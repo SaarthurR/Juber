@@ -1,3 +1,6 @@
+"use client";
+
+import { useFormStatus } from "react-dom";
 import type { EventRow, Place } from "@/lib/types";
 
 export function FormField({
@@ -78,12 +81,14 @@ export function PlacesDatalist({ places }: { places: Place[] }) {
 }
 
 export function SubmitButton({ children }: { children: React.ReactNode }) {
+  const { pending } = useFormStatus();
   return (
     <button
       type="submit"
-      className="w-full rounded-lg bg-brand-600 px-5 py-3.5 font-semibold text-white transition hover:bg-brand-700"
+      disabled={pending}
+      className="w-full rounded-lg bg-brand-600 px-5 py-3.5 font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
     >
-      {children}
+      {pending ? "Saving…" : children}
     </button>
   );
 }

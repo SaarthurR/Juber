@@ -9,7 +9,7 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
   return (
     <Link
       href={`/rides/${ride.id}`}
-      className="group block rounded-xl border border-stone-200 bg-white px-5 py-4 transition hover:border-stone-300 hover:shadow-sm"
+      className="group block rounded-xl border border-stone-200 bg-white px-5 py-4 transition hover:border-stone-300 hover:shadow-md active:scale-[0.99] active:shadow-sm"
     >
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
