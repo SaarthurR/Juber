@@ -2,7 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
-import { requestSeat, setPassengerStatus, cancelRide } from "@/app/rides/actions";
+import {
+  requestSeat,
+  setPassengerStatus,
+  cancelRide,
+  cancelRideRequest,
+} from "@/app/rides/actions";
 
 function PendingButton({
   children,
@@ -64,6 +69,74 @@ export function PassengerStatusButtons({
         </PendingButton>
       </form>
     </div>
+  );
+}
+
+export function CancelRequestButton({ requestId }: { requestId: string }) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await cancelRideRequest(requestId);
+      } catch (e) {
+        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
+          setError(e.message);
+        }
+      }
+    });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full rounded-full border border-red-200 px-5 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50 active:scale-[0.98]"
+      >
+        Cancel request
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => !pending && setOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-stone-900">Cancel this request?</h2>
+            <p className="mt-1 text-sm text-stone-500">
+              Drivers will no longer see it in ride requests. You can always post a new one.
+            </p>
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={pending}
+                className="rounded-full px-4 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
+              >
+                Keep request
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={pending}
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {pending ? "Cancelling..." : "Cancel request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

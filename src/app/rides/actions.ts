@@ -237,10 +237,14 @@ export async function cancelRide(rideId: string, reason: string) {
   }
 
   const supabase = await createClient();
+  const user = await getAuthUser(supabase);
+  if (!user) redirect("/");
+
   const { error } = await supabase
     .from("rides")
     .update({ status: "cancelled", cancellation_reason: trimmed })
-    .eq("id", rideId);
+    .eq("id", rideId)
+    .eq("driver_id", user.id);
   if (error) throw new Error(error.message);
   revalidatePath("/rides");
   redirect("/rides");

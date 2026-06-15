@@ -8,13 +8,15 @@ import { Avatar } from "@/components/ui/avatar";
 import { RouteTrack } from "@/components/route-track";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { openConversation } from "@/app/messages/actions";
-import { acceptRideRequest, cancelRideRequest } from "@/app/rides/actions";
+import { acceptRideRequest } from "@/app/rides/actions";
+import { CancelRequestButton } from "@/components/ride-actions";
 import type { EventRow, Profile, RideRequest } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 type RequestDetail = RideRequest & {
   rider: Profile | null;
+  accepted_driver: Profile | null;
   event: Pick<EventRow, "id" | "name" | "slug"> | null;
 };
 
@@ -29,7 +31,7 @@ export default async function RequestDetailPage({
 
   const { data: request } = await supabase
     .from("ride_requests")
-    .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
+    .select("*, rider:profiles!ride_requests_rider_id_fkey(*), accepted_driver:profiles!ride_requests_accepted_driver_id_fkey(*), event:events(id,name,slug)")
     .eq("id", id)
     .single<RequestDetail>();
 
@@ -70,7 +72,20 @@ export default async function RequestDetailPage({
 
       {request.status !== "active" && (
         <div className="mb-6 rounded-2xl border border-stone-200 bg-stone-50 px-5 py-4 text-sm font-semibold capitalize text-stone-600">
-          This request is {request.status}.
+          {request.status === "fulfilled" && request.accepted_driver ? (
+            <>
+              This request was accepted by{" "}
+              <Link
+                href={`/profile/${request.accepted_driver_id}`}
+                className="text-brand-600 hover:text-brand-700 hover:underline"
+              >
+                {request.accepted_driver.full_name ?? "a driver"}
+              </Link>
+              .
+            </>
+          ) : (
+            <>This request is {request.status}.</>
+          )}
         </div>
       )}
 
@@ -183,14 +198,7 @@ function OwnerActions({ requestId, isActive }: { requestId: string; isActive: bo
   }
 
   return (
-    <form action={cancelRideRequest.bind(null, requestId)}>
-      <button
-        type="submit"
-        className="w-full rounded-full border border-red-200 px-5 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50 active:scale-[0.98]"
-      >
-        Cancel request
-      </button>
-    </form>
+    <CancelRequestButton requestId={requestId} />
   );
 }
 

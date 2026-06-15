@@ -15,6 +15,7 @@ export default async function NewRequestPage({
 }) {
   const sp = await searchParams;
   const eventId = Array.isArray(sp.event_id) ? sp.event_id[0] : sp.event_id;
+  const today = new Date().toISOString().slice(0, 10);
   const { user } = await getCurrentUser();
   if (!user) redirect("/");
 
@@ -55,10 +56,10 @@ export default async function NewRequestPage({
           <p className="mb-3 text-[13px] text-[#a8a29e]">We&apos;ll match rides inside this window.</p>
           <div className="flex flex-wrap gap-3.5">
             <div className="min-w-[170px] flex-1">
-              <FormField label="" name="earliest_date" type="date" required hint="Earliest" />
+              <FormField label="" name="earliest_date" type="date" min={today} required hint="Earliest" />
             </div>
             <div className="min-w-[170px] flex-1">
-              <FormField label="" name="latest_date" type="date" required hint="Latest" />
+              <FormField label="" name="latest_date" type="date" min={today} required hint="Latest" />
             </div>
           </div>
         </div>

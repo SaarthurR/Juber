@@ -18,60 +18,17 @@ export async function openConversation(otherUserId: string, formData?: FormData)
   const rideId = formData?.get("ride_id")?.toString() || null;
   const requestId = formData?.get("request_id")?.toString() || null;
 
-  let existingId: string | null = null;
+  const { data: conversationId, error } = await supabase.rpc("open_conversation", {
+    p_other_user_id: otherUserId,
+    p_ride_id: rideId,
+    p_request_id: requestId,
+  });
 
-  if (rideId || requestId) {
-    let contextQuery = supabase.from("conversations").select("id");
-    if (rideId) contextQuery = contextQuery.eq("ride_id", rideId);
-    if (requestId) contextQuery = contextQuery.eq("request_id", requestId);
-    const { data: contextConvos } = await contextQuery;
-    const contextIds = (contextConvos ?? []).map((r) => r.id);
-    if (contextIds.length) {
-      const { data: shared } = await supabase
-        .from("conversation_participants")
-        .select("conversation_id")
-        .eq("user_id", otherUserId)
-        .in("conversation_id", contextIds)
-        .limit(1);
-      existingId = shared?.[0]?.conversation_id ?? null;
-    }
-  } else {
-    // Find conversations the current user is in, then check if the other user
-    // is also a participant.
-    const { data: mine } = await supabase
-      .from("conversation_participants")
-      .select("conversation_id")
-      .eq("user_id", user.id);
-
-    const myConvoIds = (mine ?? []).map((r) => r.conversation_id);
-
-    if (myConvoIds.length) {
-      const { data: shared } = await supabase
-        .from("conversation_participants")
-        .select("conversation_id")
-        .eq("user_id", otherUserId)
-        .in("conversation_id", myConvoIds)
-        .limit(1);
-      existingId = shared?.[0]?.conversation_id ?? null;
-    }
+  if (error || !conversationId) {
+    throw new Error(error?.message ?? "Could not start chat");
   }
 
-  if (existingId) redirect(`/messages/${existingId}`);
-
-  const { data: convo, error } = await supabase
-    .from("conversations")
-    .insert({ ride_id: rideId, request_id: requestId })
-    .select("id")
-    .single();
-  if (error || !convo) throw new Error(error?.message ?? "Could not start chat");
-
-  const { error: pErr } = await supabase.from("conversation_participants").insert([
-    { conversation_id: convo.id, user_id: user.id },
-    { conversation_id: convo.id, user_id: otherUserId },
-  ]);
-  if (pErr) throw new Error(pErr.message);
-
-  redirect(`/messages/${convo.id}`);
+  redirect(`/messages/${conversationId}`);
 }
 
 /** Marks all of the current user's unread notifications as read. */

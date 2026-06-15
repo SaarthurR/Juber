@@ -15,6 +15,15 @@ export default async function NewRidePage({
 }) {
   const sp = await searchParams;
   const eventId = Array.isArray(sp.event_id) ? sp.event_id[0] : sp.event_id;
+  const minDepartDate = new Date();
+  minDepartDate.setMinutes(minDepartDate.getMinutes() + 15);
+  const minDepartAt = [
+    minDepartDate.getFullYear(),
+    String(minDepartDate.getMonth() + 1).padStart(2, "0"),
+    String(minDepartDate.getDate()).padStart(2, "0"),
+  ].join("-") + `T${String(minDepartDate.getHours()).padStart(2, "0")}:${String(
+    minDepartDate.getMinutes(),
+  ).padStart(2, "0")}`;
   const { user } = await getCurrentUser();
   if (!user) redirect("/");
 
@@ -39,7 +48,7 @@ export default async function NewRidePage({
       <form action={postRide} className="space-y-5">
         <FormField label="From" name="origin_label" required placeholder="Your city / neighborhood" list="places" />
         <FormField label="To" name="destination_label" required defaultValue={JCNC_LABEL} list="places" />
-        <FormField label="Departure" name="depart_at" type="datetime-local" required />
+        <FormField label="Departure" name="depart_at" type="datetime-local" min={minDepartAt} required />
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Seats available" name="seats_total" type="number" min={1} defaultValue="3" required />
           <FormField label="Gas / seat ($, optional)" name="gas_contribution" type="number" min={0} placeholder="0" />

@@ -188,6 +188,23 @@ export function NotificationBell({
     router.refresh();
   }
 
+  async function markOneRead(id: string) {
+    const readAt = new Date().toISOString();
+    const target = items.find((n) => n.id === id);
+    if (!target || target.read_at) return;
+
+    setUnread((n) => Math.max(0, n - 1));
+    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: readAt } : n)));
+
+    const supabase = createClient();
+    await supabase
+      .from("notifications")
+      .update({ read_at: readAt })
+      .eq("id", id)
+      .eq("recipient_id", userId);
+    router.refresh();
+  }
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -256,7 +273,15 @@ export function NotificationBell({
                     ? `/requests/${n.request_id}`
                     : null;
                 return href ? (
-                  <Link key={n.id} href={href} onClick={() => setOpen(false)} className="block">
+                  <Link
+                    key={n.id}
+                    href={href}
+                    onClick={() => {
+                      setOpen(false);
+                      void markOneRead(n.id);
+                    }}
+                    className="block"
+                  >
                     {inner}
                   </Link>
                 ) : (

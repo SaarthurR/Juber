@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { ArrowLeftRight, Search } from "lucide-react";
+import { ArrowLeftRight, Search, X } from "lucide-react";
 
 export function RideFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const hasFilters = Boolean(params.get("from") || params.get("to") || params.get("date"));
 
   function pushWith(values: { from?: string; to?: string; date?: string }) {
     const next = new URLSearchParams(params.toString());
@@ -15,7 +16,8 @@ export function RideFilters() {
       if (v) next.set(key, v);
       else next.delete(key);
     }
-    router.push(`${pathname}?${next.toString()}`);
+    const query = next.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
   }
 
   function update(formData: FormData) {
@@ -32,6 +34,15 @@ export function RideFilters() {
       to: params.get("from") ?? "",
       date: params.get("date") ?? "",
     });
+  }
+
+  function clear() {
+    const next = new URLSearchParams(params.toString());
+    next.delete("from");
+    next.delete("to");
+    next.delete("date");
+    const query = next.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
   }
 
   return (
@@ -64,6 +75,17 @@ export function RideFilters() {
           className="h-[50px] w-full rounded-xl border border-[#ead9c2] px-3.5 text-[15px] text-stone-700 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
         />
       </label>
+
+      {hasFilters && (
+        <button
+          type="button"
+          onClick={clear}
+          className="flex h-[50px] items-center justify-center gap-1.5 rounded-xl border border-[#ead9c2] px-4 text-sm font-bold text-[#a8927a] transition hover:border-brand-200 hover:bg-tint hover:text-brand-700"
+        >
+          <X size={16} />
+          Clear
+        </button>
+      )}
     </form>
   );
 }

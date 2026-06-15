@@ -21,7 +21,7 @@ export function FormField({
   required?: boolean;
   defaultValue?: string;
   placeholder?: string;
-  min?: number;
+  min?: number | string;
   list?: string;
   textarea?: boolean;
   hint?: string;
@@ -35,7 +35,13 @@ export function FormField({
       )}
       {hint && <span className="mb-2.5 block text-[13px] text-[#a8a29e]">{hint}</span>}
       {textarea ? (
-        <textarea name={name} placeholder={placeholder} rows={3} className={cls} />
+        <textarea
+          name={name}
+          placeholder={placeholder}
+          rows={3}
+          defaultValue={defaultValue}
+          className={cls}
+        />
       ) : (
         <input
           name={name}
