@@ -9,25 +9,29 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
   return (
     <Link
       href={`/rides/${ride.id}`}
-      className="block rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:border-brand-300 hover:shadow-md"
+      className="group block rounded-xl border border-stone-200 bg-white px-5 py-4 transition hover:border-stone-300 hover:shadow-sm"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Avatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} />
-          <span className="font-semibold">{ride.driver?.full_name ?? "Driver"}</span>
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <Avatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} size={30} />
+          <span className="text-sm font-semibold text-stone-900">
+            {ride.driver?.full_name ?? "Driver"}
+          </span>
         </div>
         {ride.event && (
-          <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
+          <span className="text-xs font-medium text-stone-500">
             {ride.event.name}
           </span>
         )}
       </div>
 
-      <div className="mb-3 flex items-center justify-between text-sm font-bold uppercase tracking-wide text-stone-700">
-        <span>{format(new Date(ride.depart_at), "EEEE, MMM d hh:mm a")}</span>
-        <span className="text-stone-900">
+      <div className="mb-3 flex items-baseline justify-between">
+        <span className="text-[13px] font-semibold uppercase tracking-wide text-stone-500">
+          {format(new Date(ride.depart_at), "EEE, MMM d · h:mm a")}
+        </span>
+        <span className="text-sm font-bold text-stone-900">
           {ride.gas_contribution
-            ? `$${Number(ride.gas_contribution).toFixed(0)} gas`
+            ? `$${Number(ride.gas_contribution).toFixed(0)}`
             : "Free"}
         </span>
       </div>
@@ -44,42 +48,44 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
 
 export function RequestCard({ request }: { request: RideRequestWithRider }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Avatar src={request.rider?.avatar_url} name={request.rider?.full_name} />
-          <span className="font-semibold">{request.rider?.full_name ?? "Rider"}</span>
+    <div className="rounded-xl border border-stone-200 bg-white px-5 py-4">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <Avatar src={request.rider?.avatar_url} name={request.rider?.full_name} size={30} />
+          <span className="text-sm font-semibold text-stone-900">
+            {request.rider?.full_name ?? "Rider"}
+          </span>
         </div>
         {request.event && (
-          <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
+          <span className="text-xs font-medium text-stone-500">
             {request.event.name}
           </span>
         )}
       </div>
 
-      <div className="mb-3 flex items-center justify-between text-sm font-bold uppercase tracking-wide text-stone-700">
-        <span>
+      <div className="mb-3 flex items-baseline justify-between">
+        <span className="text-[13px] font-semibold uppercase tracking-wide text-stone-500">
           {request.earliest_date && request.latest_date
             ? `${format(new Date(`${request.earliest_date}T12:00:00`), "MMM d")} – ${format(new Date(`${request.latest_date}T12:00:00`), "MMM d")}`
-            : format(new Date(request.depart_at), "EEEE, MMM d hh:mm a")}
+            : format(new Date(request.depart_at), "EEE, MMM d · h:mm a")}
         </span>
-        <span className="text-stone-900">
-          {request.seats_needed} seat{request.seats_needed > 1 ? "s" : ""} needed
+        <span className="text-sm font-bold text-stone-900">
+          {request.seats_needed} seat{request.seats_needed > 1 ? "s" : ""}
         </span>
       </div>
 
       <RouteTrack from={request.origin_label} to={request.destination_label} />
 
       {request.max_price != null && (
-        <p className="mt-2 text-xs text-stone-500">
+        <p className="mt-2 text-xs text-stone-400">
           Up to ${Number(request.max_price).toFixed(0)}/seat
         </p>
       )}
 
       {request.rider?.phone && (
-        <p className="mt-4 text-sm text-stone-600">
+        <p className="mt-3.5 text-sm text-stone-600">
           Contact:{" "}
-          <a href={`tel:${request.rider.phone}`} className="text-brand-600">
+          <a href={`tel:${request.rider.phone}`} className="font-medium text-brand-600">
             {request.rider.phone}
           </a>
         </p>

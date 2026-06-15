@@ -29,7 +29,6 @@ export default async function RidesPage({
   const { user } = await getCurrentUser();
   const supabase = await createClient();
 
-  // Date filter -> [startOfDay, nextDay)
   let dayRange: { gte: string; lt: string } | null = null;
   if (date) {
     const start = new Date(`${date}T00:00:00`);
@@ -73,7 +72,6 @@ export default async function RidesPage({
     rides = (data as RideWithDriver[]) ?? [];
   }
 
-  // Live count for the "View Ride Requests" badge.
   const { count: requestCount } = await supabase
     .from("ride_requests")
     .select("id", { count: "exact", head: true })
@@ -82,66 +80,64 @@ export default async function RidesPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      {/* Tabs + post button */}
-      <div className="mb-8 flex items-end justify-between border-b border-stone-200">
-        <div className="-mb-px flex">
-          <span className="border-b-2 border-brand-600 px-1 pb-3 text-base font-bold text-brand-600">
-            Carpools
-          </span>
+      {/* Page header */}
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-stone-900">
+            {showRequests ? "Ride Requests" : "Carpools"}
+          </h1>
+          <p className="mt-0.5 text-sm text-stone-500">
+            {showRequests
+              ? "Riders looking for a lift — reach out if you can help."
+              : "Let's find a ride for you. Message your driver to confirm your spot."}
+          </p>
         </div>
         {user ? (
           <Link
             href="/rides/new"
-            className="mb-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+            className="shrink-0 rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
           >
             Post a ride
           </Link>
         ) : (
-          <span className="mb-3">
-            <GoogleSignInButton label="Sign in to post" />
-          </span>
+          <GoogleSignInButton label="Sign in to post" />
         )}
       </div>
 
-      <p className="mb-8 text-center text-sm text-stone-500">
-        {showRequests
-          ? "Riders looking for a lift — reach out if you can help."
-          : "Let’s find a ride for you! (Remember to message your driver to confirm your spot)"}
-      </p>
+      {/* Tabs */}
+      <div className="mb-5 flex gap-1 rounded-xl bg-stone-100 p-1">
+        <TabLink
+          href="/rides"
+          active={!showRequests}
+          label="Carpools"
+        />
+        <TabLink
+          href="/rides?tab=requests"
+          active={showRequests}
+          label="Ride Requests"
+          badge={requestCount ?? 0}
+        />
+      </div>
 
       <RideFilters />
 
-      {/* Action row */}
-      <div className="mb-8 mt-4 flex items-center justify-between">
-        <Link
-          href={showRequests ? "/rides" : "/rides?tab=requests"}
-          className="inline-flex items-center gap-2 text-sm font-bold text-brand-600 hover:text-brand-700"
-        >
-          {showRequests ? "View Carpools" : "View Ride Requests"}
-          {!showRequests && (
-            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-600 px-1.5 text-xs font-bold text-white">
-              {requestCount ?? 0}
-            </span>
-          )}
-        </Link>
-
-        {user ? (
+      {/* Request a ride CTA */}
+      {user && !showRequests && (
+        <div className="mb-5 mt-2 flex justify-end">
           <Link
             href="/requests/new"
-            className="inline-flex items-center gap-2 text-sm font-bold text-brand-600 hover:text-brand-700"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700"
           >
-            Request a Ride
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white">
-              <Plus size={14} />
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-100 text-brand-600">
+              <Plus size={12} strokeWidth={2.5} />
             </span>
+            Request a ride
           </Link>
-        ) : (
-          <GoogleSignInButton label="Sign in to request" />
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Results */}
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         {showRequests
           ? requests.length
             ? requests.map((r) => <RequestCard key={r.id} request={r} />)
@@ -154,10 +150,41 @@ export default async function RidesPage({
   );
 }
 
+function TabLink({
+  href,
+  active,
+  label,
+  badge,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+  badge?: number;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition ${
+        active
+          ? "bg-white text-stone-900 shadow-sm"
+          : "text-stone-500 hover:text-stone-700"
+      }`}
+    >
+      {label}
+      {badge !== undefined && badge > 0 && (
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">
+          {badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 function Empty({ kind }: { kind: "rides" | "requests" }) {
   return (
-    <p className="rounded-2xl border border-dashed border-stone-300 p-10 text-center text-stone-500">
-      No {kind} match your search yet.
-    </p>
+    <div className="rounded-xl border border-dashed border-stone-300 px-8 py-14 text-center">
+      <p className="font-medium text-stone-700">No {kind} match your search.</p>
+      <p className="mt-1 text-sm text-stone-400">Try adjusting your filters or check back later.</p>
+    </div>
   );
 }

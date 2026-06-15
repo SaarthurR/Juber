@@ -9,48 +9,51 @@ export async function Navbar() {
   const { user, profile } = await getCurrentUser();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-stone-200 bg-[var(--background)]/90 backdrop-blur">
-      <nav className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 font-bold text-lg">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-white">
-            <Car size={18} />
-          </span>
+    <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-[var(--background)]/95 backdrop-blur-sm">
+      <nav className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4 sm:px-6">
+        <Link
+          href="/"
+          className="flex items-center gap-1.5 font-semibold text-[15px] text-stone-900 transition hover:text-brand-600"
+        >
+          <Car size={17} className="text-brand-600" strokeWidth={2.5} />
           {APP_NAME}
         </Link>
 
-        <div className="flex items-center gap-5 text-sm font-medium text-stone-700">
-          <Link href="/rides" className="hover:text-brand-600">
-            Rides
-          </Link>
-          <Link href="/requests" className="hover:text-brand-600">
-            Requests
-          </Link>
-          <Link href="/events" className="hover:text-brand-600">
-            Events
-          </Link>
+        <div className="flex items-center gap-0.5 text-sm font-medium text-stone-600">
+          <NavLink href="/rides">Rides</NavLink>
+          <NavLink href="/requests">Requests</NavLink>
+          <NavLink href="/events">Events</NavLink>
+
           {user ? (
             <>
-              <Link href="/messages" className="hover:text-brand-600">
-                Messages
-              </Link>
-              {profile?.is_admin && (
-                <Link href="/admin" className="hover:text-brand-600">
-                  Admin
-                </Link>
-              )}
-              <Link href="/profile" className="flex items-center gap-2">
+              <NavLink href="/messages">Messages</NavLink>
+              {profile?.is_admin && <NavLink href="/admin">Admin</NavLink>}
+              <Link href="/profile" className="ml-2">
                 <Avatar
                   src={profile?.avatar_url}
                   name={profile?.full_name}
-                  size={32}
+                  size={28}
                 />
               </Link>
             </>
           ) : (
-            <GoogleSignInButton />
+            <span className="ml-2">
+              <GoogleSignInButton />
+            </span>
           )}
         </div>
       </nav>
     </header>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-md px-3 py-1.5 transition hover:bg-stone-100 hover:text-stone-900"
+    >
+      {children}
+    </Link>
   );
 }

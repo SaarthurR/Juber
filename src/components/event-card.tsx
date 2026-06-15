@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { format } from "date-fns";
-import { CalendarHeart } from "lucide-react";
 import type { EventRow } from "@/lib/types";
 
 function eventDates(event: EventRow) {
@@ -15,13 +14,16 @@ export function EventCard({ event }: { event: EventRow }) {
   return (
     <Link
       href={`/events/${event.slug}`}
-      className="block rounded-2xl border border-stone-200 bg-white p-5 shadow-sm transition hover:border-brand-300 hover:shadow-md"
+      className="group block rounded-xl border border-stone-200 bg-white px-5 py-4 transition hover:border-stone-300 hover:shadow-sm"
     >
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-        <CalendarHeart size={20} />
-      </div>
-      <h3 className="font-semibold">{event.name}</h3>
-      {dates && <p className="mt-1 text-sm text-stone-500">{dates}</p>}
+      {dates && (
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-brand-600">
+          {dates}
+        </p>
+      )}
+      <h3 className="font-semibold text-stone-900 group-hover:text-brand-600 transition">
+        {event.name}
+      </h3>
       {event.venue_label && (
         <p className="mt-1 text-sm text-stone-500">{event.venue_label}</p>
       )}

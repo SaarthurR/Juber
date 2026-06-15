@@ -26,34 +26,45 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col">
         <Navbar />
         <main className="flex-1">{children}</main>
-        <footer className="border-t border-stone-200 bg-stone-50">
-          <div className="mx-auto grid max-w-5xl gap-8 px-4 py-12 sm:grid-cols-[1fr_auto_auto] sm:px-6">
-            <div>
-              <div className="flex items-center gap-2 text-2xl font-bold">
-                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white">
-                  <Car size={20} />
-                </span>
-                {APP_NAME}
+
+        <footer className="mt-16 border-t border-stone-200">
+          <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+            <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <Link
+                  href="/"
+                  className="flex items-center gap-1.5 font-semibold text-[15px] text-stone-900"
+                >
+                  <Car size={16} className="text-brand-600" strokeWidth={2.5} />
+                  {APP_NAME}
+                </Link>
+                <p className="mt-2 max-w-[220px] text-sm text-stone-500 leading-relaxed">
+                  {APP_TAGLINE}
+                </p>
               </div>
-              <p className="mt-3 max-w-xs text-sm text-stone-500">{APP_TAGLINE}</p>
+
+              <div className="flex gap-12 text-sm">
+                <div>
+                  <p className="mb-2.5 font-medium text-stone-900">Pages</p>
+                  <ul className="space-y-1.5 text-stone-500">
+                    <li><Link href="/" className="hover:text-stone-900 transition">Home</Link></li>
+                    <li><Link href="/rides" className="hover:text-stone-900 transition">Rides</Link></li>
+                    <li><Link href="/events" className="hover:text-stone-900 transition">Events</Link></li>
+                    <li><Link href="/profile" className="hover:text-stone-900 transition">Profile</Link></li>
+                  </ul>
+                </div>
+                <div>
+                  <p className="mb-2.5 font-medium text-stone-900">Contact</p>
+                  <ul className="space-y-1.5 text-stone-500">
+                    <li><a href="https://instagram.com" className="hover:text-stone-900 transition">Instagram</a></li>
+                    <li><a href="mailto:hello@jcnc.org" className="hover:text-stone-900 transition">Email</a></li>
+                  </ul>
+                </div>
+              </div>
             </div>
 
-            <div className="sm:px-8">
-              <h3 className="mb-3 font-bold text-stone-900">Pages</h3>
-              <ul className="space-y-2 text-sm text-stone-600">
-                <li><Link href="/" className="hover:text-brand-600">Home</Link></li>
-                <li><Link href="/rides" className="hover:text-brand-600">Rides</Link></li>
-                <li><Link href="/events" className="hover:text-brand-600">Events</Link></li>
-                <li><Link href="/profile" className="hover:text-brand-600">Profile</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="mb-3 font-bold text-stone-900">Contact</h3>
-              <ul className="space-y-2 text-sm text-stone-600">
-                <li><a href="https://instagram.com" className="hover:text-brand-600">Instagram</a></li>
-                <li><a href="mailto:hello@jcnc.org" className="hover:text-brand-600">Email</a></li>
-              </ul>
+            <div className="mt-8 border-t border-stone-100 pt-6 text-xs text-stone-400">
+              © {new Date().getFullYear()} {APP_NAME} · JCNC Carpool
             </div>
           </div>
         </footer>
