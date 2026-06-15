@@ -54,19 +54,19 @@ export default async function RideDetailPage({
           <Link
             href="/rides"
             aria-label="Back to rides"
-            className="text-stone-400 transition hover:text-stone-700"
+            className="text-stone-500 transition hover:text-stone-800"
           >
-            <ArrowLeft size={22} />
+            <ArrowLeft size={24} />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-stone-900">Trip Details</h1>
+            <h1 className="text-2xl font-bold text-stone-900">Trip Details</h1>
             <p className="text-sm text-stone-500">
               {ride.origin_label} → {ride.destination_label}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-2xl font-bold text-stone-900">{price}</span>
+          <span className="text-3xl font-bold text-stone-900">{price}</span>
           <ShareButton title={`${ride.origin_label} → ${ride.destination_label}`} />
         </div>
       </div>
@@ -74,23 +74,23 @@ export default async function RideDetailPage({
       {/* Dark band */}
       <div className="mt-5 bg-stone-900 text-white">
         <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
-          <p className="text-xs font-bold uppercase tracking-widest text-stone-400">
-            {format(new Date(ride.depart_at), "EEEE, MMM d · h:mm a")}
+          <p className="text-sm font-bold uppercase tracking-wide">
+            {format(new Date(ride.depart_at), "EEEE, MMM d hh:mm a").toUpperCase()}
           </p>
-          <div className="mt-4 flex gap-4">
+          <div className="mt-4 flex gap-5">
             <div className="flex flex-col items-center py-1">
-              <span className="h-2.5 w-2.5 rounded-full border-2 border-white/70 bg-transparent" />
-              <span className="my-1.5 w-px flex-1 bg-white/25" />
-              <span className="h-2.5 w-2.5 rounded-full bg-white" />
+              <span className="h-3 w-3 rounded-full border-2 border-white bg-transparent" />
+              <span className="my-1 w-px flex-1 bg-white/30" />
+              <span className="h-3 w-3 rounded-full bg-white" />
             </div>
             <div className="flex flex-1 flex-col gap-3.5 text-[15px]">
               <p>
-                <span className="font-semibold">Pick Up: </span>
-                <span className="text-stone-300">{ride.origin_label}</span>
+                <span className="font-bold">Pick Up:</span>{" "}
+                <span className="text-white/80">{ride.origin_label}</span>
               </p>
               <p>
-                <span className="font-semibold">Drop off: </span>
-                <span className="text-stone-300">{ride.destination_label}</span>
+                <span className="font-bold">Drop off:</span>{" "}
+                <span className="text-white/80">{ride.destination_label}</span>
               </p>
             </div>
           </div>
@@ -109,11 +109,11 @@ export default async function RideDetailPage({
         )}
 
         {/* Driver */}
-        <p className="text-xs font-bold uppercase tracking-widest text-stone-400">Driver</p>
+        <p className="font-bold text-stone-900">Driver:</p>
         <div className="mt-3 flex items-center justify-between">
-          <Link href={`/profile/${ride.driver_id}`} className="flex items-center gap-2.5">
-            <Avatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} size={36} />
-            <span className="font-semibold text-stone-900">
+          <Link href={`/profile/${ride.driver_id}`} className="flex items-center gap-3">
+            <Avatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} size={38} />
+            <span className="font-bold text-stone-900">
               {ride.driver?.full_name?.split(" ")[0] ?? "Driver"}
             </span>
           </Link>
@@ -130,20 +130,16 @@ export default async function RideDetailPage({
         </div>
 
         {/* Note */}
-        {(ride.notes) && (
-          <>
-            <p className="mt-7 text-xs font-bold uppercase tracking-widest text-stone-400">Note</p>
-            <div className="mt-2 rounded-lg bg-stone-50 p-4 text-sm text-stone-700 leading-relaxed">
-              {ride.notes}
-            </div>
-          </>
-        )}
+        <p className="mt-8 font-bold text-stone-900">Note:</p>
+        <div className="mt-3 rounded-lg bg-stone-100 p-4 text-sm text-stone-700 leading-relaxed">
+          {ride.notes || "No additional notes."}
+        </div>
 
         {/* Going */}
-        <div className="mt-7 flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-widest text-stone-400">Going</p>
+        <div className="mt-8 flex items-center justify-between">
+          <p className="font-bold text-stone-900">Going:</p>
           <p className="text-sm text-stone-500">
-            {confirmed.length} / {ride.seats_total} seats
+            {confirmed.length}/{ride.seats_total}
           </p>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -152,15 +148,15 @@ export default async function RideDetailPage({
               key={p.id}
               src={p.passenger?.avatar_url}
               name={p.passenger?.full_name}
-              size={34}
+              size={36}
             />
           ))}
           {Array.from({ length: Math.max(0, ride.seats_total - confirmed.length) }).map((_, i) => (
             <span
               key={i}
-              className="flex h-[34px] w-[34px] items-center justify-center rounded-full border-2 border-dashed border-stone-200 text-stone-300"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-stone-300"
             >
-              <User size={16} />
+              <User size={20} />
             </span>
           ))}
         </div>
@@ -170,22 +166,22 @@ export default async function RideDetailPage({
           {!user ? (
             <GoogleSignInButton
               label="Sign in to reserve a seat"
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-700"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-4 text-base font-bold text-white transition hover:bg-brand-700"
             />
           ) : isDriver ? (
             <DriverPanel ride={ride} passengerRows={passengerRows} />
           ) : myJoin ? (
-            <div className="rounded-full bg-stone-100 px-6 py-3.5 text-center text-sm font-semibold text-stone-500">
+            <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
               Seat {myJoin.status}
             </div>
           ) : ride.seats_available > 0 ? (
             <form action={requestSeat.bind(null, ride.id)}>
-              <button className="w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-700">
+              <button className="w-full rounded-lg bg-brand-600 px-6 py-4 text-base font-bold text-white transition hover:bg-brand-700">
                 Reserve a seat
               </button>
             </form>
           ) : (
-            <div className="rounded-full bg-stone-100 px-6 py-3.5 text-center text-sm font-semibold text-stone-400">
+            <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-400">
               This ride is full
             </div>
           )}
@@ -217,18 +213,18 @@ function DriverPanel({
                 <Avatar src={p.passenger?.avatar_url} name={p.passenger?.full_name} size={32} />
                 <div>
                   <p className="text-sm font-medium text-stone-900">{p.passenger?.full_name}</p>
-                  <p className="text-xs text-stone-400 capitalize">{p.status}</p>
+                  <p className="text-xs capitalize text-stone-400">{p.status}</p>
                 </div>
               </div>
               {p.status === "pending" && (
                 <div className="flex gap-2">
                   <form action={setPassengerStatus.bind(null, p.id, ride.id, "confirmed")}>
-                    <button className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition">
+                    <button className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">
                       Confirm
                     </button>
                   </form>
                   <form action={setPassengerStatus.bind(null, p.id, ride.id, "declined")}>
-                    <button className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-50 transition">
+                    <button className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-50">
                       Decline
                     </button>
                   </form>
@@ -240,7 +236,7 @@ function DriverPanel({
       )}
 
       <form action={cancelRide.bind(null, ride.id)} className="mt-5 border-t border-stone-100 pt-4">
-        <button className="text-xs font-medium text-red-500 hover:text-red-600 transition hover:underline">
+        <button className="text-xs font-medium text-red-500 transition hover:underline">
           Cancel this ride
         </button>
       </form>

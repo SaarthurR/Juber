@@ -22,8 +22,9 @@ export default async function NewRequestPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-10 sm:px-6">
-      <h1 className="mb-1 text-2xl font-bold">Request a ride</h1>
-      <p className="mb-6 text-stone-600">
+      <h1 className="text-3xl font-bold text-stone-900">Request a Ride</h1>
+      <hr className="my-5 border-stone-200" />
+      <p className="mb-7 text-stone-600">
         Tell drivers when you need a ride and how much you can spend.
       </p>
 

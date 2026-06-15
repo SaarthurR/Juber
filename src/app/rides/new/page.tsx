@@ -22,8 +22,9 @@ export default async function NewRidePage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-10 sm:px-6">
-      <h1 className="mb-1 text-2xl font-bold">Offer a ride</h1>
-      <p className="mb-6 text-stone-600">
+      <h1 className="text-3xl font-bold text-stone-900">Post a Ride</h1>
+      <hr className="my-5 border-stone-200" />
+      <p className="mb-7 text-stone-600">
         Share your seats with the sangha. One car instead of four — that&apos;s ahimsa.
       </p>
 
