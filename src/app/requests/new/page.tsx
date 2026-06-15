@@ -8,7 +8,13 @@ import type { EventRow, Place } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewRequestPage() {
+export default async function NewRequestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ event_id?: string | string[] }>;
+}) {
+  const sp = await searchParams;
+  const eventId = Array.isArray(sp.event_id) ? sp.event_id[0] : sp.event_id;
   const { user } = await getCurrentUser();
   if (!user) redirect("/");
 
@@ -81,7 +87,7 @@ export default async function NewRequestPage() {
           </div>
         </div>
 
-        <EventSelect events={(events as EventRow[]) ?? []} />
+        <EventSelect events={(events as EventRow[]) ?? []} defaultValue={eventId ?? ""} />
         <FormField
           label="Notes for drivers"
           name="notes"

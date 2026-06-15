@@ -25,7 +25,7 @@ export async function Navbar() {
       supabase
         .from("notifications")
         .select(
-          "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)",
+          "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)",
         )
         .eq("recipient_id", user.id)
         .order("created_at", { ascending: false })
@@ -48,7 +48,6 @@ export async function Navbar() {
 
         <div className="flex items-center gap-1 text-[15px] font-semibold text-[#57534e]">
           <NavLink href="/rides">Rides</NavLink>
-          <NavLink href="/requests">Requests</NavLink>
           <NavLink href="/events">Events</NavLink>
 
           {user ? (

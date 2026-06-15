@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Car, Check, X, Ban } from "lucide-react";
+import { Bell, Car, Check, X, Ban, Handshake } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { markNotificationsRead } from "@/app/messages/actions";
@@ -14,6 +14,7 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   seat_confirmed: Check,
   seat_declined: X,
   ride_cancelled: Ban,
+  request_accepted: Handshake,
 };
 
 // Warm per-type chip colors, echoing the mock's varied avatars.
@@ -22,6 +23,7 @@ const CHIP: Record<NotificationType, string> = {
   seat_requested: "bg-[#f3e7d8] text-[#8a5a2b]",
   seat_declined: "bg-[#fee2e2] text-[#b91c1c]",
   ride_cancelled: "bg-[#fee2e2] text-[#b91c1c]",
+  request_accepted: "bg-[#dcfce7] text-[#15803d]",
 };
 
 function firstName(name: string | null | undefined) {
@@ -32,6 +34,8 @@ function copyFor(n: NotificationWithContext) {
   const who = firstName(n.actor?.full_name);
   const route = n.ride
     ? `${n.ride.origin_label} → ${n.ride.destination_label}`
+    : n.request
+      ? `${n.request.origin_label} → ${n.request.destination_label}`
     : null;
   switch (n.type) {
     case "seat_confirmed":
@@ -50,6 +54,12 @@ function copyFor(n: NotificationWithContext) {
       return <>Your seat request{route && <> for {route}</>} was declined.</>;
     case "ride_cancelled":
       return <>Your ride{route && <> {route}</>} was cancelled.</>;
+    case "request_accepted":
+      return (
+        <>
+          <strong>{who}</strong> accepted your ride request{route && <> for {route}</>}.
+        </>
+      );
   }
 }
 
@@ -180,8 +190,13 @@ export function NotificationBell({
                     )}
                   </div>
                 );
-                return n.ride_id ? (
-                  <Link key={n.id} href={`/rides/${n.ride_id}`} onClick={() => setOpen(false)} className="block">
+                const href = n.ride_id
+                  ? `/rides/${n.ride_id}`
+                  : n.request_id
+                    ? `/requests/${n.request_id}`
+                    : null;
+                return href ? (
+                  <Link key={n.id} href={href} onClick={() => setOpen(false)} className="block">
                     {inner}
                   </Link>
                 ) : (

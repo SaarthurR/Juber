@@ -41,6 +41,10 @@ export default async function RideDetailPage({
   const isDriver = user?.id === ride.driver_id;
   const myJoin = passengerRows.find((p) => p.passenger_id === user?.id);
   const confirmed = passengerRows.filter((p) => p.status === "confirmed");
+  const confirmedCount = Math.max(
+    confirmed.length,
+    ride.seats_total - ride.seats_available,
+  );
 
   const price = ride.gas_contribution
     ? `$${Number(ride.gas_contribution).toFixed(0)}`
@@ -150,8 +154,8 @@ export default async function RideDetailPage({
             <ContactModal
               driverName={ride.driver?.full_name?.split(" ")[0] ?? "Driver"}
               phone={ride.driver?.phone ?? null}
-              instagram={(ride.driver as any)?.instagram ?? null}
-              preferredContact={(ride.driver as any)?.preferred_contact ?? null}
+              instagram={ride.driver?.instagram ?? null}
+              preferredContact={ride.driver?.preferred_contact ?? null}
               rideId={ride.id}
               driverId={ride.driver_id}
             />
@@ -168,7 +172,7 @@ export default async function RideDetailPage({
         <div className="mt-8 flex items-center justify-between">
           <p className="text-sm font-bold uppercase tracking-wide text-[#57534e]">Going</p>
           <p className="text-sm font-extrabold text-stone-500">
-            {confirmed.length}/{ride.seats_total}
+            {confirmedCount}/{ride.seats_total}
           </p>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -180,7 +184,16 @@ export default async function RideDetailPage({
               size={36}
             />
           ))}
-          {Array.from({ length: Math.max(0, ride.seats_total - confirmed.length) }).map((_, i) => (
+          {Array.from({ length: Math.max(0, confirmedCount - confirmed.length) }).map((_, i) => (
+            <span
+              key={`confirmed-${i}`}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700"
+              title="Confirmed rider"
+            >
+              ✓
+            </span>
+          ))}
+          {Array.from({ length: Math.max(0, ride.seats_total - confirmedCount) }).map((_, i) => (
             <span
               key={i}
               className="flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-dashed border-[#d6cfc4] text-[#c2bbb0]"

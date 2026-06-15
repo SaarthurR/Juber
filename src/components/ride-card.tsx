@@ -66,7 +66,10 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
 
 export function RequestCard({ request }: { request: RideRequestWithRider }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white px-5 py-4">
+    <Link
+      href={`/requests/${request.id}`}
+      className="group block rounded-xl border border-stone-200 bg-white px-5 py-4 shadow-[0_18px_40px_-34px_rgba(92,59,46,0.35)] transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_22px_45px_-30px_rgba(92,59,46,0.35)] active:translate-y-0"
+    >
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <Avatar src={request.rider?.avatar_url} name={request.rider?.full_name} size={30} />
@@ -102,12 +105,9 @@ export function RequestCard({ request }: { request: RideRequestWithRider }) {
 
       {request.rider?.phone && (
         <p className="mt-3.5 text-sm text-stone-600">
-          Contact:{" "}
-          <a href={`tel:${request.rider.phone}`} className="font-medium text-brand-600">
-            {request.rider.phone}
-          </a>
+          Contact details available on request page
         </p>
       )}
-    </div>
+    </Link>
   );
 }

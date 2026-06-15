@@ -61,13 +61,13 @@ export default async function EventPage({
       {user && (
         <div className="mt-6 flex gap-3">
           <Link
-            href="/rides/new"
+            href={`/rides/new?event_id=${event.id}`}
             className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
           >
             <Plus size={16} /> Post a ride
           </Link>
           <Link
-            href="/requests/new"
+            href={`/requests/new?event_id=${event.id}`}
             className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 px-4 py-2 text-sm font-medium hover:bg-stone-50"
           >
             <Plus size={16} /> Request a ride

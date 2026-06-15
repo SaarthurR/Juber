@@ -33,9 +33,11 @@ export default async function RidesPage({
     dayRange = { gte: start.toISOString(), lt: end.toISOString() };
   }
 
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const today = now.toISOString().slice(0, 10);
 
-  function applyFilters<T extends { gte: (c: string, v: string) => T; lt: (c: string, v: string) => T; ilike: (c: string, v: string) => T }>(
+  function applyRideFilters<T extends { gte: (c: string, v: string) => T; lt: (c: string, v: string) => T; ilike: (c: string, v: string) => T }>(
     q: T,
   ): T {
     if (from) q = q.ilike("origin_label", `%${from}%`);
@@ -45,14 +47,24 @@ export default async function RidesPage({
     return q;
   }
 
-  const ridesQuery = applyFilters(
+  function applyRequestFilters<T extends { gte: (c: string, v: string) => T; lte: (c: string, v: string) => T; ilike: (c: string, v: string) => T }>(
+    q: T,
+  ): T {
+    if (from) q = q.ilike("origin_label", `%${from}%`);
+    if (to) q = q.ilike("destination_label", `%${to}%`);
+    if (date) q = q.lte("earliest_date", date).gte("latest_date", date);
+    else q = q.gte("latest_date", today);
+    return q;
+  }
+
+  const ridesQuery = applyRideFilters(
     supabase
       .from("rides")
       .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
       .eq("status", "active")
       .order("depart_at", { ascending: true }),
   );
-  const requestsQuery = applyFilters(
+  const requestsQuery = applyRequestFilters(
       supabase
         .from("ride_requests")
         .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
@@ -71,7 +83,7 @@ export default async function RidesPage({
       .from("ride_requests")
       .select("id", { count: "exact", head: true })
       .eq("status", "active")
-      .gte("depart_at", nowIso),
+      .gte("latest_date", today),
   ]);
 
   const rides = (ridesData as RideWithDriver[]) ?? [];

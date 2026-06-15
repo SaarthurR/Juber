@@ -52,7 +52,13 @@ export function FormField({
   );
 }
 
-export function EventSelect({ events }: { events: EventRow[] }) {
+export function EventSelect({
+  events,
+  defaultValue = "",
+}: {
+  events: EventRow[];
+  defaultValue?: string;
+}) {
   if (!events.length) return null;
   return (
     <label className="block">
@@ -61,7 +67,7 @@ export function EventSelect({ events }: { events: EventRow[] }) {
       </span>
       <select
         name="event_id"
-        defaultValue=""
+        defaultValue={defaultValue}
         className="w-full rounded-xl border border-[#e2ddd5] px-3.5 py-3 text-[15px] outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
       >
         <option value="">— None —</option>

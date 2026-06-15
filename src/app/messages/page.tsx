@@ -131,7 +131,7 @@ async function NotificationsTab({ userId, hasUnread }: { userId: string; hasUnre
   const { data } = await supabase
     .from("notifications")
     .select(
-      "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)",
+      "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)",
     )
     .eq("recipient_id", userId)
     .order("created_at", { ascending: false })

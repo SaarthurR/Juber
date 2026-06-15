@@ -18,6 +18,7 @@ const TABS = [
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+type JoinedRideRow = { ride: RideWithDriver | null };
 
 function ContactRow({
   icon,
@@ -97,7 +98,9 @@ export default async function PublicProfilePage({
       )
       .eq("passenger_id", id)
       .eq("status", "confirmed");
-    joinedRides = ((joinedRows ?? []).map((p: any) => p.ride).filter(Boolean)) as RideWithDriver[];
+    joinedRides = ((joinedRows as JoinedRideRow[] | null) ?? [])
+      .map((p) => p.ride)
+      .filter((ride): ride is RideWithDriver => Boolean(ride));
   }
 
   if (tab === "requests") {
@@ -192,7 +195,7 @@ export default async function PublicProfilePage({
             <Pencil size={15} /> Edit profile
           </Link>
         ) : user ? (
-          <form action={openConversation.bind(null, profile.id, undefined)} className="mt-3.5">
+          <form action={openConversation.bind(null, profile.id)} className="mt-3.5">
             <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700">
               <MessageCircle size={15} /> Message {profile.full_name?.split(" ")[0] ?? "member"}
             </button>

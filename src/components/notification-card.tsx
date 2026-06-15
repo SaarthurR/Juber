@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, Car, Check, X, Ban } from "lucide-react";
+import { Bell, Car, Check, X, Ban, Handshake } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { Avatar } from "@/components/ui/avatar";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
@@ -9,6 +9,7 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   seat_confirmed: Check,
   seat_declined: X,
   ride_cancelled: Ban,
+  request_accepted: Handshake,
 };
 
 function firstName(name: string | null | undefined) {
@@ -26,6 +27,8 @@ function titleFor(n: NotificationWithContext): string {
       return "Your seat request was declined";
     case "ride_cancelled":
       return "Your ride was cancelled";
+    case "request_accepted":
+      return `${who} accepted your ride request`;
   }
 }
 
@@ -34,8 +37,14 @@ export function NotificationCard({ n }: { n: NotificationWithContext }) {
   const unread = !n.read_at;
   const route = n.ride
     ? `${n.ride.origin_label} → ${n.ride.destination_label}`
+    : n.request
+      ? `${n.request.origin_label} → ${n.request.destination_label}`
     : null;
-  const departs = n.ride ? format(new Date(n.ride.depart_at), "EEE, MMM d · h:mm a") : null;
+  const departs = n.ride
+    ? format(new Date(n.ride.depart_at), "EEE, MMM d · h:mm a")
+    : n.request
+      ? format(new Date(n.request.depart_at), "EEE, MMM d")
+      : null;
 
   const body = (
     <div
@@ -83,6 +92,13 @@ export function NotificationCard({ n }: { n: NotificationWithContext }) {
   if (n.ride_id) {
     return (
       <Link href={`/rides/${n.ride_id}`} className="block">
+        {body}
+      </Link>
+    );
+  }
+  if (n.request_id) {
+    return (
+      <Link href={`/requests/${n.request_id}`} className="block">
         {body}
       </Link>
     );

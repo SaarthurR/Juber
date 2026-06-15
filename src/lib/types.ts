@@ -73,6 +73,8 @@ export type RideRequest = {
   notes: string | null;
   event_id: string | null;
   status: "active" | "fulfilled" | "cancelled";
+  accepted_driver_id: string | null;
+  accepted_at: string | null;
   created_at: string;
 };
 
@@ -99,7 +101,8 @@ export type NotificationType =
   | "seat_requested"
   | "seat_confirmed"
   | "seat_declined"
-  | "ride_cancelled";
+  | "ride_cancelled"
+  | "request_accepted";
 
 export type Notification = {
   id: string;
@@ -107,6 +110,7 @@ export type Notification = {
   actor_id: string | null;
   type: NotificationType;
   ride_id: string | null;
+  request_id: string | null;
   message: string | null;
   read_at: string | null;
   created_at: string;
@@ -116,6 +120,7 @@ export type Notification = {
 export type NotificationWithContext = Notification & {
   actor: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
   ride: Pick<Ride, "id" | "origin_label" | "destination_label" | "depart_at" | "status"> | null;
+  request: Pick<RideRequest, "id" | "origin_label" | "destination_label" | "depart_at" | "status"> | null;
 };
 
 // Common joined shapes used in the UI.

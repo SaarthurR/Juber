@@ -108,7 +108,8 @@ export function ContactModal({
                 </a>
               )}
 
-              <form action={openConversation.bind(null, driverId, rideId)}>
+              <form action={openConversation.bind(null, driverId)}>
+                <input type="hidden" name="ride_id" value={rideId} />
                 <button type="submit" className="flex w-full items-center gap-4 group">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50">
                     <MessageCircle size={18} className="text-brand-600" />
