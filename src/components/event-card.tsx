@@ -14,7 +14,7 @@ export function EventCard({ event }: { event: EventRow }) {
   return (
     <Link
       href={`/events/${event.slug}`}
-      className="group block rounded-xl border border-stone-200 bg-white px-5 py-4 transition hover:border-stone-300 hover:shadow-sm"
+      className="group block rounded-xl border border-stone-200 bg-white px-5 py-4 transition hover:border-stone-300 hover:shadow-md active:scale-[0.99] active:shadow-sm"
     >
       {dates && (
         <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-brand-600">

@@ -28,7 +28,7 @@ export async function Navbar() {
             <>
               <NavLink href="/messages">Messages</NavLink>
               {profile?.is_admin && <NavLink href="/admin">Admin</NavLink>}
-              <Link href="/profile" className="ml-2">
+              <Link href="/profile" className="ml-2 rounded-full transition hover:ring-2 hover:ring-brand-200 hover:ring-offset-1 active:scale-95">
                 <Avatar
                   src={profile?.avatar_url}
                   name={profile?.full_name}

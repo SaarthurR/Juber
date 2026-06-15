@@ -7,8 +7,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { Avatar } from "@/components/ui/avatar";
 import { ShareButton } from "@/components/share-button";
 import { GoogleSignInButton } from "@/components/auth-button";
-import { requestSeat, setPassengerStatus, cancelRide } from "@/app/rides/actions";
 import { ContactModal } from "@/components/contact-modal";
+import { ReserveSeatButton, PassengerStatusButtons, CancelRideButton } from "@/components/ride-actions";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -111,7 +111,7 @@ export default async function RideDetailPage({
         {/* Driver */}
         <p className="font-bold text-stone-900">Driver:</p>
         <div className="mt-3 flex items-center justify-between">
-          <Link href={`/profile/${ride.driver_id}`} className="flex items-center gap-3">
+          <Link href={`/profile/${ride.driver_id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <Avatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} size={38} />
             <span className="font-bold text-stone-900">
               {ride.driver?.full_name?.split(" ")[0] ?? "Driver"}
@@ -166,7 +166,7 @@ export default async function RideDetailPage({
           {!user ? (
             <GoogleSignInButton
               label="Sign in to reserve a seat"
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-4 text-base font-bold text-white transition hover:bg-brand-700"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-4 text-base font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
             />
           ) : isDriver ? (
             <DriverPanel ride={ride} passengerRows={passengerRows} />
@@ -175,11 +175,7 @@ export default async function RideDetailPage({
               Seat {myJoin.status}
             </div>
           ) : ride.seats_available > 0 ? (
-            <form action={requestSeat.bind(null, ride.id)}>
-              <button className="w-full rounded-lg bg-brand-600 px-6 py-4 text-base font-bold text-white transition hover:bg-brand-700">
-                Reserve a seat
-              </button>
-            </form>
+            <ReserveSeatButton rideId={ride.id} />
           ) : (
             <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-400">
               This ride is full
@@ -217,29 +213,14 @@ function DriverPanel({
                 </div>
               </div>
               {p.status === "pending" && (
-                <div className="flex gap-2">
-                  <form action={setPassengerStatus.bind(null, p.id, ride.id, "confirmed")}>
-                    <button className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700">
-                      Confirm
-                    </button>
-                  </form>
-                  <form action={setPassengerStatus.bind(null, p.id, ride.id, "declined")}>
-                    <button className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-stone-50">
-                      Decline
-                    </button>
-                  </form>
-                </div>
+                <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
               )}
             </li>
           ))}
         </ul>
       )}
 
-      <form action={cancelRide.bind(null, ride.id)} className="mt-5 border-t border-stone-100 pt-4">
-        <button className="text-xs font-medium text-red-500 transition hover:underline">
-          Cancel this ride
-        </button>
-      </form>
+      <CancelRideButton rideId={ride.id} />
     </div>
   );
 }
