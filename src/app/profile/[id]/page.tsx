@@ -48,6 +48,8 @@ export default async function PublicProfilePage({
 
   const isMe = user?.id === id;
 
+  const nowIso = new Date().toISOString();
+
   // --- Tab data queries ---
   let postedRides: RideWithDriver[] = [];
   let joinedRides: RideWithDriver[] = [];
@@ -78,12 +80,14 @@ export default async function PublicProfilePage({
       .from("ride_requests")
       .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
       .eq("rider_id", id)
-      .order("created_at", { ascending: false });
+      .gte("depart_at", nowIso)
+      .order("depart_at", { ascending: true });
     rideRequests = (data ?? []) as RideRequestWithRider[];
   }
 
-  // Merge + deduplicate for "all" tab
-  let allRides: RideWithDriver[] = [];
+  // Merge + deduplicate for "all" tab, then split live vs past
+  let liveRides: RideWithDriver[] = [];
+  let pastRides: RideWithDriver[] = [];
   if (tab === "all") {
     const seen = new Set<string>();
     const merged: RideWithDriver[] = [];
@@ -93,10 +97,13 @@ export default async function PublicProfilePage({
         merged.push(r);
       }
     }
-    merged.sort(
-      (a, b) => new Date(b.depart_at).getTime() - new Date(a.depart_at).getTime()
-    );
-    allRides = merged;
+    const now = new Date(nowIso);
+    liveRides = merged
+      .filter((r) => new Date(r.depart_at) >= now)
+      .sort((a, b) => new Date(a.depart_at).getTime() - new Date(b.depart_at).getTime());
+    pastRides = merged
+      .filter((r) => new Date(r.depart_at) < now)
+      .sort((a, b) => new Date(b.depart_at).getTime() - new Date(a.depart_at).getTime());
   }
 
   // Contact method styling helpers
@@ -201,12 +208,30 @@ export default async function PublicProfilePage({
         </div>
 
         <div className="mt-6 grid gap-4">
-          {tab === "all" &&
-            (allRides.length > 0 ? (
-              allRides.map((r) => <RideCard key={r.id} ride={r} />)
-            ) : (
+          {tab === "all" && (
+            liveRides.length === 0 && pastRides.length === 0 ? (
               <EmptyState />
-            ))}
+            ) : (
+              <>
+                {liveRides.length > 0 && (
+                  <div>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-400">Live Rides</h3>
+                    <div className="grid gap-3">
+                      {liveRides.map((r) => <RideCard key={r.id} ride={r} />)}
+                    </div>
+                  </div>
+                )}
+                {pastRides.length > 0 && (
+                  <div className={liveRides.length > 0 ? "mt-4" : ""}>
+                    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-400">Past Rides</h3>
+                    <div className="grid gap-3">
+                      {pastRides.map((r) => <RideCard key={r.id} ride={r} />)}
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          )}
 
           {tab === "posted" &&
             (postedRides.length > 0 ? (
