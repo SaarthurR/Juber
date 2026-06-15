@@ -24,7 +24,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${jakarta.variable} h-full`}>
+    <html
+      lang="en"
+      className={`${jakarta.variable} h-full`}
+      data-scroll-behavior="smooth"
+    >
       <body className="flex min-h-full flex-col">
         <Navbar />
         <main className="flex-1">{children}</main>

@@ -16,20 +16,21 @@ export default async function HomePage() {
 
   const nowIso = new Date().toISOString();
 
-  const { data: rides } = await supabase
-    .from("rides")
-    .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
-    .eq("status", "active")
-    .gte("depart_at", nowIso)
-    .order("depart_at", { ascending: true })
-    .limit(3);
-
-  const { data: events } = await supabase
-    .from("events")
-    .select("*")
-    .eq("is_active", true)
-    .order("start_date", { ascending: true })
-    .limit(3);
+  const [{ data: rides }, { data: events }] = await Promise.all([
+    supabase
+      .from("rides")
+      .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+      .eq("status", "active")
+      .gte("depart_at", nowIso)
+      .order("depart_at", { ascending: true })
+      .limit(3),
+    supabase
+      .from("events")
+      .select("*")
+      .eq("is_active", true)
+      .order("start_date", { ascending: true })
+      .limit(3),
+  ]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">

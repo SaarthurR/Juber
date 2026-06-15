@@ -50,34 +50,35 @@ export default async function RidesPage({
     return q;
   }
 
-  let rides: RideWithDriver[] = [];
-  let requests: RideRequestWithRider[] = [];
-
-  if (showRequests) {
-    const { data } = await applyFilters(
+  const resultsQuery = showRequests
+    ? applyFilters(
       supabase
         .from("ride_requests")
         .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
         .eq("status", "active")
         .order("depart_at", { ascending: true }),
-    );
-    requests = (data as RideRequestWithRider[]) ?? [];
-  } else {
-    const { data } = await applyFilters(
+    )
+    : applyFilters(
       supabase
         .from("rides")
         .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
         .eq("status", "active")
         .order("depart_at", { ascending: true }),
     );
-    rides = (data as RideWithDriver[]) ?? [];
-  }
 
-  const { count: requestCount } = await supabase
-    .from("ride_requests")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "active")
-    .gte("depart_at", nowIso);
+  const [{ data }, { count: requestCount }] = await Promise.all([
+    resultsQuery,
+    supabase
+      .from("ride_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active")
+      .gte("depart_at", nowIso),
+  ]);
+
+  const rides = showRequests ? [] : ((data as RideWithDriver[]) ?? []);
+  const requests = showRequests
+    ? ((data as RideRequestWithRider[]) ?? [])
+    : [];
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">

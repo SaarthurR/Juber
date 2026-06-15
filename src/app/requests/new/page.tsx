@@ -13,12 +13,14 @@ export default async function NewRequestPage() {
   if (!user) redirect("/");
 
   const supabase = await createClient();
-  const { data: places } = await supabase.from("places").select("*").eq("active", true);
-  const { data: events } = await supabase
-    .from("events")
-    .select("*")
-    .eq("is_active", true)
-    .order("start_date", { ascending: true });
+  const [{ data: places }, { data: events }] = await Promise.all([
+    supabase.from("places").select("*").eq("active", true),
+    supabase
+      .from("events")
+      .select("*")
+      .eq("is_active", true)
+      .order("start_date", { ascending: true }),
+  ]);
 
   return (
     <div className="mx-auto max-w-[760px] px-4 py-10 sm:px-6">

@@ -18,27 +18,27 @@ export default async function EventsPage() {
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
-  const { data: events } = await supabase
-    .from("events")
-    .select("*")
-    .eq("is_active", true)
-    .order("start_date", { ascending: true });
+  const [{ data: events }, { data: rides }, { data: requests }] =
+    await Promise.all([
+      supabase
+        .from("events")
+        .select("*")
+        .eq("is_active", true)
+        .order("start_date", { ascending: true }),
+      supabase
+        .from("rides")
+        .select("event_id, seats_available")
+        .eq("status", "active")
+        .gte("depart_at", nowIso)
+        .not("event_id", "is", null),
+      supabase
+        .from("ride_requests")
+        .select("event_id")
+        .eq("status", "active")
+        .not("event_id", "is", null),
+    ]);
 
   const list = (events as EventRow[]) ?? [];
-
-  // Aggregate live ride + request stats per event in two queries.
-  const { data: rides } = await supabase
-    .from("rides")
-    .select("event_id, seats_available")
-    .eq("status", "active")
-    .gte("depart_at", nowIso)
-    .not("event_id", "is", null);
-
-  const { data: requests } = await supabase
-    .from("ride_requests")
-    .select("event_id")
-    .eq("status", "active")
-    .not("event_id", "is", null);
 
   const stats = new Map<string, { rides: number; seats: number; requests: number }>();
   for (const e of list) stats.set(e.id, { rides: 0, seats: 0, requests: 0 });

@@ -33,9 +33,11 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  // Refreshing the auth token keeps the session alive across requests.
+  // Reading the session refreshes expired tokens through the cookie adapter
+  // without verifying the user on every navigation. Authorization still uses
+  // getClaims() in page/action code; Proxy only needs to keep cookies current.
   try {
-    await supabase.auth.getUser();
+    await supabase.auth.getSession();
   } catch {
     // Network/config hiccup — don't take down every request over it.
   }
