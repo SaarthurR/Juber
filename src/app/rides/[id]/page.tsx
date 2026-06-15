@@ -37,7 +37,23 @@ export default async function RideDetailPage({
     .select("*, passenger:profiles!ride_passengers_passenger_id_fkey(*)")
     .eq("ride_id", id);
 
-  const passengerRows = (passengers as PassengerRow[]) ?? [];
+  let passengerRows = (passengers as PassengerRow[]) ?? [];
+  const missingProfileIds = passengerRows
+    .filter((p) => !p.passenger && p.passenger_id)
+    .map((p) => p.passenger_id);
+  if (missingProfileIds.length) {
+    const { data: fallbackProfiles } = await supabase
+      .from("profiles")
+      .select("*")
+      .in("id", missingProfileIds);
+    const profilesById = new Map(
+      ((fallbackProfiles as Profile[] | null) ?? []).map((profile) => [profile.id, profile]),
+    );
+    passengerRows = passengerRows.map((p) => ({
+      ...p,
+      passenger: p.passenger ?? profilesById.get(p.passenger_id) ?? null,
+    }));
+  }
   const isDriver = user?.id === ride.driver_id;
   const myJoin = passengerRows.find((p) => p.passenger_id === user?.id);
   const confirmed = passengerRows.filter((p) => p.status === "confirmed");
@@ -177,23 +193,20 @@ export default async function RideDetailPage({
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {confirmed.map((p) => (
-            <Avatar
+            <Link
               key={p.id}
-              src={p.passenger?.avatar_url}
-              name={p.passenger?.full_name}
-              size={36}
-            />
-          ))}
-          {Array.from({ length: Math.max(0, confirmedCount - confirmed.length) }).map((_, i) => (
-            <span
-              key={`confirmed-${i}`}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700"
-              title="Confirmed rider"
+              href={`/profile/${p.passenger_id}`}
+              aria-label={`View ${p.passenger?.full_name ?? "confirmed rider"}'s profile`}
+              className="rounded-full transition hover:ring-2 hover:ring-brand-200 hover:ring-offset-1 active:scale-95"
             >
-              ✓
-            </span>
+              <Avatar
+                src={p.passenger?.avatar_url}
+                name={p.passenger?.full_name}
+                size={36}
+              />
+            </Link>
           ))}
-          {Array.from({ length: Math.max(0, ride.seats_total - confirmedCount) }).map((_, i) => (
+          {Array.from({ length: Math.max(0, ride.seats_total - confirmed.length) }).map((_, i) => (
             <span
               key={i}
               className="flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-dashed border-[#d6cfc4] text-[#c2bbb0]"
@@ -251,13 +264,18 @@ function DriverPanel({
         <ul className="space-y-3">
           {passengerRows.map((p) => (
             <li key={p.id} className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
+              <Link
+                href={`/profile/${p.passenger_id}`}
+                className="flex items-center gap-2.5 transition-opacity hover:opacity-80"
+              >
                 <Avatar src={p.passenger?.avatar_url} name={p.passenger?.full_name} size={32} />
                 <div>
-                  <p className="text-sm font-medium text-stone-900">{p.passenger?.full_name}</p>
+                  <p className="text-sm font-medium text-stone-900">
+                    {p.passenger?.full_name ?? "Member"}
+                  </p>
                   <p className="text-xs capitalize text-stone-400">{p.status}</p>
                 </div>
-              </div>
+              </Link>
               {p.status === "pending" && (
                 <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
               )}

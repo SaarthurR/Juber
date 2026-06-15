@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Car, Check, X, Ban, Handshake } from "lucide-react";
@@ -8,6 +8,12 @@ import { formatDistanceToNow } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { markNotificationsRead } from "@/app/messages/actions";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
+
+const NOTIFICATION_SELECT =
+  "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)";
+
+const FALLBACK_NOTIFICATION_SELECT =
+  "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)";
 
 const ICON: Record<NotificationType, React.ComponentType<{ size?: number; className?: string }>> = {
   seat_requested: Car,
@@ -76,12 +82,45 @@ export function NotificationBell({
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(initial);
   const [unread, setUnread] = useState(initialUnread);
+  const initialKey = `${initialUnread}:${initial.map((n) => n.id).join(",")}`;
+  const [syncedTo, setSyncedTo] = useState(initialKey);
   const ref = useRef<HTMLDivElement>(null);
 
-  // Keep in sync when the server hands fresh data on navigation.
-  const [syncedTo, setSyncedTo] = useState(initialUnread);
-  if (syncedTo !== initialUnread) {
-    setSyncedTo(initialUnread);
+  const refreshNotifications = useCallback(async () => {
+    const supabase = createClient();
+    const [{ count }, notificationsResult] = await Promise.all([
+      supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", userId)
+        .is("read_at", null),
+      supabase
+        .from("notifications")
+        .select(NOTIFICATION_SELECT)
+        .eq("recipient_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(6),
+    ]);
+
+    let data = notificationsResult.data;
+    if (notificationsResult.error) {
+      const fallback = await supabase
+        .from("notifications")
+        .select(FALLBACK_NOTIFICATION_SELECT)
+        .eq("recipient_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      data = fallback.data;
+    }
+
+    setUnread(count ?? 0);
+    setItems(((data ?? []) as NotificationWithContext[]).map((n) => ({ ...n, request: n.request ?? null })));
+  }, [userId]);
+
+  // Keep in sync when the server hands fresh data on navigation. This render-time
+  // adjustment avoids the extra cascading render that a syncing effect would add.
+  if (syncedTo !== initialKey) {
+    setSyncedTo(initialKey);
     setUnread(initialUnread);
     setItems(initial);
   }
@@ -101,6 +140,7 @@ export function NotificationBell({
         },
         () => {
           setUnread((n) => n + 1);
+          void refreshNotifications();
           router.refresh();
         },
       )
@@ -108,7 +148,21 @@ export function NotificationBell({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, router]);
+  }, [userId, router, refreshNotifications]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void refreshNotifications();
+    }, 10000);
+    function onVisible() {
+      if (document.visibilityState === "visible") void refreshNotifications();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [refreshNotifications]);
 
   // Click-out + Esc close the popover.
   useEffect(() => {
@@ -137,7 +191,13 @@ export function NotificationBell({
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setOpen((o) => {
+            const next = !o;
+            if (next) void refreshNotifications();
+            return next;
+          });
+        }}
         aria-label="Notifications"
         className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-tint text-brand-600 transition hover:brightness-95 active:scale-95"
       >

@@ -16,7 +16,7 @@ export async function Navbar() {
   let notifications: NotificationWithContext[] = [];
   if (user) {
     const supabase = await createClient();
-    const [{ count }, { data }] = await Promise.all([
+    const [{ count }, notificationsResult] = await Promise.all([
       supabase
         .from("notifications")
         .select("id", { count: "exact", head: true })
@@ -32,7 +32,22 @@ export async function Navbar() {
         .limit(6),
     ]);
     unread = count ?? 0;
-    notifications = (data as NotificationWithContext[] | null) ?? [];
+    let data = notificationsResult.data;
+    if (notificationsResult.error) {
+      const fallback = await supabase
+        .from("notifications")
+        .select(
+          "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)",
+        )
+        .eq("recipient_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      data = fallback.data;
+    }
+    notifications = (((data as NotificationWithContext[] | null) ?? []).map((n) => ({
+      ...n,
+      request: n.request ?? null,
+    })));
   }
 
   return (
