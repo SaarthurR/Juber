@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 
 /**
  * Finds an existing 1:1 conversation between the current user and `otherUserId`
@@ -10,9 +11,7 @@ import { createClient } from "@/lib/supabase/server";
  */
 export async function openConversation(otherUserId: string, rideId?: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) redirect("/");
   if (user.id === otherUserId) redirect("/messages");
 
@@ -57,9 +56,7 @@ export async function openConversation(otherUserId: string, rideId?: string) {
 /** Marks all of the current user's unread notifications as read. */
 export async function markNotificationsRead() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) return;
 
   await supabase
@@ -73,9 +70,7 @@ export async function markNotificationsRead() {
 
 export async function sendMessage(conversationId: string, formData: FormData) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
   const body = (formData.get("body") ?? "").toString().trim();

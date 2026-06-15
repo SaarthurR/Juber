@@ -2,6 +2,26 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
+export type AuthUser = { id: string; email: string | null };
+
+/**
+ * Resolve the signed-in user from the session JWT.
+ *
+ * Uses `getClaims()`, which verifies the token locally against the project's
+ * (cached) JWKS — no per-request round-trip to the Auth server like `getUser()`
+ * makes. With asymmetric JWT signing keys this is effectively free; with legacy
+ * symmetric secrets it transparently falls back to a verified `getUser()` call,
+ * so it is never slower.
+ */
+export async function getAuthUser(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<AuthUser | null> {
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (!claims?.sub) return null;
+  return { id: claims.sub, email: (claims.email as string) ?? null };
+}
+
 /**
  * Returns the current auth user and their profile row, or nulls if signed out.
  *
@@ -11,9 +31,7 @@ import type { Profile } from "@/lib/types";
  */
 export const getCurrentUser = cache(async () => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
 
   if (!user) return { user: null, profile: null as Profile | null };
 

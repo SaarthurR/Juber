@@ -54,13 +54,7 @@ export default async function RequestsPage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-stone-300 p-10 text-center text-stone-500">
-          <p className="mb-4 text-base">No ride requests yet.</p>
-          <Link
-            href="/requests/new"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
-          >
-            <Plus size={16} /> Post a request
-          </Link>
+          <p className="text-base">No ride requests yet.</p>
         </div>
       )}
     </div>

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -11,9 +12,7 @@ function str(v: FormDataEntryValue | null) {
 
 export async function updateProfile(formData: FormData) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
   const rawInsta = str(formData.get("instagram"));

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -21,9 +22,7 @@ function isoDate(v: FormDataEntryValue | null) {
 
 export async function postRide(formData: FormData) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
   const seats = parseInt(str(formData.get("seats_total")) ?? "1", 10);
@@ -50,9 +49,7 @@ export async function postRide(formData: FormData) {
 
 export async function postRequest(formData: FormData) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
   const earliestDate = str(formData.get("earliest_date")); // "YYYY-MM-DD"
@@ -88,9 +85,7 @@ export async function postRequest(formData: FormData) {
 
 export async function requestSeat(rideId: string) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
   const { error } = await supabase

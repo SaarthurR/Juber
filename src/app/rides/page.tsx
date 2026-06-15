@@ -128,7 +128,7 @@ export default async function RidesPage({
       <RideFilters />
 
       {/* Request a ride CTA */}
-      {user && !showRequests && (
+      {user && (
         <div className="mb-5 mt-3 flex justify-end">
           <Link
             href="/requests/new"

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -19,9 +20,7 @@ function slugify(name: string) {
 
 async function requireAdmin() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthUser(supabase);
   if (!user) redirect("/");
   const { data: profile } = await supabase
     .from("profiles")
