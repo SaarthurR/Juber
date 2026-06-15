@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowLeft, User, Ban } from "lucide-react";
+import { ArrowLeft, Plus, Ban } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { Avatar } from "@/components/ui/avatar";
@@ -74,9 +74,9 @@ export default async function RideDetailPage({
             <ArrowLeft size={24} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-stone-900">Trip Details</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight text-ink">Trip details</h1>
             <p className="text-sm text-stone-500">
-              {ride.origin_label} → {ride.destination_label}
+              {ride.origin_label} &nbsp;→&nbsp; {ride.destination_label}
             </p>
           </div>
         </div>
@@ -124,13 +124,27 @@ export default async function RideDetailPage({
         )}
 
         {/* Driver */}
-        <p className="font-bold text-stone-900">Driver:</p>
-        <div className="mt-3 flex items-center justify-between">
-          <Link href={`/profile/${ride.driver_id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
-            <Avatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} size={38} />
-            <span className="font-bold text-stone-900">
-              {ride.driver?.full_name?.split(" ")[0] ?? "Driver"}
-            </span>
+        <p className="text-sm font-bold uppercase tracking-wide text-[#57534e]">Driver</p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <Link href={`/profile/${ride.driver_id}`} className="flex items-center gap-3 transition-opacity hover:opacity-80">
+            <Avatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} size={46} />
+            <div>
+              <div className="font-bold text-ink">
+                {ride.driver?.full_name ?? "Driver"}
+              </div>
+              {(ride.driver?.pronouns || ride.driver?.car_make_model || ride.driver?.car_color) && (
+                <div className="text-[13px] text-[#a8a29e]">
+                  {[
+                    ride.driver?.pronouns,
+                    (ride.driver?.car_color || ride.driver?.car_make_model)
+                      ? `drives a ${[ride.driver?.car_color, ride.driver?.car_make_model].filter(Boolean).join(" ")}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+              )}
+            </div>
           </Link>
           {user && !isDriver && (
             <ContactModal
@@ -145,15 +159,15 @@ export default async function RideDetailPage({
         </div>
 
         {/* Note */}
-        <p className="mt-8 font-bold text-stone-900">Note:</p>
-        <div className="mt-3 rounded-lg bg-stone-100 p-4 text-sm text-stone-700 leading-relaxed">
+        <p className="mt-8 text-sm font-bold uppercase tracking-wide text-[#57534e]">Note</p>
+        <div className="mt-3 rounded-xl bg-[#f7f5f2] p-4 text-[15px] leading-relaxed text-[#44403c]">
           {ride.notes || "No additional notes."}
         </div>
 
         {/* Going */}
         <div className="mt-8 flex items-center justify-between">
-          <p className="font-bold text-stone-900">Going:</p>
-          <p className="text-sm text-stone-500">
+          <p className="text-sm font-bold uppercase tracking-wide text-[#57534e]">Going</p>
+          <p className="text-sm font-extrabold text-stone-500">
             {confirmed.length}/{ride.seats_total}
           </p>
         </div>
@@ -169,9 +183,9 @@ export default async function RideDetailPage({
           {Array.from({ length: Math.max(0, ride.seats_total - confirmed.length) }).map((_, i) => (
             <span
               key={i}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-stone-300"
+              className="flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-dashed border-[#d6cfc4] text-[#c2bbb0]"
             >
-              <User size={20} />
+              <Plus size={18} />
             </span>
           ))}
         </div>

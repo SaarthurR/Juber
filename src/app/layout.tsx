@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
@@ -64,8 +65,29 @@ export default function RootLayout({
               </div>
             </div>
 
-            <div className="mt-8 border-t border-stone-100 pt-6 text-xs text-stone-400">
-              © {new Date().getFullYear()} {APP_NAME} · JCNC Carpool
+            <div className="mt-8 flex flex-col gap-4 border-t border-[#f3ece1] pt-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2.5 text-[13px] font-semibold text-[#a8927a]">
+                <span>An initiative for the</span>
+                <Image
+                  src="/jcnc-logo.png"
+                  alt="Jain Center of Northern California"
+                  width={449}
+                  height={66}
+                  className="h-5 w-auto"
+                />
+                <span>community ·</span>
+                <a
+                  href="https://jcnc.org/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold text-brand-600 hover:text-brand-700"
+                >
+                  jcnc.org
+                </a>
+              </div>
+              <p className="text-xs text-stone-400">
+                © {new Date().getFullYear()} {APP_NAME}
+              </p>
             </div>
           </div>
         </footer>

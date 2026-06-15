@@ -37,23 +37,23 @@ export function RideFilters() {
   return (
     <form
       action={update}
-      className="grid items-end gap-x-4 gap-y-3 sm:grid-cols-[1fr_auto_1fr_1fr]"
+      className="flex flex-wrap items-end gap-3.5 rounded-2xl border border-[#efe4d3] bg-white p-[18px] shadow-[0_24px_50px_-36px_rgba(92,59,46,0.4)]"
     >
-      <Field label="From" name="from" defaultValue={params.get("from") ?? ""} placeholder="City, State" />
+      <Field label="From" name="from" defaultValue={params.get("from") ?? ""} placeholder="San Jose" />
 
       <button
         type="button"
         onClick={swap}
         aria-label="Swap from and to"
-        className="mx-auto hidden h-[46px] items-center justify-center text-stone-400 transition hover:text-stone-700 sm:flex"
+        className="hidden h-[50px] items-center justify-center pb-0.5 text-[#cdb593] transition hover:text-brand-600 sm:flex"
       >
-        <ArrowLeftRight size={20} />
+        <ArrowLeftRight size={22} />
       </button>
 
-      <Field label="To" name="to" defaultValue={params.get("to") ?? ""} placeholder="City, State" />
+      <Field label="To" name="to" defaultValue={params.get("to") ?? ""} placeholder="JCNC, Milpitas" />
 
-      <label className="block">
-        <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-stone-900">
+      <label className="block min-w-[140px] flex-1">
+        <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#a8927a]">
           Date
         </span>
         <input
@@ -61,7 +61,7 @@ export function RideFilters() {
           type="date"
           defaultValue={params.get("date") ?? ""}
           onChange={(e) => e.currentTarget.form?.requestSubmit()}
-          className="h-[46px] w-full rounded-lg border border-stone-300 px-3 text-sm text-stone-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          className="h-[50px] w-full rounded-xl border border-[#ead9c2] px-3.5 text-[15px] text-stone-700 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
         />
       </label>
     </form>
@@ -80,8 +80,8 @@ function Field({
   placeholder?: string;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-stone-900">
+    <label className="block min-w-[170px] flex-1">
+      <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#a8927a]">
         {label}
       </span>
       <div className="relative">
@@ -90,12 +90,12 @@ function Field({
           type="text"
           defaultValue={defaultValue}
           placeholder={placeholder}
-          className="h-[46px] w-full rounded-lg border border-stone-300 pl-3 pr-10 text-sm outline-none placeholder:text-stone-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+          className="h-[50px] w-full rounded-xl border border-[#ead9c2] pl-3.5 pr-10 text-[15px] outline-none placeholder:text-[#b6a48c] focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
         />
         <button
           type="submit"
           aria-label="Search"
-          className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 transition hover:text-stone-700"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#cdb593] transition hover:text-brand-600"
         >
           <Search size={18} />
         </button>

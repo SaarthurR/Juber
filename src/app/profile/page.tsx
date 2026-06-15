@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
+import { Camera } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { updateProfile } from "@/app/profile/actions";
 import { FormField, SubmitButton } from "@/components/form-bits";
-import { Avatar } from "@/components/ui/avatar";
+import { initials } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -13,20 +14,19 @@ export default async function EditProfilePage() {
   const preferredContact = profile?.preferred_contact ?? "message";
 
   const radioBase =
-    "flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50 has-[:checked]:text-brand-700 border-stone-200 text-stone-600 hover:bg-stone-50";
+    "flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition has-[:checked]:border-brand-600 has-[:checked]:bg-tint has-[:checked]:text-brand-700 border-[#e2ddd5] text-stone-600 hover:bg-stone-50";
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-10 sm:px-6">
-      <div className="mb-1 flex items-center gap-4">
-        <Avatar src={profile?.avatar_url} name={profile?.full_name} size={44} />
-        <h1 className="text-3xl font-bold text-stone-900">Edit Profile</h1>
-      </div>
-      <hr className="my-5 border-stone-200" />
+    <div className="mx-auto flex max-w-4xl flex-wrap-reverse gap-12 px-4 py-10 sm:px-6">
+      <form action={updateProfile} className="min-w-[300px] max-w-[560px] flex-[2] space-y-8">
+        <div>
+          <h1 className="text-[30px] font-extrabold tracking-tight text-ink">Edit profile</h1>
+          <div className="mt-5 h-px bg-[#efece6]" />
+        </div>
 
-      <form action={updateProfile} className="space-y-8">
         {/* Personal Information */}
         <div>
-          <h2 className="mb-4 font-bold text-stone-900">Personal Information</h2>
+          <h2 className="mb-4 text-base font-extrabold text-ink">Personal information</h2>
           <div className="space-y-4">
             <FormField label="Name" name="full_name" defaultValue={profile?.full_name ?? ""} required />
             <FormField
@@ -46,7 +46,7 @@ export default async function EditProfilePage() {
 
         {/* Contact */}
         <div>
-          <h2 className="mb-4 font-bold text-stone-900">Contact</h2>
+          <h2 className="mb-4 text-base font-extrabold text-ink">Contact</h2>
           <div className="space-y-4">
             <FormField label="Phone (optional)" name="phone" type="tel" defaultValue={profile?.phone ?? ""} />
             <FormField
@@ -60,7 +60,7 @@ export default async function EditProfilePage() {
 
         {/* Preferred contact */}
         <div>
-          <h2 className="mb-4 font-bold text-stone-900">Preferred contact method</h2>
+          <h2 className="mb-4 text-base font-extrabold text-ink">Preferred contact method</h2>
           <div className="flex flex-wrap gap-2">
             <label className={radioBase}>
               <input type="radio" name="preferred_contact" value="phone" defaultChecked={preferredContact === "phone"} className="sr-only" />
@@ -79,7 +79,7 @@ export default async function EditProfilePage() {
 
         {/* Car info */}
         <div>
-          <h2 className="mb-4 font-bold text-stone-900">Car</h2>
+          <h2 className="mb-4 text-base font-extrabold text-ink">Car</h2>
           <div className="grid grid-cols-2 gap-4">
             <FormField
               label="Make / model"
@@ -98,18 +98,36 @@ export default async function EditProfilePage() {
 
         {/* Bio */}
         <div>
-          <h2 className="mb-4 font-bold text-stone-900">About (optional)</h2>
+          <h2 className="mb-4 text-base font-extrabold text-ink">About (optional)</h2>
           <FormField label="" name="bio" textarea defaultValue={profile?.bio ?? ""} placeholder="A short intro for other riders" />
         </div>
 
-        <SubmitButton>Save</SubmitButton>
+        <SubmitButton>Save changes</SubmitButton>
+
+        <div className="border-t border-[#efece6] pt-5 text-center">
+          <button
+            formAction="/auth/signout"
+            formMethod="post"
+            className="text-sm text-stone-400 transition hover:text-red-500"
+          >
+            Sign out
+          </button>
+        </div>
       </form>
 
-      <form action="/auth/signout" method="post" className="mt-6 text-center">
-        <button className="text-sm text-stone-400 hover:text-red-500 transition">
-          Sign out
-        </button>
-      </form>
+      {/* Avatar column */}
+      <div className="flex min-w-[200px] flex-1 flex-col items-center pt-2 text-center sm:pt-14">
+        <div className="relative mb-4">
+          <div className="flex h-[120px] w-[120px] items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[42px] font-extrabold text-white">
+            {initials(profile?.full_name)}
+          </div>
+          <span className="absolute bottom-1 right-1 flex h-[34px] w-[34px] items-center justify-center rounded-full border border-[#e2ddd5] bg-white text-stone-500">
+            <Camera size={16} />
+          </span>
+        </div>
+        <p className="text-sm font-bold text-stone-700">Update photo</p>
+        <p className="mt-0.5 text-[13px] text-[#a8a29e]">JPG or PNG, up to 4MB</p>
+      </div>
     </div>
   );
 }

@@ -24,10 +24,15 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
     >
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <Avatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} size={32} />
-          <span className="text-sm font-bold text-stone-900">
-            {ride.driver?.full_name ?? "Driver"}
-          </span>
+          <Avatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} size={40} />
+          <div>
+            <div className="text-[15px] font-bold text-ink">
+              {ride.driver?.full_name ?? "Driver"}
+            </div>
+            {ride.driver?.neighborhood && (
+              <div className="text-[13px] text-[#a8927a]">{ride.driver.neighborhood}</div>
+            )}
+          </div>
         </div>
         {ride.event ? (
           <span className="text-xs font-semibold text-stone-500">
