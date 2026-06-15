@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { APP_TAGLINE } from "@/lib/constants";
+import { TempleLogo } from "@/components/temple-logo";
 import { RideCard } from "@/components/ride-card";
 import { EventCard } from "@/components/event-card";
 import { GoogleSignInButton } from "@/components/auth-button";
@@ -33,39 +33,48 @@ export default async function HomePage() {
 
   return (
     <div>
-      {/* Hero */}
-      <section className="mx-auto max-w-5xl px-4 pb-12 pt-14 sm:px-6 sm:pt-20">
-        <h1 className="text-4xl font-extrabold tracking-tight text-stone-900 sm:text-5xl lg:text-[56px] lg:leading-[1.1]">
-          Fewer cars.{" "}
-          <span className="text-brand-600">Less harm.</span>
-        </h1>
-        <p className="mt-5 max-w-lg text-[17px] leading-relaxed text-stone-600">
-          {APP_TAGLINE} Share rides to JCNC with the sangha you already trust —
-          especially during Paryushan and big events.
-        </p>
-        <div className="mt-7 flex flex-wrap items-center gap-3">
-          <Link
-            href="/rides"
-            className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700"
-          >
-            Find a ride <ArrowRight size={15} />
-          </Link>
-          {!user ? (
-            <GoogleSignInButton label="Sign in to post a ride" />
-          ) : (
-            <Link
-              href="/rides/new"
-              className="inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-6 py-2.5 text-sm font-medium text-stone-800 transition hover:bg-stone-50"
-            >
-              Post a ride
-            </Link>
-          )}
-        </div>
-
-        <div className="mt-10 flex flex-wrap gap-x-8 gap-y-2 border-t border-stone-200 pt-8 text-sm text-stone-500">
-          <span>· Rides to & from JCNC</span>
-          <span>· Paryushan, Mahavir Jayanti &amp; more</span>
-          <span>· Free to use, community-run</span>
+      {/* Hero band */}
+      <section className="px-4 pt-6 sm:px-6">
+        <div className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl bg-brand-600 px-7 py-12 text-white shadow-[0_24px_50px_-28px_rgba(92,59,46,0.55)] sm:px-12 sm:py-16">
+          {/* faint temple silhouette */}
+          <TempleLogo
+            size={260}
+            className="pointer-events-none absolute -bottom-12 -right-8 text-white/10"
+          />
+          <div className="relative">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#e8c887]">
+              Ahimsa on the road
+            </p>
+            <h1 className="mt-3 max-w-2xl text-4xl font-extrabold leading-[1.08] sm:text-5xl lg:text-[52px]">
+              Fewer cars.{" "}
+              <span className="text-[#e8c887]">Less harm.</span>
+            </h1>
+            <p className="mt-4 max-w-lg text-[16px] leading-relaxed text-white/85">
+              Share rides to JCNC with the sangha you already trust — especially
+              during Paryushan and big events.
+            </p>
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              <Link
+                href="/rides"
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-2.5 text-sm font-bold text-brand-600 transition hover:bg-[#fbf7f0] active:scale-95"
+              >
+                Find a ride <ArrowRight size={15} />
+              </Link>
+              {!user ? (
+                <GoogleSignInButton
+                  label="Sign in to post a ride"
+                  className="inline-flex items-center gap-2 rounded-xl border-[1.5px] border-white/70 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-white/10 active:scale-95"
+                />
+              ) : (
+                <Link
+                  href="/rides/new"
+                  className="inline-flex items-center gap-2 rounded-xl border-[1.5px] border-white/70 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-white/10 active:scale-95"
+                >
+                  Post a ride
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
       </section>
 

@@ -1,0 +1,31 @@
+// JCNC temple mark — heritage brown body with a gold doorway.
+// Uses currentColor for the body so it inherits the surrounding text color.
+export function TempleLogo({
+  size = 28,
+  className,
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 48 48"
+      fill="none"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M24 3.5l1.8 3.6h-3.6z" fill="currentColor" />
+      <rect x="23.2" y="6.5" width="1.6" height="3" fill="currentColor" />
+      <path d="M9 19 L24 8.5 L39 19 Z" fill="currentColor" />
+      <rect x="12" y="21" width="3" height="13" rx="1" fill="currentColor" />
+      <rect x="17.5" y="21" width="3" height="13" rx="1" fill="currentColor" />
+      <rect x="27.5" y="21" width="3" height="13" rx="1" fill="currentColor" />
+      <rect x="33" y="21" width="3" height="13" rx="1" fill="currentColor" />
+      <path d="M22 34v-7a2 2 0 0 1 4 0v7z" fill="#C99A2E" />
+      <rect x="8" y="35.5" width="32" height="3" rx="1" fill="currentColor" />
+      <rect x="10.5" y="40" width="27" height="3" rx="1" fill="currentColor" opacity="0.55" />
+    </svg>
+  );
+}

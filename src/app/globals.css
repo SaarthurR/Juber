@@ -1,17 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  /* JCNC Heritage — brand brown ramp */
+  --color-brand-50: #f6e9da;
+  --color-brand-100: #f3e7d8;
+  --color-brand-200: #e8c887;
+  --color-brand-500: #c9712f;
+  --color-brand-600: #a65329;
+  --color-brand-700: #8a4420;
+
+  /* Heritage accents */
+  --color-gold: #c99a2e;
+  --color-gold-light: #e8c887;
+  --color-tint: #f6e9da;
+  --color-sand: #f3e7d8;
+  --color-sand-text: #8a5a2b;
+  --color-cream: #fbf7f0;
+  --color-ink: #1c1917;
 }
 
 :root {
-  --background: #faf9f7;
+  --background: #fbf7f0;
   --foreground: #1c1917;
 }
 
@@ -25,11 +36,17 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+  text-wrap: pretty;
 }
 
 ::selection {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: #f6e9da;
+  color: #8a4420;
 }
 
 * {

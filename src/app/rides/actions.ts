@@ -118,11 +118,16 @@ export async function setPassengerStatus(
   revalidatePath(`/rides/${rideId}`);
 }
 
-export async function cancelRide(rideId: string) {
+export async function cancelRide(rideId: string, reason: string) {
+  const trimmed = (reason ?? "").trim();
+  if (!trimmed) {
+    throw new Error("Please tell your riders why the ride is cancelled.");
+  }
+
   const supabase = await createClient();
   const { error } = await supabase
     .from("rides")
-    .update({ status: "cancelled" })
+    .update({ status: "cancelled", cancellation_reason: trimmed })
     .eq("id", rideId);
   if (error) throw new Error(error.message);
   revalidatePath("/rides");

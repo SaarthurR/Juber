@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Geist } from "next/font/google";
-import { Car } from "lucide-react";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
+import { TempleLogo } from "@/components/temple-logo";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const jakarta = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -22,20 +23,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} h-full`}>
+    <html lang="en" className={`${jakarta.variable} h-full`}>
       <body className="flex min-h-full flex-col">
         <Navbar />
         <main className="flex-1">{children}</main>
 
-        <footer className="mt-16 border-t border-stone-200">
+        <footer className="mt-16 border-t border-[var(--border,#efe4d3)] border-stone-200">
           <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
             <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <Link
                   href="/"
-                  className="flex items-center gap-1.5 font-semibold text-[15px] text-stone-900"
+                  className="flex items-center gap-1.5 font-extrabold text-[15px] text-stone-900"
                 >
-                  <Car size={16} className="text-brand-600" strokeWidth={2.5} />
+                  <TempleLogo size={18} className="text-brand-600" />
                   {APP_NAME}
                 </Link>
                 <p className="mt-2 max-w-[220px] text-sm text-stone-500 leading-relaxed">

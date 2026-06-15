@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowLeft, User } from "lucide-react";
+import { ArrowLeft, User, Ban } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { Avatar } from "@/components/ui/avatar";
@@ -46,8 +46,23 @@ export default async function RideDetailPage({
     ? `$${Number(ride.gas_contribution).toFixed(0)}`
     : "Free";
 
+  const cancelled = ride.status === "cancelled";
+
   return (
     <div>
+      {cancelled && (
+        <div className="border-b border-red-200 bg-red-50">
+          <div className="mx-auto flex max-w-4xl items-start gap-3 px-4 py-4 sm:px-6">
+            <Ban size={20} className="mt-0.5 shrink-0 text-red-600" />
+            <div>
+              <p className="text-sm font-bold text-red-700">This ride was cancelled.</p>
+              {ride.cancellation_reason && (
+                <p className="mt-0.5 text-sm text-red-600">“{ride.cancellation_reason}”</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 pt-7 sm:px-6">
         <div className="flex items-center gap-3">
@@ -170,6 +185,10 @@ export default async function RideDetailPage({
             />
           ) : isDriver ? (
             <DriverPanel ride={ride} passengerRows={passengerRows} />
+          ) : cancelled ? (
+            <div className="rounded-lg bg-red-50 px-6 py-4 text-center text-base font-bold text-red-500">
+              This ride was cancelled
+            </div>
           ) : myJoin ? (
             <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
               Seat {myJoin.status}
@@ -220,7 +239,7 @@ function DriverPanel({
         </ul>
       )}
 
-      <CancelRideButton rideId={ride.id} />
+      {ride.status !== "cancelled" && <CancelRideButton rideId={ride.id} />}
     </div>
   );
 }

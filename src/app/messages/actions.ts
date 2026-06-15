@@ -54,6 +54,23 @@ export async function openConversation(otherUserId: string, rideId?: string) {
   redirect(`/messages/${convo.id}`);
 }
 
+/** Marks all of the current user's unread notifications as read. */
+export async function markNotificationsRead() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("recipient_id", user.id)
+    .is("read_at", null);
+
+  revalidatePath("/messages");
+}
+
 export async function sendMessage(conversationId: string, formData: FormData) {
   const supabase = await createClient();
   const {
