@@ -131,6 +131,16 @@ export async function acceptRideRequest(requestId: string) {
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
+  const { data: request } = await supabase
+    .from("ride_requests")
+    .select("rider_id")
+    .eq("id", requestId)
+    .single<{ rider_id: string }>();
+  if (!request) throw new Error("Could not find this request.");
+  if (request.rider_id === user.id) {
+    throw new Error("You cannot accept your own ride request.");
+  }
+
   const { data, error } = await supabase.rpc("accept_ride_request", {
     p_request_id: requestId,
   });
@@ -139,33 +149,13 @@ export async function acceptRideRequest(requestId: string) {
     throw new Error("This request is no longer available.");
   }
 
-  const { data: request } = await supabase
-    .from("ride_requests")
-    .select("rider_id")
-    .eq("id", requestId)
-    .single<{ rider_id: string }>();
-  if (!request) throw new Error("Could not find the accepted request.");
-
-  const { data: existingConvos } = await supabase
-    .from("conversations")
-    .select("id")
-    .eq("request_id", requestId);
-  let conversationId = existingConvos?.[0]?.id ?? null;
-
-  if (!conversationId) {
-    const { data: convo, error: convoErr } = await supabase
-      .from("conversations")
-      .insert({ request_id: requestId })
-      .select("id")
-      .single();
-    if (convoErr || !convo) throw new Error(convoErr?.message ?? "Could not start chat");
-    conversationId = convo.id;
-
-    const { error: participantErr } = await supabase.from("conversation_participants").insert([
-      { conversation_id: conversationId, user_id: user.id },
-      { conversation_id: conversationId, user_id: request.rider_id },
-    ]);
-    if (participantErr) throw new Error(participantErr.message);
+  const { data: conversationId, error: convoError } = await supabase.rpc("open_conversation", {
+    p_other_user_id: request.rider_id,
+    p_ride_id: null,
+    p_request_id: requestId,
+  });
+  if (convoError || !conversationId) {
+    throw new Error(convoError?.message ?? "Could not start chat");
   }
 
   revalidatePath("/rides");

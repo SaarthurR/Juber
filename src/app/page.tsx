@@ -17,14 +17,23 @@ export default async function HomePage() {
 
   const nowIso = new Date().toISOString();
 
+  const ridesPromise = user
+    ? supabase
+        .from("rides")
+        .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+        .eq("status", "active")
+        .gte("depart_at", nowIso)
+        .order("depart_at", { ascending: true })
+        .limit(3)
+    : supabase.rpc("public_upcoming_rides", {
+        p_from: null,
+        p_to: null,
+        p_date: null,
+        p_limit: 3,
+      });
+
   const [{ data: rides }, { data: events }] = await Promise.all([
-    supabase
-      .from("rides")
-      .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
-      .eq("status", "active")
-      .gte("depart_at", nowIso)
-      .order("depart_at", { ascending: true })
-      .limit(3),
+    ridesPromise,
     supabase
       .from("events")
       .select("*")

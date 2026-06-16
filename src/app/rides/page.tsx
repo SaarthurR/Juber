@@ -57,13 +57,20 @@ export default async function RidesPage({
     return q;
   }
 
-  const ridesQuery = applyRideFilters(
-    supabase
-      .from("rides")
-      .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
-      .eq("status", "active")
-      .order("depart_at", { ascending: true }),
-  );
+  const ridesQuery = user
+    ? applyRideFilters(
+        supabase
+          .from("rides")
+          .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+          .eq("status", "active")
+          .order("depart_at", { ascending: true }),
+      )
+    : supabase.rpc("public_upcoming_rides", {
+        p_from: from ?? null,
+        p_to: to ?? null,
+        p_date: date ?? null,
+        p_limit: 100,
+      });
   const requestsQuery = applyRequestFilters(
       supabase
         .from("ride_requests")
