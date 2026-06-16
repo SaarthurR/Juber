@@ -1,0 +1,101 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { getAuthUser } from "@/lib/auth";
+import { JCNC_LABEL } from "@/lib/constants";
+
+function str(v: FormDataEntryValue | null) {
+  const s = (v ?? "").toString().trim();
+  return s.length ? s : null;
+}
+
+function parsePositiveInt(v: FormDataEntryValue | null, fallback: number, label: string) {
+  const n = Number.parseInt(str(v) ?? String(fallback), 10);
+  if (!Number.isFinite(n) || n < 1) throw new Error(`${label} must be at least 1.`);
+  return n;
+}
+
+function parseNonNegativeNumber(v: FormDataEntryValue | null, label: string) {
+  const raw = str(v);
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${label} must be 0 or more.`);
+  return n;
+}
+
+/** Post a ride request from the mobile form, then return to the mobile requests tab. */
+export async function postRequestMobile(formData: FormData) {
+  const supabase = await createClient();
+  const user = await getAuthUser(supabase);
+  if (!user) redirect("/m");
+
+  const direction = str(formData.get("direction")) ?? "toJCNC";
+  const neighborhood = str(formData.get("neighborhood"));
+  if (!neighborhood) throw new Error("Please choose your pick-up neighborhood.");
+
+  const origin = direction === "toJCNC" ? neighborhood : JCNC_LABEL;
+  const destination = direction === "toJCNC" ? JCNC_LABEL : neighborhood;
+
+  const earliestDate = str(formData.get("earliest_date"));
+  const latestDate = str(formData.get("latest_date"));
+  if (!earliestDate) throw new Error("Please choose a start date.");
+  if (!latestDate) throw new Error("Please choose an end date.");
+  const earliest = new Date(`${earliestDate}T00:00:00`);
+  const latest = new Date(`${latestDate}T00:00:00`);
+  if (Number.isNaN(earliest.getTime()) || Number.isNaN(latest.getTime())) {
+    throw new Error("Please choose a valid date range.");
+  }
+  if (earliest > latest) throw new Error("The start date must be before the end date.");
+
+  const departAt = new Date(`${earliestDate}T12:00:00`).toISOString();
+
+  const { error } = await supabase.from("ride_requests").insert({
+    rider_id: user.id,
+    origin_label: origin,
+    destination_label: destination,
+    depart_at: departAt,
+    earliest_date: earliestDate,
+    latest_date: latestDate,
+    max_price: parseNonNegativeNumber(formData.get("max_price"), "Max gas"),
+    seats_needed: parsePositiveInt(formData.get("seats_needed"), 1, "Seats"),
+    notes: str(formData.get("notes")),
+    event_id: str(formData.get("event_id")),
+  });
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/m/requests");
+  redirect("/m/requests");
+}
+
+/** Save profile edits from the mobile form, then return to the mobile profile tab. */
+export async function updateProfileMobile(formData: FormData) {
+  const supabase = await createClient();
+  const user = await getAuthUser(supabase);
+  if (!user) redirect("/m");
+
+  const rawInsta = str(formData.get("instagram"));
+  const instagram = rawInsta?.startsWith("@") ? rawInsta.slice(1) : rawInsta;
+
+  const first = str(formData.get("first_name")) ?? "";
+  const lastInitial = str(formData.get("last_initial")) ?? "";
+  const fullName = [first, lastInitial].filter(Boolean).join(" ") || null;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      full_name: fullName,
+      pronouns: str(formData.get("pronouns")),
+      neighborhood: str(formData.get("neighborhood")),
+      phone: str(formData.get("phone")),
+      instagram,
+      preferred_contact: str(formData.get("preferred_contact")),
+      car_make_model: str(formData.get("car_make_model")),
+    })
+    .eq("id", user.id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/m/profile");
+  redirect("/m/profile");
+}

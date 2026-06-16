@@ -19,6 +19,15 @@
   --color-sand-text: #8a5a2b;
   --color-cream: #fbf7f0;
   --color-ink: #1c1917;
+
+  /* Mobile system — neutrals & control surfaces */
+  --color-brand-bright: #c9712f;
+  --color-brand-deep: #8a4420;
+  --color-muted: #57534e;
+  --color-muted-warm: #a8927a;
+  --color-border: #efe4d3;
+  --color-border-soft: #f1e8da;
+  --color-seg-track: #f1e4d2;
 }
 
 :root {

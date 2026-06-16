@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
+import { SiteChrome } from "@/components/site-chrome";
 import { TempleLogo } from "@/components/temple-logo";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 
@@ -30,10 +31,10 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
     >
       <body className="flex min-h-full flex-col">
-        <Navbar />
-        <main className="flex-1">{children}</main>
-
-        <footer className="mt-16 border-t border-[var(--border,#efe4d3)] border-stone-200">
+        <SiteChrome
+          navbar={<Navbar />}
+          footer={
+            <footer className="mt-16 border-t border-[var(--border,#efe4d3)] border-stone-200">
           <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
             <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -95,6 +96,10 @@ export default function RootLayout({
             </div>
           </div>
         </footer>
+          }
+        >
+          {children}
+        </SiteChrome>
       </body>
     </html>
   );
