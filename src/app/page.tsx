@@ -6,6 +6,7 @@ import { TempleLogo } from "@/components/temple-logo";
 import { RideCard } from "@/components/ride-card";
 import { EventCard } from "@/components/event-card";
 import { GoogleSignInButton } from "@/components/auth-button";
+import { LandingAuthGate } from "@/components/landing-auth-gate";
 import type { EventRow, RideWithDriver } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,7 @@ export default async function HomePage() {
       .limit(3),
   ]);
 
-  return (
+  const content = (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
       {/* Hero band */}
       <section className="relative overflow-hidden rounded-3xl bg-brand-600 px-7 py-12 text-white shadow-[0_24px_50px_-28px_rgba(92,59,46,0.55)] sm:px-12 sm:py-16">
@@ -91,7 +92,7 @@ export default async function HomePage() {
 
       {/* Recent rides */}
       <section className="mt-14">
-        <SectionHeader title="Latest rides" href="/rides" />
+        <SectionHeader title="Scheduled rides" href="/rides" />
         {rides && rides.length > 0 ? (
           <div className="grid gap-3">
             {(rides as RideWithDriver[]).map((ride) => (
@@ -104,6 +105,10 @@ export default async function HomePage() {
       </section>
     </div>
   );
+
+  if (!user) return <LandingAuthGate>{content}</LandingAuthGate>;
+
+  return content;
 }
 
 function SectionHeader({ title, href }: { title: string; href: string }) {
@@ -123,7 +128,7 @@ function SectionHeader({ title, href }: { title: string; href: string }) {
 function EmptyRides() {
   return (
     <div className="rounded-xl border border-dashed border-stone-300 px-8 py-12 text-center">
-      <p className="text-stone-500">No rides posted yet.</p>
+      <p className="text-stone-500">No scheduled rides yet.</p>
       <Link
         href="/rides/new"
         className="mt-3 inline-block text-sm font-medium text-brand-600 hover:underline"
