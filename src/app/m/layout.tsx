@@ -1,4 +1,5 @@
 import { BottomNav } from "@/components/mobile/bottom-nav";
+import { TapFeedback } from "@/components/mobile/tap-feedback";
 
 // The mobile redesign lives under /m: a single phone-width column (centered on
 // larger screens) with the persistent bottom tab bar. The desktop navbar/footer
@@ -8,6 +9,7 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
     <div className="relative mx-auto min-h-screen w-full max-w-[440px] bg-cream sm:border-x sm:border-border">
       {children}
       <BottomNav />
+      <TapFeedback />
     </div>
   );
 }

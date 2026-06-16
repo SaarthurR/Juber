@@ -61,3 +61,20 @@ h1, h2, h3 {
 * {
   min-width: 0;
 }
+
+/* --- Mobile tap responsiveness --- */
+/* Remove the 300ms double-tap-to-zoom delay and the gray flash so our own
+   feedback (below) is the only thing the user sees. */
+a, button, [role="button"], label, summary, input[type="submit"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Instant pressed state driven by <TapFeedback>. Fires the moment a finger
+   lands — independent of iOS Safari's unreliable `:active` timing. Opacity +
+   scale read clearly without fighting any element's own active styles. */
+.is-pressed {
+  opacity: 0.7;
+  transform: scale(0.97);
+  transition: transform 0.05s ease, opacity 0.05s ease;
+}
