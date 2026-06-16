@@ -6,6 +6,8 @@ import {
   requestSeat,
   setPassengerStatus,
   cancelRide,
+  closeRide,
+  cancelSeat,
   cancelRideRequest,
 } from "@/app/rides/actions";
 
@@ -161,7 +163,7 @@ export function CancelRideButton({ rideId }: { rideId: string }) {
   }
 
   return (
-    <div className="mt-5 border-t border-stone-100 pt-4">
+    <div className="mt-3 text-center">
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -222,5 +224,153 @@ export function CancelRideButton({ rideId }: { rideId: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+export function CloseRideButton({ rideId }: { rideId: string }) {
+  const [open, setOpen] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await closeRide(rideId);
+      } catch (e) {
+        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
+          setError(e.message);
+        }
+      }
+    });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
+      >
+        Close ride
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => !pending && setOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-stone-900">Close this ride?</h2>
+            <p className="mt-1 text-sm text-stone-500">
+              This marks the ride completed, removes it from active listings, and clears its chat history.
+            </p>
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={pending}
+                className="rounded-full px-4 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
+              >
+                Keep open
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={pending}
+                className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {pending ? "Closing..." : "Close ride"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+export function CancelSeatButton({ rideId }: { rideId: string }) {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function submit() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await cancelSeat(rideId, message);
+      } catch (e) {
+        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
+          setError(e.message);
+        }
+      }
+    });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-3 w-full rounded-full border border-red-200 px-5 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50 active:scale-[0.98]"
+      >
+        Cancel my seat
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => !pending && setOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold text-stone-900">Cancel your seat?</h2>
+            <p className="mt-1 text-sm text-stone-500">
+              Send the driver a quick note so they know what changed.
+            </p>
+            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-stone-500">
+              Message <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              autoFocus
+              rows={3}
+              placeholder="e.g. I cannot make it anymore. Sorry for the change."
+              className="mt-1.5 w-full resize-none rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+            />
+            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={pending}
+                className="rounded-full px-4 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
+              >
+                Keep seat
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={pending || !message.trim()}
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {pending ? "Sending..." : "Send and cancel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

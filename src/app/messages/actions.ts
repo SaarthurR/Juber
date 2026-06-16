@@ -62,3 +62,21 @@ export async function sendMessage(conversationId: string, formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath(`/messages/${conversationId}`);
 }
+
+export async function markConversationRead(conversationId: string) {
+  const supabase = await createClient();
+  const user = await getAuthUser(supabase);
+  if (!user) return;
+
+  const readAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("messages")
+    .update({ read_at: readAt })
+    .eq("conversation_id", conversationId)
+    .neq("sender_id", user.id)
+    .is("read_at", null);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/messages");
+  revalidatePath(`/messages/${conversationId}`);
+}

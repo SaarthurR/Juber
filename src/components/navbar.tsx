@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { MessageSquare } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { APP_NAME } from "@/lib/constants";
@@ -7,16 +6,18 @@ import { Avatar } from "@/components/ui/avatar";
 import { TempleLogo } from "@/components/temple-logo";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { NotificationBell } from "@/components/notification-bell";
+import { MessagesNavLink } from "@/components/messages-nav-link";
 import type { NotificationWithContext } from "@/lib/types";
 
 export async function Navbar() {
   const { user, profile } = await getCurrentUser();
 
   let unread = 0;
+  let notificationUnread = 0;
   let notifications: NotificationWithContext[] = [];
   if (user) {
     const supabase = await createClient();
-    const [{ count }, notificationsResult] = await Promise.all([
+    const [{ count }, notificationsResult, { data: mine }] = await Promise.all([
       supabase
         .from("notifications")
         .select("id", { count: "exact", head: true })
@@ -30,8 +31,24 @@ export async function Navbar() {
         .eq("recipient_id", user.id)
         .order("created_at", { ascending: false })
         .limit(6),
+      supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", user.id),
     ]);
-    unread = count ?? 0;
+    let unreadMessages = 0;
+    const convoIds = (mine ?? []).map((row) => row.conversation_id);
+    if (convoIds.length) {
+      const { count: messageCount } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .in("conversation_id", convoIds)
+        .neq("sender_id", user.id)
+        .is("read_at", null);
+      unreadMessages = messageCount ?? 0;
+    }
+    notificationUnread = count ?? 0;
+    unread = notificationUnread + unreadMessages;
     let data = notificationsResult.data;
     if (notificationsResult.error) {
       const fallback = await supabase
@@ -67,17 +84,11 @@ export async function Navbar() {
 
           {user ? (
             <>
-              <Link
-                href="/messages"
-                aria-label="Messages"
-                className="ml-1 hidden h-[38px] w-[38px] items-center justify-center rounded-full text-[#57534e] transition hover:bg-[#f6e9da] hover:text-brand-700 sm:flex"
-              >
-                <MessageSquare size={19} strokeWidth={2} />
-              </Link>
+              <MessagesNavLink userId={user.id} initialUnread={unread} />
               <span className="ml-0.5">
                 <NotificationBell
                   initial={notifications}
-                  initialUnread={unread}
+                  initialUnread={notificationUnread}
                   userId={user.id}
                 />
               </span>

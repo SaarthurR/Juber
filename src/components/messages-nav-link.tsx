@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MessageSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 /**
- * "Messages" nav item with an unread-notifications badge. Seeds from a
- * server-computed count and bumps live via Supabase Realtime on new inserts.
+ * Messages nav item with a combined unread badge for notifications and chats.
  */
 export function MessagesNavLink({
   userId,
@@ -17,50 +17,82 @@ export function MessagesNavLink({
   initialUnread: number;
 }) {
   const pathname = usePathname();
-  // Realtime arrivals since the last server render of `initialUnread`.
-  const [extra, setExtra] = useState(0);
+  const [unread, setUnread] = useState(initialUnread);
   const [syncedTo, setSyncedTo] = useState(initialUnread);
 
-  // Reset live count whenever the server hands us a fresh truth (render-time
-  // adjustment — the React-endorsed alternative to a syncing effect).
   if (syncedTo !== initialUnread) {
     setSyncedTo(initialUnread);
-    setExtra(0);
+    setUnread(initialUnread);
   }
+
+  const refreshUnread = useCallback(async () => {
+    const supabase = createClient();
+    const { count: notificationCount } = await supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("recipient_id", userId)
+      .is("read_at", null);
+    const { data: mine } = await supabase
+      .from("conversation_participants")
+      .select("conversation_id")
+      .eq("user_id", userId);
+    const convoIds = (mine ?? []).map((row) => row.conversation_id);
+    let messageCount = 0;
+    if (convoIds.length) {
+      const { count } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .in("conversation_id", convoIds)
+        .neq("sender_id", userId)
+        .is("read_at", null);
+      messageCount = count ?? 0;
+    }
+    setUnread((notificationCount ?? 0) + messageCount);
+  }, [userId]);
 
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
-      .channel(`notifications:${userId}`)
+      .channel(`nav-unread:${userId}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `recipient_id=eq.${userId}`,
-        },
-        () => setExtra((n) => n + 1),
+        { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
+        () => void refreshUnread(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
+        () => void refreshUnread(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        () => void refreshUnread(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages" },
+        () => void refreshUnread(),
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, refreshUnread]);
 
-  // On the inbox itself, treat as read — the server refresh will confirm.
-  const unread = pathname === "/messages" ? 0 : initialUnread + extra;
+  const visibleUnread = pathname.startsWith("/messages") ? unread : unread;
 
   return (
     <Link
       href="/messages"
-      className="relative rounded-md px-3 py-1.5 transition hover:bg-stone-100 hover:text-stone-900"
+      aria-label="Messages"
+      className="relative ml-1 hidden h-[38px] w-[38px] items-center justify-center rounded-full text-[#57534e] transition hover:bg-[#f6e9da] hover:text-brand-700 sm:flex"
     >
-      Messages
-      {unread > 0 && (
+      <MessageSquare size={19} strokeWidth={2} />
+      {visibleUnread > 0 && (
         <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-bold text-white">
-          {unread > 9 ? "9+" : unread}
+          {visibleUnread > 9 ? "9+" : visibleUnread}
         </span>
       )}
     </Link>

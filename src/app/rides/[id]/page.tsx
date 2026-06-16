@@ -8,7 +8,13 @@ import { Avatar } from "@/components/ui/avatar";
 import { ShareButton } from "@/components/share-button";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { ContactModal } from "@/components/contact-modal";
-import { ReserveSeatButton, PassengerStatusButtons, CancelRideButton } from "@/components/ride-actions";
+import {
+  ReserveSeatButton,
+  PassengerStatusButtons,
+  CancelRideButton,
+  CloseRideButton,
+  CancelSeatButton,
+} from "@/components/ride-actions";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +73,7 @@ export default async function RideDetailPage({
     : "Free";
 
   const cancelled = ride.status === "cancelled";
+  const completed = ride.status === "completed";
 
   return (
     <div>
@@ -80,6 +87,13 @@ export default async function RideDetailPage({
                 <p className="mt-0.5 text-sm text-red-600">“{ride.cancellation_reason}”</p>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {completed && (
+        <div className="border-b border-emerald-200 bg-emerald-50">
+          <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6">
+            <p className="text-sm font-bold text-emerald-700">This ride is closed.</p>
           </div>
         </div>
       )}
@@ -230,8 +244,13 @@ export default async function RideDetailPage({
               This ride was cancelled
             </div>
           ) : myJoin ? (
-            <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
-              Seat {myJoin.status}
+            <div>
+              <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
+                Seat {myJoin.status}
+              </div>
+              {ride.status === "active" && myJoin.status !== "declined" && (
+                <CancelSeatButton rideId={ride.id} />
+              )}
             </div>
           ) : ride.seats_available > 0 ? (
             <ReserveSeatButton rideId={ride.id} />
@@ -284,7 +303,12 @@ function DriverPanel({
         </ul>
       )}
 
-      {ride.status !== "cancelled" && <CancelRideButton rideId={ride.id} />}
+      {ride.status === "active" && (
+        <div className="mt-5 border-t border-stone-100 pt-4">
+          <CloseRideButton rideId={ride.id} />
+          <CancelRideButton rideId={ride.id} />
+        </div>
+      )}
     </div>
   );
 }

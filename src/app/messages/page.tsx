@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { Avatar } from "@/components/ui/avatar";
 import { NotificationCard } from "@/components/notification-card";
-import { NotificationsMarkRead } from "@/components/notifications-mark-read";
+import { MessagesList, type ThreadSummary } from "@/components/messages-list";
 import type { Message, Profile, NotificationWithContext } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +64,7 @@ async function MessagesTab({ userId }: { userId: string }) {
     id: string;
     other: Profile | null;
     last: Message | null;
+    unread: number;
   }[] = [];
 
   if (convoIds.length) {
@@ -84,8 +83,12 @@ async function MessagesTab({ userId }: { userId: string }) {
     threads = convoIds.map((id) => {
       const other =
         (others?.find((o) => o.conversation_id === id)?.user as unknown as Profile) ?? null;
-      const last = (messages as Message[] | null)?.find((m) => m.conversation_id === id) ?? null;
-      return { id, other, last };
+      const inThread = ((messages as Message[] | null) ?? []).filter(
+        (m) => m.conversation_id === id,
+      );
+      const last = inThread[0] ?? null;
+      const unread = inThread.filter((m) => m.sender_id !== userId && !m.read_at).length;
+      return { id, other, last, unread };
     });
 
     threads.sort((a, b) =>
@@ -93,39 +96,10 @@ async function MessagesTab({ userId }: { userId: string }) {
     );
   }
 
-  if (threads.length === 0) {
-    return (
-      <p className="rounded-2xl border border-dashed border-stone-300 p-10 text-center text-stone-500">
-        No conversations yet. Message a driver from a ride to start chatting.
-      </p>
-    );
-  }
-
-  return (
-    <ul className="divide-y divide-stone-200 overflow-hidden rounded-2xl border border-stone-200 bg-white">
-      {threads.map((t) => (
-        <li key={t.id}>
-          <Link href={`/messages/${t.id}`} className="flex items-center gap-3 p-4 hover:bg-stone-50">
-            <Avatar src={t.other?.avatar_url} name={t.other?.full_name} size={44} />
-            <div className="min-w-0 flex-1">
-              <p className="font-medium">{t.other?.full_name ?? "Member"}</p>
-              <p className="truncate text-sm text-stone-500">
-                {t.last?.body ?? "Say hello 👋"}
-              </p>
-            </div>
-            {t.last && (
-              <span className="shrink-0 text-xs text-stone-400">
-                {formatDistanceToNow(new Date(t.last.created_at), { addSuffix: true })}
-              </span>
-            )}
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
+  return <MessagesList userId={userId} initialThreads={threads as ThreadSummary[]} />;
 }
 
-async function NotificationsTab({ userId, hasUnread }: { userId: string; hasUnread: boolean }) {
+async function NotificationsTab({ userId }: { userId: string; hasUnread: boolean }) {
   const supabase = await createClient();
 
   const notificationsResult = await supabase
@@ -165,7 +139,6 @@ async function NotificationsTab({ userId, hasUnread }: { userId: string; hasUnre
 
   return (
     <>
-      <NotificationsMarkRead hasUnread={hasUnread} />
       <ul className="divide-y divide-stone-200 overflow-hidden rounded-2xl border border-stone-200 bg-white">
         {notifications.map((n) => (
           <li key={n.id}>

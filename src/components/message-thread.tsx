@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { sendMessage } from "@/app/messages/actions";
+import { markConversationRead, sendMessage } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Message, Profile } from "@/lib/types";
@@ -44,12 +44,31 @@ export function MessageThread({
           );
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        (payload) => {
+          const msg = payload.new as Message;
+          setMessages((prev) => prev.map((m) => (m.id === msg.id ? msg : m)));
+        },
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [conversationId]);
+
+  useEffect(() => {
+    if (messages.some((m) => m.sender_id !== currentUserId && !m.read_at)) {
+      void markConversationRead(conversationId);
+    }
+  }, [conversationId, currentUserId, messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -82,15 +101,22 @@ export function MessageThread({
           const mine = m.sender_id === currentUserId;
           return (
             <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
-              <div
-                className={cn(
-                  "max-w-[75%] rounded-2xl px-4 py-2 text-sm",
-                  mine
-                    ? "bg-brand-600 text-white"
-                    : "bg-stone-100 text-stone-800",
+              <div className="flex max-w-[75%] flex-col">
+                <div
+                  className={cn(
+                    "rounded-2xl px-4 py-2 text-sm",
+                    mine
+                      ? "bg-brand-600 text-white"
+                      : "bg-stone-100 text-stone-800",
+                  )}
+                >
+                  {m.body}
+                </div>
+                {mine && (
+                  <span className="mt-1 self-end text-[11px] font-semibold text-stone-400">
+                    {m.read_at ? "Read" : "Sent"}
+                  </span>
                 )}
-              >
-                {m.body}
               </div>
             </div>
           );
