@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowLeft, Plus, Ban } from "lucide-react";
+import { ArrowLeft, Plus, Ban, ArrowLeftRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { Avatar } from "@/components/ui/avatar";
@@ -144,6 +144,22 @@ export default async function RideDetailPage({
               </p>
             </div>
           </div>
+          {ride.round_trip && (
+            <div className="mt-5 rounded-2xl bg-white/10 p-4 text-[15px]">
+              <div className="flex items-center gap-2 font-bold">
+                <ArrowLeftRight size={16} />
+                Round trip included
+              </div>
+              {ride.return_depart_at && (
+                <p className="mt-2 text-white/80">
+                  Return leaves {format(new Date(ride.return_depart_at), "EEEE, MMM d hh:mm a")}
+                </p>
+              )}
+              {ride.return_notes && (
+                <p className="mt-1 text-white/70">{ride.return_notes}</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

@@ -7,9 +7,10 @@ export function RideFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const hasFilters = Boolean(params.get("from") || params.get("to") || params.get("date"));
+  const roundTripOnly = params.get("trip") === "round";
+  const hasFilters = Boolean(params.get("from") || params.get("to") || params.get("date") || roundTripOnly);
 
-  function pushWith(values: { from?: string; to?: string; date?: string }) {
+  function pushWith(values: { from?: string; to?: string; date?: string; trip?: string }) {
     const next = new URLSearchParams(params.toString());
     for (const [key, raw] of Object.entries(values)) {
       const v = (raw ?? "").toString().trim();
@@ -25,6 +26,7 @@ export function RideFilters() {
       from: formData.get("from")?.toString(),
       to: formData.get("to")?.toString(),
       date: formData.get("date")?.toString(),
+      trip: formData.get("trip")?.toString(),
     });
   }
 
@@ -33,6 +35,7 @@ export function RideFilters() {
       from: params.get("to") ?? "",
       to: params.get("from") ?? "",
       date: params.get("date") ?? "",
+      trip: params.get("trip") ?? "",
     });
   }
 
@@ -41,6 +44,7 @@ export function RideFilters() {
     next.delete("from");
     next.delete("to");
     next.delete("date");
+    next.delete("trip");
     const query = next.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
   }
@@ -74,6 +78,18 @@ export function RideFilters() {
           onChange={(e) => e.currentTarget.form?.requestSubmit()}
           className="h-[50px] w-full rounded-xl border border-[#ead9c2] px-3.5 text-[15px] text-stone-700 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
         />
+      </label>
+
+      <label className="flex h-[50px] min-w-[160px] cursor-pointer items-center gap-2 rounded-xl border border-[#ead9c2] px-4 text-sm font-bold text-[#7b6650] transition hover:border-brand-200 hover:bg-tint">
+        <input
+          name="trip"
+          type="checkbox"
+          value="round"
+          defaultChecked={roundTripOnly}
+          onChange={(e) => e.currentTarget.form?.requestSubmit()}
+          className="h-4 w-4 accent-brand-600"
+        />
+        Round trips only
       </label>
 
       {hasFilters && (

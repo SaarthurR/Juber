@@ -30,6 +30,7 @@ export default async function HomePage() {
         p_to: null,
         p_date: null,
         p_limit: 3,
+        p_round_trip: null,
       });
 
   const [{ data: rides }, { data: events }] = await Promise.all([

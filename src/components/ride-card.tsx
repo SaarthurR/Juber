@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { format } from "date-fns";
-import { CalendarDays, ChevronRight, CircleDollarSign, Users } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, ChevronRight, CircleDollarSign, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
@@ -115,6 +115,16 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
               : `${ride.seats_available} seat${ride.seats_available > 1 ? "s" : ""} left`
           }
         />
+        {ride.round_trip && (
+          <StatPill
+            icon={<ArrowLeftRight size={14} />}
+            label={
+              ride.return_depart_at
+                ? `Round trip · return ${format(new Date(ride.return_depart_at), "h:mm a")}`
+                : "Round trip"
+            }
+          />
+        )}
       </div>
 
       <VisualRoute from={ride.origin_label} to={ride.destination_label} />

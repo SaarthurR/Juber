@@ -27,6 +27,7 @@ export default async function MobileHomePage({
   const from = one(sp.from) ?? "";
   const to = one(sp.to) ?? "";
   const date = one(sp.date) ?? "";
+  const roundTripOnly = one(sp.trip) === "round";
 
   const { user, profile } = await getCurrentUser();
   const supabase = await createClient();
@@ -50,6 +51,7 @@ export default async function MobileHomePage({
     .order("depart_at", { ascending: true });
   if (from) ridesQuery = ridesQuery.ilike("origin_label", `%${from}%`);
   if (to) ridesQuery = ridesQuery.ilike("destination_label", `%${to}%`);
+  if (roundTripOnly) ridesQuery = ridesQuery.eq("round_trip", true);
   if (dayRange) ridesQuery = ridesQuery.gte("depart_at", dayRange.gte).lt("depart_at", dayRange.lt);
   else ridesQuery = ridesQuery.gte("depart_at", nowIso);
 
@@ -122,10 +124,11 @@ export default async function MobileHomePage({
         <HomeBoard
           rides={rides}
           requests={requests}
-          initialFrom={from}
-          initialTo={to}
-          initialDate={date}
-        />
+        initialFrom={from}
+        initialTo={to}
+        initialDate={date}
+        initialRoundTripOnly={roundTripOnly}
+      />
       </div>
     </div>
   );

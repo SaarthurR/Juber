@@ -21,7 +21,9 @@ export function RidesView({
 }) {
   const params = useSearchParams();
   const showRequests = params.get("tab") === "requests";
-  const hasFilters = Boolean(params.get("from") || params.get("to") || params.get("date"));
+  const hasFilters = Boolean(
+    params.get("from") || params.get("to") || params.get("date") || params.get("trip"),
+  );
 
   function setTab(tab: "carpools" | "requests") {
     const next = new URLSearchParams(params.toString());

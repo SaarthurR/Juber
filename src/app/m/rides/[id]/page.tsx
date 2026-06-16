@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
-import { Plus } from "lucide-react";
+import { ArrowLeftRight, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { SubHeader } from "@/components/mobile/sub-header";
@@ -112,6 +112,22 @@ export default async function MobileTripPage({
               </div>
             </div>
           </div>
+          {ride.round_trip && (
+            <div className="mt-4 rounded-[16px] bg-white/10 p-3.5">
+              <div className="flex items-center gap-2 text-[13px] font-extrabold">
+                <ArrowLeftRight size={15} />
+                Round trip included
+              </div>
+              {ride.return_depart_at && (
+                <p className="mt-1.5 text-[13px] font-medium text-white/75">
+                  Return leaves {format(new Date(ride.return_depart_at), "EEE, MMM d · h:mm a")}
+                </p>
+              )}
+              {ride.return_notes && (
+                <p className="mt-1 text-[13px] text-white/65">{ride.return_notes}</p>
+              )}
+            </div>
+          )}
         </section>
 
         {ride.event && (

@@ -13,12 +13,14 @@ export function HomeBoard({
   initialFrom,
   initialTo,
   initialDate,
+  initialRoundTripOnly,
 }: {
   rides: RideWithDriver[];
   requests: RideRequestWithRider[];
   initialFrom: string;
   initialTo: string;
   initialDate: string;
+  initialRoundTripOnly: boolean;
 }) {
   const [tab, setTab] = useState<"carpools" | "requests">("carpools");
 
@@ -34,7 +36,12 @@ export function HomeBoard({
         ]}
       />
 
-      <SearchCard initialFrom={initialFrom} initialTo={initialTo} initialDate={initialDate} />
+      <SearchCard
+        initialFrom={initialFrom}
+        initialTo={initialTo}
+        initialDate={initialDate}
+        initialRoundTripOnly={initialRoundTripOnly}
+      />
 
       {tab === "carpools" ? (
         <List
@@ -90,21 +97,25 @@ function SearchCard({
   initialFrom,
   initialTo,
   initialDate,
+  initialRoundTripOnly,
 }: {
   initialFrom: string;
   initialTo: string;
   initialDate: string;
+  initialRoundTripOnly: boolean;
 }) {
   const router = useRouter();
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo || "JCNC");
   const [date, setDate] = useState(initialDate);
+  const [roundTripOnly, setRoundTripOnly] = useState(initialRoundTripOnly);
 
   function search() {
     const params = new URLSearchParams();
     if (from.trim()) params.set("from", from.trim());
     if (to.trim() && to.trim() !== "JCNC") params.set("to", to.trim());
     if (date) params.set("date", date);
+    if (roundTripOnly) params.set("trip", "round");
     const qs = params.toString();
     router.push(qs ? `/m?${qs}` : "/m");
   }
@@ -166,6 +177,16 @@ function SearchCard({
           Search
         </button>
       </div>
+
+      <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-[13px] bg-tint px-3 py-2.5 text-[13px] font-bold text-brand-700">
+        <input
+          type="checkbox"
+          checked={roundTripOnly}
+          onChange={(e) => setRoundTripOnly(e.target.checked)}
+          className="h-4 w-4 accent-brand-600"
+        />
+        Round trips only
+      </label>
     </div>
   );
 }

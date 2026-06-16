@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { format } from "date-fns";
+import { ArrowLeftRight } from "lucide-react";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
@@ -65,6 +66,14 @@ export function MRideCard({ ride }: { ride: RideWithDriver }) {
           {seatsLabel}
         </span>
       </div>
+      {ride.round_trip && (
+        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-tint px-2.5 py-1 text-[11px] font-bold text-brand-700">
+          <ArrowLeftRight size={12} strokeWidth={2.5} />
+          {ride.return_depart_at
+            ? `Round trip · ${format(new Date(ride.return_depart_at), "h:mm a")}`
+            : "Round trip"}
+        </div>
+      )}
     </Link>
   );
 }

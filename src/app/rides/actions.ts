@@ -55,9 +55,16 @@ export async function postRide(formData: FormData) {
     direction === "from_jcnc" ? JCNC_LABEL : routePlace ?? fallbackOrigin;
   const destination =
     direction === "from_jcnc" ? routePlace ?? fallbackDestination : JCNC_LABEL;
+  const departAt = isoDate(formData.get("depart_at"));
+  const roundTrip = str(formData.get("round_trip")) === "true";
+  const returnDepartAt = roundTrip ? isoDate(formData.get("return_depart_at")) : null;
 
   if (!origin || !destination) {
     throw new Error("Please choose whether this ride is to or from JCNC and add the city.");
+  }
+
+  if (returnDepartAt && new Date(returnDepartAt) <= new Date(departAt)) {
+    throw new Error("Return time must be after the outbound departure.");
   }
 
   if (eventId) {
@@ -78,7 +85,10 @@ export async function postRide(formData: FormData) {
     destination_label: destination,
     pickup_location: str(formData.get("pickup_location")),
     dropoff_location: str(formData.get("dropoff_location")),
-    depart_at: isoDate(formData.get("depart_at")),
+    depart_at: departAt,
+    round_trip: roundTrip,
+    return_depart_at: returnDepartAt,
+    return_notes: roundTrip ? str(formData.get("return_notes")) : null,
     seats_total: seats,
     seats_available: seats,
     gas_contribution: gas,

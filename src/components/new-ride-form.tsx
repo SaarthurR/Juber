@@ -23,6 +23,8 @@ export function NewRideForm({
   const [direction, setDirection] = useState<Direction | null>(null);
   const [routePlace, setRoutePlace] = useState("");
   const [departAt, setDepartAt] = useState("");
+  const [roundTrip, setRoundTrip] = useState(false);
+  const [returnDepartAt, setReturnDepartAt] = useState("");
   const [pickupLocation, setPickupLocation] = useState("");
   const [dropoffLocation, setDropoffLocation] = useState("");
 
@@ -31,11 +33,12 @@ export function NewRideForm({
       direction,
       routePlace.trim(),
       departAt,
+      !roundTrip || returnDepartAt,
       dropoffLocation.trim(),
       pickupLocation.trim(),
     ].filter(Boolean).length;
     return 8 + completed * 18;
-  }, [departAt, direction, dropoffLocation, pickupLocation, routePlace]);
+  }, [departAt, direction, dropoffLocation, pickupLocation, returnDepartAt, roundTrip, routePlace]);
 
   const routeQuestion = direction === "from_jcnc" ? "To where?" : "From where?";
   const routePlaceholder =
@@ -120,6 +123,49 @@ export function NewRideForm({
             <option value="none">Does not repeat</option>
           </select>
         </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-[18px] font-extrabold text-ink">Is this a round trip?</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <DirectionButton active={!roundTrip} onClick={() => setRoundTrip(false)}>
+            One way
+          </DirectionButton>
+          <DirectionButton active={roundTrip} onClick={() => setRoundTrip(true)}>
+            Round trip
+          </DirectionButton>
+        </div>
+        <input type="hidden" name="round_trip" value={roundTrip ? "true" : "false"} />
+
+        {roundTrip && (
+          <div className="grid gap-3 rounded-2xl border border-brand-100 bg-brand-50/45 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+            <label className="block">
+              <span className="mb-1.5 block text-[13px] font-extrabold uppercase tracking-[0.1em] text-brand-700">
+                Return time
+              </span>
+              <input
+                name="return_depart_at"
+                type="datetime-local"
+                min={departAt || minDepartAt}
+                required={roundTrip}
+                value={returnDepartAt}
+                onChange={(event) => setReturnDepartAt(event.target.value)}
+                className="w-full rounded-xl border border-[#d8d0c5] bg-white px-3.5 py-3 text-[15px] outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-[13px] font-extrabold uppercase tracking-[0.1em] text-brand-700">
+                Return details
+              </span>
+              <input
+                name="return_notes"
+                type="text"
+                placeholder="Same spots, after event ends, flexible, etc."
+                className="w-full rounded-xl border border-[#d8d0c5] bg-white px-3.5 py-3 text-[15px] outline-none placeholder:text-[#a8a29e] focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+              />
+            </label>
+          </div>
+        )}
       </section>
 
       <LocationField

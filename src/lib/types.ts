@@ -52,6 +52,9 @@ export type Ride = {
   pickup_location: string | null;
   dropoff_location: string | null;
   depart_at: string;
+  round_trip: boolean;
+  return_depart_at: string | null;
+  return_notes: string | null;
   seats_total: number;
   seats_available: number;
   gas_contribution: number | null;
