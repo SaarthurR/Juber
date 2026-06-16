@@ -52,6 +52,8 @@ export default async function MobileTripPage({
   const emptySlots = Math.max(0, ride.seats_total - confirmed.length);
 
   const price = ride.gas_contribution ? `$${Number(ride.gas_contribution).toFixed(0)}` : "Free";
+  const pickupLocation = ride.pickup_location || ride.origin_label;
+  const dropoffLocation = ride.dropoff_location || ride.destination_label;
   const cancelled = ride.status === "cancelled";
   const driverFirst = ride.driver?.full_name?.split(" ")[0] ?? "the driver";
   const carLine = [
@@ -100,13 +102,13 @@ export default async function MobileTripPage({
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">
                   Pick up
                 </p>
-                <p className="text-[15px] font-bold">{ride.origin_label}</p>
+                <p className="text-[15px] font-bold">{pickupLocation}</p>
               </div>
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">
                   Drop off
                 </p>
-                <p className="text-[15px] font-bold">{ride.destination_label}</p>
+                <p className="text-[15px] font-bold">{dropoffLocation}</p>
               </div>
             </div>
           </div>

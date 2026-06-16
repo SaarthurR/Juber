@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
+import { JCNC_LABEL } from "@/lib/constants";
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -45,19 +46,44 @@ export async function postRide(formData: FormData) {
 
   const seats = parsePositiveInt(formData.get("seats_total"), 1, "Seats available");
   const gas = parseNonNegativeNumber(formData.get("gas_contribution"), "Gas contribution");
+  const eventId = str(formData.get("event_id"));
+  const direction = str(formData.get("direction"));
+  const routePlace = str(formData.get("route_place"));
+  const fallbackOrigin = str(formData.get("origin_label"));
+  const fallbackDestination = str(formData.get("destination_label"));
+  const origin =
+    direction === "from_jcnc" ? JCNC_LABEL : routePlace ?? fallbackOrigin;
+  const destination =
+    direction === "from_jcnc" ? routePlace ?? fallbackDestination : JCNC_LABEL;
+
+  if (!origin || !destination) {
+    throw new Error("Please choose whether this ride is to or from JCNC and add the city.");
+  }
+
+  if (eventId) {
+    const { data: event } = await supabase
+      .from("events")
+      .select("id")
+      .eq("id", eventId)
+      .eq("is_active", true)
+      .single<{ id: string }>();
+    if (!event) {
+      throw new Error("Please choose a live event, or select no specific event.");
+    }
+  }
 
   const { error } = await supabase.from("rides").insert({
     driver_id: user.id,
-    origin_label: str(formData.get("origin_label")),
-    destination_label:
-      str(formData.get("destination_label")) ??
-      "JCNC",
+    origin_label: origin,
+    destination_label: destination,
+    pickup_location: str(formData.get("pickup_location")),
+    dropoff_location: str(formData.get("dropoff_location")),
     depart_at: isoDate(formData.get("depart_at")),
     seats_total: seats,
     seats_available: seats,
     gas_contribution: gas,
     notes: str(formData.get("notes")),
-    event_id: str(formData.get("event_id")),
+    event_id: eventId,
   });
 
   if (error) throw new Error(error.message);

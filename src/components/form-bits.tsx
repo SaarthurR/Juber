@@ -69,14 +69,17 @@ export function EventSelect({
   return (
     <label className="block">
       <span className="mb-2.5 block text-[15px] font-bold text-ink">
-        Event (optional)
+        Is this ride for a live event?
+      </span>
+      <span className="mb-2.5 block text-[13px] text-[#a8a29e]">
+        Pick an event so this ride appears on that event&apos;s board.
       </span>
       <select
         name="event_id"
         defaultValue={defaultValue}
         className="w-full rounded-xl border border-[#e2ddd5] px-3.5 py-3 text-[15px] outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
       >
-        <option value="">— None —</option>
+        <option value="">No specific event</option>
         {events.map((e) => (
           <option key={e.id} value={e.id}>
             {e.name}

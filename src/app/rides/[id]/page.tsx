@@ -70,6 +70,8 @@ export default async function RideDetailPage({
   const price = ride.gas_contribution
     ? `$${Number(ride.gas_contribution).toFixed(0)}`
     : "Free";
+  const pickupLocation = ride.pickup_location || ride.origin_label;
+  const dropoffLocation = ride.dropoff_location || ride.destination_label;
 
   const cancelled = ride.status === "cancelled";
   const completed = ride.status === "completed";
@@ -134,11 +136,11 @@ export default async function RideDetailPage({
             <div className="flex flex-1 flex-col gap-3.5 text-[15px]">
               <p>
                 <span className="font-bold">Pick Up:</span>{" "}
-                <span className="text-white/80">{ride.origin_label}</span>
+                <span className="text-white/80">{pickupLocation}</span>
               </p>
               <p>
                 <span className="font-bold">Drop off:</span>{" "}
-                <span className="text-white/80">{ride.destination_label}</span>
+                <span className="text-white/80">{dropoffLocation}</span>
               </p>
             </div>
           </div>

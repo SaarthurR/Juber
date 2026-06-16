@@ -49,6 +49,8 @@ export type Ride = {
   driver_id: string;
   origin_label: string;
   destination_label: string;
+  pickup_location: string | null;
+  dropoff_location: string | null;
   depart_at: string;
   seats_total: number;
   seats_available: number;
