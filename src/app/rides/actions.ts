@@ -240,13 +240,14 @@ export async function cancelRide(rideId: string, reason: string) {
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const { error } = await supabase
-    .from("rides")
-    .update({ status: "cancelled", cancellation_reason: trimmed })
-    .eq("id", rideId)
-    .eq("driver_id", user.id);
+  const { data: cancelled, error } = await supabase.rpc("cancel_ride", {
+    p_ride_id: rideId,
+    p_reason: trimmed,
+  });
   if (error) throw new Error(error.message);
+  if (!cancelled) throw new Error("Only the driver can cancel an active ride.");
   revalidatePath("/rides");
+  revalidatePath("/messages");
   redirect("/rides");
 }
 
@@ -262,6 +263,7 @@ export async function closeRide(rideId: string) {
   if (!closed) throw new Error("Only the driver can close an active ride.");
 
   revalidatePath("/rides");
+  revalidatePath("/messages");
   revalidatePath(`/rides/${rideId}`);
   redirect("/rides");
 }

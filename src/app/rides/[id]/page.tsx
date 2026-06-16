@@ -271,6 +271,8 @@ function DriverPanel({
   ride: Ride;
   passengerRows: PassengerRow[];
 }) {
+  const pendingRequests = passengerRows.filter((p) => p.status === "pending");
+
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-5">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -279,11 +281,11 @@ function DriverPanel({
         </h2>
         {ride.status === "active" && <DriverRideOptions rideId={ride.id} />}
       </div>
-      {passengerRows.length === 0 ? (
+      {pendingRequests.length === 0 ? (
         <p className="text-sm text-stone-500">No requests yet.</p>
       ) : (
         <ul className="space-y-3">
-          {passengerRows.map((p) => (
+          {pendingRequests.map((p) => (
             <li key={p.id} className="flex items-center justify-between">
               <Link
                 href={`/profile/${p.passenger_id}`}
@@ -297,9 +299,7 @@ function DriverPanel({
                   <p className="text-xs capitalize text-stone-400">{p.status}</p>
                 </div>
               </Link>
-              {p.status === "pending" && (
-                <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
-              )}
+              <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
             </li>
           ))}
         </ul>

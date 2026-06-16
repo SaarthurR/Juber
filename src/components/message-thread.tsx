@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import Link from "next/link";
-import { Send } from "lucide-react";
+import { ArrowLeft, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { markConversationRead, sendMessage } from "@/app/messages/actions";
+import { markConversationRead } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Message, Profile } from "@/lib/types";
@@ -21,7 +22,7 @@ export function MessageThread({
   initialMessages: Message[];
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   // Subscribe to new messages in this conversation via Supabase Realtime.
@@ -39,9 +40,20 @@ export function MessageThread({
         },
         (payload) => {
           const msg = payload.new as Message;
-          setMessages((prev) =>
-            prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
-          );
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            const pendingIndex = prev.findIndex(
+              (m) =>
+                m.id.startsWith("pending:") &&
+                m.sender_id === msg.sender_id &&
+                m.body === msg.body,
+            );
+            if (pendingIndex === -1) return [...prev, msg];
+
+            const next = [...prev];
+            next[pendingIndex] = msg;
+            return next;
+          });
         },
       )
       .on(
@@ -71,12 +83,55 @@ export function MessageThread({
   }, [conversationId, currentUserId, messages]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Scroll only the message list, not the window — scrollIntoView would
+    // bubble up and scroll the whole page (header + messages off-screen).
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  async function action(formData: FormData) {
+  async function submitMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const body = (formData.get("body") ?? "").toString().trim();
+    if (!body) return;
+
+    const pendingId = `pending:${crypto.randomUUID()}`;
+    const pendingMessage: Message = {
+      id: pendingId,
+      conversation_id: conversationId,
+      sender_id: currentUserId,
+      body,
+      created_at: new Date().toISOString(),
+      read_at: null,
+    };
+
     formRef.current?.reset();
-    await sendMessage(conversationId, formData);
+    setMessages((prev) => [...prev, pendingMessage]);
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: conversationId,
+        sender_id: currentUserId,
+        body,
+      })
+      .select()
+      .single<Message>();
+
+    if (error || !data) {
+      setMessages((prev) => prev.filter((m) => m.id !== pendingId));
+      window.alert(error?.message ?? "Could not send this message.");
+      return;
+    }
+
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === data.id)) {
+        return prev.filter((m) => m.id !== pendingId);
+      }
+      return prev.map((m) => (m.id === pendingId ? data : m));
+    });
   }
 
   const lastMessage = messages.at(-1);
@@ -86,8 +141,12 @@ export function MessageThread({
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-2xl flex-col px-4 sm:px-6">
       <div className="flex items-center gap-3 border-b border-stone-200 py-4">
-        <Link href="/messages" className="text-brand-600 sm:hidden">
-          ←
+        <Link
+          href="/messages"
+          aria-label="Back to all chats"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-brand-600 transition hover:bg-brand-50"
+        >
+          <ArrowLeft size={20} />
         </Link>
         <Avatar src={other?.avatar_url} name={other?.full_name} size={40} />
         <Link href={other ? `/profile/${other.id}` : "#"} className="font-semibold">
@@ -95,7 +154,7 @@ export function MessageThread({
         </Link>
       </div>
 
-      <div className="flex-1 space-y-2 overflow-y-auto py-4">
+      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto py-4">
         {messages.length === 0 && (
           <p className="py-10 text-center text-sm text-stone-400">
             No messages yet. Say hello!
@@ -125,12 +184,11 @@ export function MessageThread({
             </div>
           );
         })}
-        <div ref={bottomRef} />
       </div>
 
       <form
         ref={formRef}
-        action={action}
+        onSubmit={submitMessage}
         className="flex items-center gap-2 border-t border-stone-200 py-4"
       >
         <input

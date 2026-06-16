@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCheck, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -27,8 +28,24 @@ export function MessagesList({
   const [threads, setThreads] = useState(initialThreads);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const router = useRouter();
+  const refreshVersion = useRef(0);
   const initialKey = useMemo(
-    () => initialThreads.map((t) => `${t.id}:${t.last?.id ?? ""}:${t.unread}`).join("|"),
+    () =>
+      initialThreads
+        .map((t) =>
+          [
+            t.id,
+            t.other?.full_name ?? "",
+            t.other?.avatar_url ?? "",
+            t.last?.id ?? "",
+            t.last?.body ?? "",
+            t.last?.created_at ?? "",
+            t.last?.read_at ?? "",
+            t.unread,
+          ].join(":"),
+        )
+        .join("|"),
     [initialThreads],
   );
   const [syncedTo, setSyncedTo] = useState(initialKey);
@@ -39,6 +56,7 @@ export function MessagesList({
   }
 
   const refreshThreads = useCallback(async () => {
+    const version = ++refreshVersion.current;
     const supabase = createClient();
     const { data: mine } = await supabase
       .from("conversation_participants")
@@ -46,6 +64,7 @@ export function MessagesList({
       .eq("user_id", userId);
     const convoIds = (mine ?? []).map((row) => row.conversation_id);
     if (!convoIds.length) {
+      if (version !== refreshVersion.current) return;
       setThreads([]);
       return;
     }
@@ -77,7 +96,43 @@ export function MessagesList({
     });
 
     next.sort((a, b) => (b.last?.created_at ?? "").localeCompare(a.last?.created_at ?? ""));
+    if (version !== refreshVersion.current) return;
     setThreads(next);
+  }, [userId]);
+
+  const refreshThread = useCallback(async (conversationId: string) => {
+    const version = ++refreshVersion.current;
+    const supabase = createClient();
+    const [{ data: otherRows }, { data: messageRows }] = await Promise.all([
+      supabase
+        .from("conversation_participants")
+        .select("conversation_id, user:profiles!conversation_participants_user_id_fkey(*)")
+        .eq("conversation_id", conversationId)
+        .neq("user_id", userId),
+      supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const messages = (messageRows as Message[] | null) ?? [];
+    const nextThread: ThreadSummary = {
+      id: conversationId,
+      other:
+        (otherRows?.find((row) => row.conversation_id === conversationId)
+          ?.user as unknown as Profile) ?? null,
+      last: messages[0] ?? null,
+      unread: messages.filter((m) => m.sender_id !== userId && !m.read_at).length,
+    };
+
+    if (version !== refreshVersion.current) return;
+    setThreads((prev) => {
+      const without = prev.filter((thread) => thread.id !== conversationId);
+      const next = [nextThread, ...without];
+      next.sort((a, b) => (b.last?.created_at ?? "").localeCompare(a.last?.created_at ?? ""));
+      return next;
+    });
   }, [userId]);
 
   useEffect(() => {
@@ -87,16 +142,59 @@ export function MessagesList({
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
-        () => void refreshThreads(),
+        (payload) => {
+          const msg = payload.new as Message;
+          setThreads((prev) => {
+            const index = prev.findIndex((thread) => thread.id === msg.conversation_id);
+            if (index === -1) {
+              void refreshThread(msg.conversation_id);
+              return prev;
+            }
+
+            const next = [...prev];
+            const existing = next[index];
+            next[index] = {
+              ...existing,
+              last:
+                !existing.last || msg.created_at >= existing.last.created_at
+                  ? msg
+                  : existing.last,
+              unread:
+                msg.sender_id !== userId && !msg.read_at
+                  ? existing.unread + 1
+                  : existing.unread,
+            };
+            next.sort((a, b) =>
+              (b.last?.created_at ?? "").localeCompare(a.last?.created_at ?? ""),
+            );
+            return next;
+          });
+          void refreshThread(msg.conversation_id);
+        },
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "messages" },
-        () => void refreshThreads(),
+        (payload) => {
+          const msg = payload.new as Message;
+          setThreads((prev) =>
+            prev.map((thread) =>
+              thread.id === msg.conversation_id && thread.last?.id === msg.id
+                ? { ...thread, last: msg }
+                : thread,
+            ),
+          );
+          void refreshThread(msg.conversation_id);
+        },
       )
       .on(
         "postgres_changes",
         { event: "DELETE", schema: "public", table: "messages" },
+        () => void refreshThreads(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "conversation_participants" },
         () => void refreshThreads(),
       )
       .on(
@@ -109,7 +207,7 @@ export function MessagesList({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, refreshThreads]);
+  }, [userId, refreshThread, refreshThreads]);
 
   function removeChat(conversationId: string, name: string) {
     if (!window.confirm(`Delete your chat with ${name}?`)) return;
@@ -150,6 +248,8 @@ export function MessagesList({
             >
               <Link
                 href={`/messages/${thread.id}`}
+                onMouseEnter={() => router.prefetch(`/messages/${thread.id}`)}
+                onFocus={() => router.prefetch(`/messages/${thread.id}`)}
                 className="flex min-w-0 flex-1 items-center gap-3"
               >
                 <Avatar src={thread.other?.avatar_url} name={thread.other?.full_name} size={44} />
