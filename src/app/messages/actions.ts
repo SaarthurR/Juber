@@ -80,3 +80,18 @@ export async function markConversationRead(conversationId: string) {
   revalidatePath("/messages");
   revalidatePath(`/messages/${conversationId}`);
 }
+
+export async function deleteConversation(conversationId: string) {
+  const supabase = await createClient();
+  const user = await getAuthUser(supabase);
+  if (!user) redirect("/");
+
+  const { data: deleted, error } = await supabase.rpc("delete_conversation", {
+    p_conversation_id: conversationId,
+  });
+
+  if (error) throw new Error(error.message);
+  if (!deleted) throw new Error("Could not delete this chat.");
+
+  revalidatePath("/messages");
+}

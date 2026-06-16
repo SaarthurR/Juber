@@ -79,6 +79,10 @@ export function MessageThread({
     await sendMessage(conversationId, formData);
   }
 
+  const lastMessage = messages.at(-1);
+  const receiptMessageId =
+    lastMessage?.sender_id === currentUserId ? lastMessage.id : null;
+
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-2xl flex-col px-4 sm:px-6">
       <div className="flex items-center gap-3 border-b border-stone-200 py-4">
@@ -112,7 +116,7 @@ export function MessageThread({
                 >
                   {m.body}
                 </div>
-                {mine && (
+                {m.id === receiptMessageId && (
                   <span className="mt-1 self-end text-[11px] font-semibold text-stone-400">
                     {m.read_at ? "Read" : "Sent"}
                   </span>

@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
-import { CheckCheck } from "lucide-react";
+import { CheckCheck, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { markConversationRead } from "@/app/messages/actions";
+import { deleteConversation } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Message, Profile } from "@/lib/types";
@@ -25,7 +25,7 @@ export function MessagesList({
   initialThreads: ThreadSummary[];
 }) {
   const [threads, setThreads] = useState(initialThreads);
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const initialKey = useMemo(
     () => initialThreads.map((t) => `${t.id}:${t.last?.id ?? ""}:${t.unread}`).join("|"),
@@ -94,6 +94,16 @@ export function MessagesList({
         { event: "UPDATE", schema: "public", table: "messages" },
         () => void refreshThreads(),
       )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "messages" },
+        () => void refreshThreads(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "conversation_participants" },
+        () => void refreshThreads(),
+      )
       .subscribe();
 
     return () => {
@@ -101,16 +111,19 @@ export function MessagesList({
     };
   }, [userId, refreshThreads]);
 
-  function markRead(conversationId: string) {
-    setPendingId(conversationId);
-    setThreads((prev) =>
-      prev.map((t) => (t.id === conversationId ? { ...t, unread: 0 } : t)),
-    );
+  function removeChat(conversationId: string, name: string) {
+    if (!window.confirm(`Delete your chat with ${name}?`)) return;
+    setDeletingId(conversationId);
+    setThreads((prev) => prev.filter((t) => t.id !== conversationId));
     startTransition(async () => {
       try {
-        await markConversationRead(conversationId);
+        await deleteConversation(conversationId);
+        await refreshThreads();
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : "Could not delete this chat.");
+        await refreshThreads();
       } finally {
-        setPendingId(null);
+        setDeletingId(null);
       }
     });
   }
@@ -131,46 +144,52 @@ export function MessagesList({
           <li key={thread.id}>
             <div
               className={cn(
-                "group relative flex items-center gap-3 p-4 transition",
+                "group flex items-center gap-3 p-4 transition",
                 unread ? "bg-brand-50/60" : "hover:bg-stone-50",
               )}
             >
-              <Link href={`/messages/${thread.id}`} className="absolute inset-0" aria-label={`Open chat with ${thread.other?.full_name ?? "Member"}`} />
-              <Avatar src={thread.other?.avatar_url} name={thread.other?.full_name} size={44} />
-              <div className="relative min-w-0 flex-1">
-                <p className={cn("truncate font-medium", unread && "text-brand-800")}>
-                  {thread.other?.full_name ?? "Member"}
-                </p>
-                <p className={cn("truncate text-sm", unread ? "font-semibold text-stone-700" : "text-stone-500")}>
-                  {thread.last?.body ?? "Say hello"}
-                </p>
-              </div>
-              <div className="relative flex shrink-0 flex-col items-end gap-2">
-                {thread.last && (
-                  <span className="text-xs text-stone-400">
-                    {formatDistanceToNow(new Date(thread.last.created_at), { addSuffix: true })}
-                  </span>
-                )}
-                {unread ? (
-                  <button
-                    type="button"
-                    disabled={pendingId === thread.id}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      markRead(thread.id);
-                    }}
-                    aria-label="Mark conversation read"
-                    title="Mark read"
-                    className="h-3 w-3 rounded-full bg-gold shadow-[0_0_0_4px_rgba(232,200,135,0.28),0_0_16px_rgba(194,129,12,0.55)] transition hover:scale-125 disabled:opacity-50"
-                  />
-                ) : thread.last?.sender_id === userId && thread.last.read_at ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
-                    <CheckCheck size={13} />
-                    Read
-                  </span>
-                ) : null}
-              </div>
+              <Link
+                href={`/messages/${thread.id}`}
+                className="flex min-w-0 flex-1 items-center gap-3"
+              >
+                <Avatar src={thread.other?.avatar_url} name={thread.other?.full_name} size={44} />
+                <div className="min-w-0 flex-1">
+                  <p className={cn("truncate font-medium", unread && "text-brand-800")}>
+                    {thread.other?.full_name ?? "Member"}
+                  </p>
+                  <p className={cn("truncate text-sm", unread ? "font-semibold text-stone-700" : "text-stone-500")}>
+                    {thread.last?.body ?? "Say hello"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  {thread.last && (
+                    <span className="text-xs text-stone-400">
+                      {formatDistanceToNow(new Date(thread.last.created_at), { addSuffix: true })}
+                    </span>
+                  )}
+                  {unread ? (
+                    <span
+                      aria-label="Unread"
+                      className="h-3 w-3 rounded-full bg-gold shadow-[0_0_0_4px_rgba(232,200,135,0.28),0_0_16px_rgba(194,129,12,0.55)]"
+                    />
+                  ) : thread.last?.sender_id === userId && thread.last.read_at ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                      <CheckCheck size={13} />
+                      Read
+                    </span>
+                  ) : null}
+                </div>
+              </Link>
+              <button
+                type="button"
+                disabled={deletingId === thread.id}
+                onClick={() => removeChat(thread.id, thread.other?.full_name ?? "Member")}
+                aria-label={`Delete chat with ${thread.other?.full_name ?? "Member"}`}
+                title="Delete chat"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-300 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trash2 size={17} />
+              </button>
             </div>
           </li>
         );

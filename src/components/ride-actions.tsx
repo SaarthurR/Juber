@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
+import { MoreHorizontal } from "lucide-react";
 import {
   requestSeat,
   setPassengerStatus,
@@ -142,7 +143,13 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
   );
 }
 
-export function CancelRideButton({ rideId }: { rideId: string }) {
+export function CancelRideButton({
+  rideId,
+  variant = "link",
+}: {
+  rideId: string;
+  variant?: "link" | "menu";
+}) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [pending, startTransition] = useTransition();
@@ -163,11 +170,15 @@ export function CancelRideButton({ rideId }: { rideId: string }) {
   }
 
   return (
-    <div className="mt-3 text-center">
+    <div className={variant === "menu" ? "" : "mt-3 text-center"}>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs font-medium text-red-500 hover:text-red-600 transition hover:underline"
+        className={
+          variant === "menu"
+            ? "block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50"
+            : "text-xs font-medium text-red-500 hover:text-red-600 transition hover:underline"
+        }
       >
         Cancel this ride
       </button>
@@ -227,7 +238,13 @@ export function CancelRideButton({ rideId }: { rideId: string }) {
   );
 }
 
-export function CloseRideButton({ rideId }: { rideId: string }) {
+export function CloseRideButton({
+  rideId,
+  variant = "primary",
+}: {
+  rideId: string;
+  variant?: "primary" | "menu";
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -250,7 +267,11 @@ export function CloseRideButton({ rideId }: { rideId: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
+        className={
+          variant === "menu"
+            ? "block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
+            : "w-full rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
+        }
       >
         Close ride
       </button>
@@ -292,6 +313,32 @@ export function CloseRideButton({ rideId }: { rideId: string }) {
         </div>
       )}
     </>
+  );
+}
+
+export function DriverRideOptions({ rideId }: { rideId: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label="Ride options"
+        className="inline-flex h-9 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-bold text-stone-500 transition hover:bg-stone-50 hover:text-stone-700"
+      >
+        <MoreHorizontal size={16} />
+        Options
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white p-1.5 shadow-[0_18px_45px_-24px_rgba(68,64,60,0.55)]">
+          <CloseRideButton rideId={rideId} variant="menu" />
+          <CancelRideButton rideId={rideId} variant="menu" />
+        </div>
+      )}
+    </div>
   );
 }
 

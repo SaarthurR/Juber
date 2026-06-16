@@ -11,9 +11,8 @@ import { ContactModal } from "@/components/contact-modal";
 import {
   ReserveSeatButton,
   PassengerStatusButtons,
-  CancelRideButton,
-  CloseRideButton,
   CancelSeatButton,
+  DriverRideOptions,
 } from "@/components/ride-actions";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
 
@@ -274,9 +273,12 @@ function DriverPanel({
 }) {
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-5">
-      <h2 className="mb-3 text-xs font-bold uppercase tracking-widest text-stone-400">
-        Seat requests
-      </h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
+          Seat requests
+        </h2>
+        {ride.status === "active" && <DriverRideOptions rideId={ride.id} />}
+      </div>
       {passengerRows.length === 0 ? (
         <p className="text-sm text-stone-500">No requests yet.</p>
       ) : (
@@ -301,13 +303,6 @@ function DriverPanel({
             </li>
           ))}
         </ul>
-      )}
-
-      {ride.status === "active" && (
-        <div className="mt-5 border-t border-stone-100 pt-4">
-          <CloseRideButton rideId={ride.id} />
-          <CancelRideButton rideId={ride.id} />
-        </div>
       )}
     </div>
   );
