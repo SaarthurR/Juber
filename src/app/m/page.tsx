@@ -44,16 +44,27 @@ export default async function MobileHomePage({
     dayRange = { gte: start.toISOString(), lt: end.toISOString() };
   }
 
-  let ridesQuery = supabase
-    .from("rides")
-    .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
-    .eq("status", "active")
-    .order("depart_at", { ascending: true });
-  if (from) ridesQuery = ridesQuery.ilike("origin_label", `%${from}%`);
-  if (to) ridesQuery = ridesQuery.ilike("destination_label", `%${to}%`);
-  if (roundTripOnly) ridesQuery = ridesQuery.eq("round_trip", true);
-  if (dayRange) ridesQuery = ridesQuery.gte("depart_at", dayRange.gte).lt("depart_at", dayRange.lt);
-  else ridesQuery = ridesQuery.gte("depart_at", nowIso);
+  const ridesQuery = user
+    ? (() => {
+        let q = supabase
+          .from("rides")
+          .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+          .eq("status", "active")
+          .order("depart_at", { ascending: true });
+        if (from) q = q.ilike("origin_label", `%${from}%`);
+        if (to) q = q.ilike("destination_label", `%${to}%`);
+        if (roundTripOnly) q = q.eq("round_trip", true);
+        if (dayRange) q = q.gte("depart_at", dayRange.gte).lt("depart_at", dayRange.lt);
+        else q = q.gte("depart_at", nowIso);
+        return q;
+      })()
+    : supabase.rpc("public_upcoming_rides", {
+        p_from: from || null,
+        p_to: to || null,
+        p_date: date || null,
+        p_limit: 100,
+        p_round_trip: roundTripOnly ? true : null,
+      });
 
   let requestsQuery = supabase
     .from("ride_requests")
@@ -124,11 +135,11 @@ export default async function MobileHomePage({
         <HomeBoard
           rides={rides}
           requests={requests}
-        initialFrom={from}
-        initialTo={to}
-        initialDate={date}
-        initialRoundTripOnly={roundTripOnly}
-      />
+          initialFrom={from}
+          initialTo={to}
+          initialDate={date}
+          initialRoundTripOnly={roundTripOnly}
+        />
       </div>
     </div>
   );
