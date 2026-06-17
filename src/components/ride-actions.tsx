@@ -358,10 +358,11 @@ export function CancelSeatButton({
     setError(null);
     startTransition(async () => {
       try {
-        await cancelSeat(rideId, message, redirectTo);
+        const result = await cancelSeat(rideId, message, redirectTo);
+        if (result?.error) setError(result.error);
       } catch (e) {
         if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
-          setError(e.message);
+          setError("We couldn't cancel your seat. Please try again.");
         }
       }
     });

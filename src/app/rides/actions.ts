@@ -297,7 +297,7 @@ export async function closeRide(rideId: string) {
 export async function cancelSeat(rideId: string, message: string, redirectTo?: string) {
   const trimmed = (message ?? "").trim();
   if (!trimmed) {
-    throw new Error("Please tell the driver why you are cancelling.");
+    return { error: "Please tell the driver why you are cancelling." };
   }
 
   const supabase = await createClient();
@@ -308,8 +308,11 @@ export async function cancelSeat(rideId: string, message: string, redirectTo?: s
     p_ride_id: rideId,
     p_reason: trimmed,
   });
-  if (error) throw new Error(error.message);
-  if (!cancelled) throw new Error("You are not currently in this active ride.");
+  if (error) {
+    console.error("cancel_seat failed", { code: error.code, rideId });
+    return { error: "We couldn't cancel your seat. Please try again." };
+  }
+  if (!cancelled) return { error: "You are not currently in this active ride." };
 
   revalidatePath("/rides");
   revalidatePath(`/rides/${rideId}`);
