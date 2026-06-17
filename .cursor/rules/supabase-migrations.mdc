@@ -1,0 +1,11 @@
+---
+description: Keep local and remote Supabase migrations synchronized
+alwaysApply: true
+---
+
+# Supabase Migrations
+
+- Whenever a Supabase migration is added or changed, automatically apply all pending migrations to the linked remote project with `supabase db push` before considering the task complete.
+- Run `supabase migration list` afterward and verify every local migration is recorded remotely.
+- If the remote schema already contains a migration's objects but its history entry is missing, inspect the mismatch, repair only the confirmed history entry, then push the remaining migrations.
+- Never report migration-dependent functionality as complete while local and remote migration histories differ.

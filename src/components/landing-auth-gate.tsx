@@ -53,6 +53,7 @@ export function LandingAuthGate({ children }: { children: React.ReactNode }) {
               details, posting, requests, and messages.
             </p>
             <GoogleSignInButton
+              googleBranding
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
