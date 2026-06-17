@@ -1,31 +1,46 @@
 "use client";
 
 import { useState } from "react";
-import { Phone, MessageCircle, X, AtSign } from "lucide-react";
+import { Phone, MessageCircle, X } from "lucide-react";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { openConversation } from "@/app/messages/actions";
 
-type Method = "phone" | "instagram" | "message" | null;
+type Method = "phone" | "whatsapp" | "message" | null;
+
+function WhatsAppIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden>
+      <path
+        fill="#25D366"
+        d="M12.04 2a9.84 9.84 0 0 0-8.5 14.78L2.4 22l5.35-1.1A9.84 9.84 0 1 0 12.04 2Z"
+      />
+      <path
+        fill="white"
+        d="M17.5 14.5c-.27.78-1.36 1.44-2.17 1.63-.58.12-1.34.22-3.9-.84-3.27-1.36-5.38-4.68-5.54-4.9-.16-.21-1.32-1.75-1.32-3.34s.83-2.37 1.13-2.7c.27-.3.72-.44 1.15-.44h.4c.35.01.53.04.76.58.27.65.93 2.25 1.01 2.42.08.16.13.36.03.57-.09.22-.14.35-.28.53-.14.16-.3.37-.43.5-.14.15-.29.3-.12.58.16.27.72 1.18 1.54 1.9 1.06.95 1.95 1.24 2.24 1.38.27.14.44.12.61-.07.2-.22.7-.82.89-1.1.18-.27.38-.23.64-.14.27.1 1.7.8 1.99.95.3.15.49.22.56.34.08.13.08.72-.19 1.5Z"
+      />
+    </svg>
+  );
+}
 
 export function ContactSheet({
   driverId,
   driverFullName,
   rideId,
   phone,
-  instagram,
+  whatsapp,
   preferredContact,
 }: {
   driverId: string;
   driverFullName: string | null;
   rideId: string;
   phone: string | null;
-  instagram: string | null;
+  whatsapp: string | null;
   preferredContact: Method;
 }) {
   const [open, setOpen] = useState(false);
   const firstName = driverFullName?.split(" ")[0] ?? "the driver";
-  const igHandle = instagram?.startsWith("@") ? instagram.slice(1) : instagram;
+  const whatsappHref = whatsapp ? `https://wa.me/${whatsapp.replace(/[^\d]/g, "")}` : null;
 
   return (
     <>
@@ -67,14 +82,14 @@ export function ContactSheet({
               preferred={preferredContact === "phone"}
             />
           )}
-          {igHandle && (
+          {whatsapp && whatsappHref && (
             <ContactRow
-              href={`https://instagram.com/${igHandle}`}
+              href={whatsappHref}
               external
-              icon={<AtSign size={17} className="text-brand-600" />}
-              label="Instagram"
-              value={`@${igHandle}`}
-              preferred={preferredContact === "instagram"}
+              icon={<WhatsAppIcon />}
+              label="WhatsApp"
+              value={whatsapp}
+              preferred={preferredContact === "whatsapp"}
             />
           )}
           <form action={openConversation.bind(null, driverId)}>

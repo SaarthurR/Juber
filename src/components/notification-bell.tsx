@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Car, Check, X, Ban, Handshake } from "lucide-react";
+import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { markNotificationsRead } from "@/app/messages/actions";
@@ -19,8 +19,10 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   seat_requested: Car,
   seat_confirmed: Check,
   seat_declined: X,
+  seat_cancelled: Ban,
   ride_cancelled: Ban,
   request_accepted: Handshake,
+  new_message: MessageCircle,
 };
 
 // Warm per-type chip colors, echoing the mock's varied avatars.
@@ -28,8 +30,10 @@ const CHIP: Record<NotificationType, string> = {
   seat_confirmed: "bg-[#dcfce7] text-[#15803d]",
   seat_requested: "bg-[#f3e7d8] text-[#8a5a2b]",
   seat_declined: "bg-[#fee2e2] text-[#b91c1c]",
+  seat_cancelled: "bg-[#fee2e2] text-[#b91c1c]",
   ride_cancelled: "bg-[#fee2e2] text-[#b91c1c]",
   request_accepted: "bg-[#dcfce7] text-[#15803d]",
+  new_message: "bg-[#e0f2fe] text-[#0369a1]",
 };
 
 function firstName(name: string | null | undefined) {
@@ -58,12 +62,24 @@ function copyFor(n: NotificationWithContext) {
       );
     case "seat_declined":
       return <>Your seat request{route && <> for {route}</>} was declined.</>;
+    case "seat_cancelled":
+      return (
+        <>
+          <strong>{who}</strong> cancelled their seat{route && <> for {route}</>}.
+        </>
+      );
     case "ride_cancelled":
       return <>Your ride{route && <> {route}</>} was cancelled.</>;
     case "request_accepted":
       return (
         <>
           <strong>{who}</strong> accepted your ride request{route && <> for {route}</>}.
+        </>
+      );
+    case "new_message":
+      return (
+        <>
+          One new message from <strong>{who}</strong>.
         </>
       );
   }
@@ -271,7 +287,9 @@ export function NotificationBell({
                   ? `/rides/${n.ride_id}`
                   : n.request_id
                     ? `/requests/${n.request_id}`
-                    : null;
+                    : n.conversation_id
+                      ? `/messages/${n.conversation_id}`
+                      : null;
                 return href ? (
                   <Link
                     key={n.id}

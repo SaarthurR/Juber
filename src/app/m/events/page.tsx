@@ -2,6 +2,8 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ChevronRight, CalendarDays } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { EventRequestForm } from "@/components/event-request-form";
 import type { EventRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +16,7 @@ function eventDates(e: EventRow) {
 }
 
 export default async function MobileEventsPage() {
+  const { user } = await getCurrentUser();
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
@@ -79,6 +82,7 @@ export default async function MobileEventsPage() {
           ))
         )}
       </div>
+      <EventRequestForm signedIn={Boolean(user)} compact />
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, Car, Check, X, Ban, Handshake } from "lucide-react";
+import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { MAvatar } from "@/components/mobile/m-avatar";
@@ -14,8 +14,10 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   seat_requested: Car,
   seat_confirmed: Check,
   seat_declined: X,
+  seat_cancelled: Ban,
   ride_cancelled: Ban,
   request_accepted: Handshake,
+  new_message: MessageCircle,
 };
 
 function firstName(name: string | null | undefined) {
@@ -31,10 +33,14 @@ function titleFor(n: NotificationWithContext): string {
       return "Your seat was confirmed";
     case "seat_declined":
       return "Your seat request was declined";
+    case "seat_cancelled":
+      return `${who} cancelled their seat`;
     case "ride_cancelled":
       return "Your ride was cancelled";
     case "request_accepted":
       return `${who} accepted your ride request`;
+    case "new_message":
+      return `One new message from ${who}`;
     default:
       return "New activity";
   }
@@ -121,7 +127,9 @@ function NotifRow({
     ? `/m/rides/${n.ride_id}`
     : n.request_id
       ? `/requests/${n.request_id}`
-      : null;
+      : n.conversation_id
+        ? `/messages/${n.conversation_id}`
+        : null;
 
   const body = (
     <div className="flex gap-3 py-3.5">
@@ -143,6 +151,11 @@ function NotifRow({
           <p className="truncate text-xs text-muted">
             {route}
             {departs && <span className="text-muted-warm"> · {departs}</span>}
+          </p>
+        )}
+        {n.type === "seat_cancelled" && n.message && (
+          <p className="mt-1.5 rounded-[10px] bg-tint px-3 py-2 text-xs text-muted">
+            “{n.message}”
           </p>
         )}
       </div>

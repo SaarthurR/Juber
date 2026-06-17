@@ -77,6 +77,16 @@ export async function markConversationRead(conversationId: string) {
     .is("read_at", null);
 
   if (error) throw new Error(error.message);
+
+  const { error: notificationError } = await supabase
+    .from("notifications")
+    .update({ read_at: readAt })
+    .eq("recipient_id", user.id)
+    .eq("type", "new_message")
+    .eq("conversation_id", conversationId)
+    .is("read_at", null);
+  if (notificationError) throw new Error(notificationError.message);
+
   revalidatePath("/messages");
   revalidatePath(`/messages/${conversationId}`);
 }

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { format } from "date-fns";
-import { ArrowLeft, CheckCircle2, MessageCircle, Phone } from "lucide-react";
+import { ArrowLeft, CheckCircle2, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { Avatar } from "@/components/ui/avatar";
@@ -46,10 +46,6 @@ export default async function RequestDetailPage({
           "EEE, MMM d",
         )}`
       : format(new Date(request.depart_at), "EEE, MMM d, h:mm a");
-  const instagramHandle = request.rider?.instagram?.startsWith("@")
-    ? request.rider.instagram.slice(1)
-    : request.rider?.instagram;
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <div className="mb-6 flex items-center gap-3">
@@ -157,8 +153,6 @@ export default async function RequestDetailPage({
                 <ResponderActions
                   riderId={request.rider_id}
                   requestId={request.id}
-                  phone={request.rider?.phone ?? null}
-                  instagramHandle={instagramHandle ?? null}
                 />
               ) : (
                 <div className="rounded-xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-500">
@@ -205,13 +199,9 @@ function OwnerActions({ requestId, isActive }: { requestId: string; isActive: bo
 function ResponderActions({
   riderId,
   requestId,
-  phone,
-  instagramHandle,
 }: {
   riderId: string;
   requestId: string;
-  phone: string | null;
-  instagramHandle: string | null;
 }) {
   return (
     <>
@@ -234,25 +224,6 @@ function ResponderActions({
           Message rider
         </button>
       </form>
-      {phone && (
-        <a
-          href={`tel:${phone}`}
-          className="flex w-full items-center justify-center gap-2 rounded-full border border-stone-200 px-5 py-3 text-sm font-bold text-stone-700 transition hover:bg-white active:scale-[0.98]"
-        >
-          <Phone size={17} />
-          Call rider
-        </a>
-      )}
-      {instagramHandle && (
-        <a
-          href={`https://instagram.com/${instagramHandle}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block text-center text-sm font-semibold text-brand-600 hover:text-brand-700"
-        >
-          @{instagramHandle}
-        </a>
-      )}
     </>
   );
 }

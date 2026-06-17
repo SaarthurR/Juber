@@ -2,7 +2,9 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { EventCard } from "@/components/event-card";
+import { EventRequestForm } from "@/components/event-request-form";
 import type { EventRow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,7 @@ function eventDates(e: EventRow) {
 }
 
 export default async function EventsPage() {
+  const { user } = await getCurrentUser();
   const supabase = await createClient();
   const nowIso = new Date().toISOString();
 
@@ -116,6 +119,8 @@ export default async function EventsPage() {
           )}
         </>
       )}
+
+      <EventRequestForm signedIn={Boolean(user)} />
     </div>
   );
 }

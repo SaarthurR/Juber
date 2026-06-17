@@ -197,11 +197,11 @@ export default async function RideDetailPage({
               )}
             </div>
           </Link>
-          {user && !isDriver && (
+          {user && !isDriver && myJoin?.status === "confirmed" && (
             <ContactModal
               driverName={ride.driver?.full_name?.split(" ")[0] ?? "Driver"}
               phone={ride.driver?.phone ?? null}
-              instagram={ride.driver?.instagram ?? null}
+              whatsapp={ride.driver?.whatsapp ?? null}
               preferredContact={ride.driver?.preferred_contact ?? null}
               rideId={ride.id}
               driverId={ride.driver_id}

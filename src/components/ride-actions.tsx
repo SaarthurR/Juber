@@ -342,7 +342,13 @@ export function DriverRideOptions({ rideId }: { rideId: string }) {
   );
 }
 
-export function CancelSeatButton({ rideId }: { rideId: string }) {
+export function CancelSeatButton({
+  rideId,
+  redirectTo,
+}: {
+  rideId: string;
+  redirectTo?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -352,7 +358,7 @@ export function CancelSeatButton({ rideId }: { rideId: string }) {
     setError(null);
     startTransition(async () => {
       try {
-        await cancelSeat(rideId, message);
+        await cancelSeat(rideId, message, redirectTo);
       } catch (e) {
         if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
           setError(e.message);
@@ -383,10 +389,10 @@ export function CancelSeatButton({ rideId }: { rideId: string }) {
           >
             <h2 className="text-lg font-bold text-stone-900">Cancel your seat?</h2>
             <p className="mt-1 text-sm text-stone-500">
-              Send the driver a quick note so they know what changed.
+              The driver will get a notification with your reason.
             </p>
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-stone-500">
-              Message <span className="text-red-500">*</span>
+              Reason <span className="text-red-500">*</span>
             </label>
             <textarea
               value={message}
@@ -412,7 +418,7 @@ export function CancelSeatButton({ rideId }: { rideId: string }) {
                 disabled={pending || !message.trim()}
                 className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {pending ? "Sending..." : "Send and cancel"}
+                {pending ? "Cancelling..." : "Cancel seat"}
               </button>
             </div>
           </div>

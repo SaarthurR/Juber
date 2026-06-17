@@ -50,10 +50,11 @@ export default async function EditProfilePage() {
           <div className="space-y-4">
             <FormField label="Phone (optional)" name="phone" type="tel" defaultValue={profile?.phone ?? ""} />
             <FormField
-              label="Instagram handle (optional)"
-              name="instagram"
-              defaultValue={profile?.instagram ? `@${profile.instagram}` : ""}
-              placeholder="e.g. @yourhandle"
+              label="WhatsApp number (optional)"
+              name="whatsapp"
+              type="tel"
+              defaultValue={profile?.whatsapp ?? ""}
+              placeholder="e.g. +1 555 555 5555"
             />
           </div>
         </div>
@@ -67,8 +68,8 @@ export default async function EditProfilePage() {
               Phone
             </label>
             <label className={radioBase}>
-              <input type="radio" name="preferred_contact" value="instagram" defaultChecked={preferredContact === "instagram"} className="sr-only" />
-              Instagram
+              <input type="radio" name="preferred_contact" value="whatsapp" defaultChecked={preferredContact === "whatsapp"} className="sr-only" />
+              WhatsApp
             </label>
             <label className={radioBase}>
               <input type="radio" name="preferred_contact" value="message" defaultChecked={preferredContact === "message"} className="sr-only" />

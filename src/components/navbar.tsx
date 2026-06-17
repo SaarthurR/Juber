@@ -17,7 +17,7 @@ export async function Navbar() {
   let notifications: NotificationWithContext[] = [];
   if (user) {
     const supabase = await createClient();
-    const [{ count }, notificationsResult, { data: mine }] = await Promise.all([
+    const [{ count }, notificationsResult] = await Promise.all([
       supabase
         .from("notifications")
         .select("id", { count: "exact", head: true })
@@ -31,24 +31,9 @@ export async function Navbar() {
         .eq("recipient_id", user.id)
         .order("created_at", { ascending: false })
         .limit(6),
-      supabase
-        .from("conversation_participants")
-        .select("conversation_id")
-        .eq("user_id", user.id),
     ]);
-    let unreadMessages = 0;
-    const convoIds = (mine ?? []).map((row) => row.conversation_id);
-    if (convoIds.length) {
-      const { count: messageCount } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .in("conversation_id", convoIds)
-        .neq("sender_id", user.id)
-        .is("read_at", null);
-      unreadMessages = messageCount ?? 0;
-    }
     notificationUnread = count ?? 0;
-    unread = notificationUnread + unreadMessages;
+    unread = notificationUnread;
     let data = notificationsResult.data;
     if (notificationsResult.error) {
       const fallback = await supabase

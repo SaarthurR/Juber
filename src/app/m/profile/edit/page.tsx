@@ -122,11 +122,12 @@ export default async function MobileEditProfilePage() {
               />
             </label>
             <label className="block">
-              <Caption>Instagram (optional)</Caption>
+              <Caption>WhatsApp (optional)</Caption>
               <input
-                name="instagram"
-                defaultValue={profile?.instagram ? `@${profile.instagram}` : ""}
-                placeholder="@yourhandle"
+                name="whatsapp"
+                type="tel"
+                defaultValue={profile?.whatsapp ?? ""}
+                placeholder="+1 555 555 5555"
                 className={inputCls}
               />
             </label>
@@ -143,7 +144,7 @@ export default async function MobileEditProfilePage() {
               <Caption>Preferred contact method</Caption>
               <SelectWithChevron name="preferred_contact" defaultValue={preferred}>
                 <option value="phone">Phone</option>
-                <option value="instagram">Instagram</option>
+                <option value="whatsapp">WhatsApp</option>
                 <option value="message">In-app message</option>
               </SelectWithChevron>
             </label>

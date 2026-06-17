@@ -11,7 +11,7 @@ export type Profile = {
   whatsapp: string | null;
   instagram: string | null;
   pronouns: string | null;
-  preferred_contact: "phone" | "instagram" | "message" | null;
+  preferred_contact: "phone" | "whatsapp" | "message" | null;
   car_make_model: string | null;
   car_color: string | null;
   bio: string | null;
@@ -30,6 +30,28 @@ export type EventRow = {
   is_active: boolean;
   created_by: string | null;
   created_at: string;
+};
+
+export type EventRequest = {
+  id: string;
+  name: string;
+  description: string | null;
+  venue_label: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  source: "user" | "jcnc";
+  source_url: string | null;
+  expected_traffic: "unsure" | "high";
+  status: "pending" | "approved" | "rejected";
+  requested_by: string | null;
+  reviewed_by: string | null;
+  approved_event_id: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+};
+
+export type EventRequestWithRequester = EventRequest & {
+  requester: Pick<Profile, "id" | "full_name"> | null;
 };
 
 export type Place = {
@@ -106,8 +128,10 @@ export type NotificationType =
   | "seat_requested"
   | "seat_confirmed"
   | "seat_declined"
+  | "seat_cancelled"
   | "ride_cancelled"
-  | "request_accepted";
+  | "request_accepted"
+  | "new_message";
 
 export type Notification = {
   id: string;
@@ -116,6 +140,7 @@ export type Notification = {
   type: NotificationType;
   ride_id: string | null;
   request_id: string | null;
+  conversation_id: string | null;
   message: string | null;
   read_at: string | null;
   created_at: string;

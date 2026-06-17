@@ -15,9 +15,6 @@ export async function updateProfile(formData: FormData) {
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const rawInsta = str(formData.get("instagram"));
-  const instagram = rawInsta?.startsWith("@") ? rawInsta.slice(1) : rawInsta;
-
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -25,7 +22,7 @@ export async function updateProfile(formData: FormData) {
       pronouns: str(formData.get("pronouns")),
       neighborhood: str(formData.get("neighborhood")),
       phone: str(formData.get("phone")),
-      instagram,
+      whatsapp: str(formData.get("whatsapp")),
       preferred_contact: str(formData.get("preferred_contact")),
       car_make_model: str(formData.get("car_make_model")),
       car_color: str(formData.get("car_color")),

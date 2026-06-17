@@ -32,22 +32,7 @@ export function MessagesNavLink({
       .select("id", { count: "exact", head: true })
       .eq("recipient_id", userId)
       .is("read_at", null);
-    const { data: mine } = await supabase
-      .from("conversation_participants")
-      .select("conversation_id")
-      .eq("user_id", userId);
-    const convoIds = (mine ?? []).map((row) => row.conversation_id);
-    let messageCount = 0;
-    if (convoIds.length) {
-      const { count } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .in("conversation_id", convoIds)
-        .neq("sender_id", userId)
-        .is("read_at", null);
-      messageCount = count ?? 0;
-    }
-    setUnread((notificationCount ?? 0) + messageCount);
+    setUnread(notificationCount ?? 0);
   }, [userId]);
 
   useEffect(() => {
@@ -62,16 +47,6 @@ export function MessagesNavLink({
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
-        () => void refreshUnread(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        () => void refreshUnread(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "messages" },
         () => void refreshUnread(),
       )
       .subscribe();

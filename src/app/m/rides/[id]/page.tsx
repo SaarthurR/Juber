@@ -148,13 +148,13 @@ export default async function MobileTripPage({
               {carLine && <p className="truncate text-xs text-muted-warm">{carLine}</p>}
             </div>
           </Link>
-          {user && !isDriver && (
+          {user && !isDriver && myJoin?.status === "confirmed" && (
             <ContactSheet
               driverId={ride.driver_id}
               driverFullName={ride.driver?.full_name ?? null}
               rideId={ride.id}
               phone={ride.driver?.phone ?? null}
-              instagram={ride.driver?.instagram ?? null}
+              whatsapp={ride.driver?.whatsapp ?? null}
               preferredContact={ride.driver?.preferred_contact ?? null}
             />
           )}
@@ -256,7 +256,7 @@ export default async function MobileTripPage({
               Seat {myJoin.status}
             </div>
             {ride.status === "active" && myJoin.status !== "declined" && (
-              <CancelSeatButton rideId={ride.id} />
+              <CancelSeatButton rideId={ride.id} redirectTo={`/m/rides/${ride.id}`} />
             )}
           </div>
         ) : ride.seats_available > 0 ? (

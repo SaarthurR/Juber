@@ -294,60 +294,25 @@ export async function closeRide(rideId: string) {
   redirect("/rides");
 }
 
-export async function cancelSeat(rideId: string, message: string) {
+export async function cancelSeat(rideId: string, message: string, redirectTo?: string) {
   const trimmed = (message ?? "").trim();
   if (!trimmed) {
-    throw new Error("Please leave a message for the driver.");
+    throw new Error("Please tell the driver why you are cancelling.");
   }
 
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const { data: ride } = await supabase
-    .from("rides")
-    .select("driver_id,status")
-    .eq("id", rideId)
-    .single<{ driver_id: string; status: string }>();
-  if (!ride) throw new Error("Ride not found.");
-  if (ride.driver_id === user.id) throw new Error("Drivers cannot cancel their own seat.");
-  if (ride.status !== "active") throw new Error("This ride is already closed.");
-
-  const { data: passenger } = await supabase
-    .from("ride_passengers")
-    .select("id")
-    .eq("ride_id", rideId)
-    .eq("passenger_id", user.id)
-    .in("status", ["pending", "confirmed"])
-    .single<{ id: string }>();
-  if (!passenger) throw new Error("You are not currently in this ride.");
-
-  const { data: conversationId, error: convoError } = await supabase.rpc("open_conversation", {
-    p_other_user_id: ride.driver_id,
+  const { data: cancelled, error } = await supabase.rpc("cancel_seat", {
     p_ride_id: rideId,
-    p_request_id: null,
+    p_reason: trimmed,
   });
-  if (convoError || !conversationId) {
-    throw new Error(convoError?.message ?? "Could not message the driver.");
-  }
-
-  const { error: messageError } = await supabase.from("messages").insert({
-    conversation_id: conversationId,
-    sender_id: user.id,
-    body: trimmed,
-  });
-  if (messageError) throw new Error(messageError.message);
-
-  const { error: deleteError } = await supabase
-    .from("ride_passengers")
-    .delete()
-    .eq("id", passenger.id)
-    .eq("ride_id", rideId)
-    .eq("passenger_id", user.id);
-  if (deleteError) throw new Error(deleteError.message);
+  if (error) throw new Error(error.message);
+  if (!cancelled) throw new Error("You are not currently in this active ride.");
 
   revalidatePath("/rides");
   revalidatePath(`/rides/${rideId}`);
-  revalidatePath(`/messages/${conversationId}`);
-  redirect(`/messages/${conversationId}`);
+  revalidatePath("/messages");
+  redirect(redirectTo ?? `/rides/${rideId}`);
 }

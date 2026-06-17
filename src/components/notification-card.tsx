@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, Car, Check, X, Ban, Handshake } from "lucide-react";
+import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { Avatar } from "@/components/ui/avatar";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
@@ -8,8 +8,10 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   seat_requested: Car,
   seat_confirmed: Check,
   seat_declined: X,
+  seat_cancelled: Ban,
   ride_cancelled: Ban,
   request_accepted: Handshake,
+  new_message: MessageCircle,
 };
 
 function firstName(name: string | null | undefined) {
@@ -25,10 +27,14 @@ function titleFor(n: NotificationWithContext): string {
       return "Your seat was confirmed";
     case "seat_declined":
       return "Your seat request was declined";
+    case "seat_cancelled":
+      return `${who} cancelled their seat`;
     case "ride_cancelled":
       return "Your ride was cancelled";
     case "request_accepted":
       return `${who} accepted your ride request`;
+    case "new_message":
+      return `One new message from ${who}`;
   }
 }
 
@@ -73,7 +79,7 @@ export function NotificationCard({ n }: { n: NotificationWithContext }) {
             {departs && <span className="text-stone-400"> · {departs}</span>}
           </p>
         )}
-        {n.type === "ride_cancelled" && n.message && (
+        {(n.type === "ride_cancelled" || n.type === "seat_cancelled") && n.message && (
           <p className="mt-1.5 rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
             “{n.message}”
           </p>
@@ -99,6 +105,13 @@ export function NotificationCard({ n }: { n: NotificationWithContext }) {
   if (n.request_id) {
     return (
       <Link href={`/requests/${n.request_id}`} className="block">
+        {body}
+      </Link>
+    );
+  }
+  if (n.conversation_id) {
+    return (
+      <Link href={`/messages/${n.conversation_id}`} className="block">
         {body}
       </Link>
     );
