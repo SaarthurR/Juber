@@ -7,6 +7,7 @@ import { TempleLogo } from "@/components/temple-logo";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { NotificationBell } from "@/components/notification-bell";
 import { MessagesNavLink } from "@/components/messages-nav-link";
+import { ActiveNavLink, ActiveProfileLink } from "@/components/active-nav-link";
 import type { NotificationWithContext } from "@/lib/types";
 
 export async function Navbar() {
@@ -64,8 +65,8 @@ export async function Navbar() {
         </Link>
 
         <div className="flex items-center gap-1 text-[15px] font-semibold text-[#57534e]">
-          <NavLink href="/rides">Rides</NavLink>
-          <NavLink href="/events">Events</NavLink>
+          <ActiveNavLink href="/rides">Rides</ActiveNavLink>
+          <ActiveNavLink href="/events">Events</ActiveNavLink>
 
           {user ? (
             <>
@@ -77,13 +78,10 @@ export async function Navbar() {
                   userId={user.id}
                 />
               </span>
-              {profile?.is_admin && <NavLink href="/admin">Admin</NavLink>}
-              <Link
-                href="/profile"
-                className="ml-1.5 rounded-full transition hover:ring-2 hover:ring-brand-200 hover:ring-offset-1 active:scale-95"
-              >
+              {profile?.is_admin && <ActiveNavLink href="/admin">Admin</ActiveNavLink>}
+              <ActiveProfileLink>
                 <Avatar src={profile?.avatar_url} name={profile?.full_name} size={32} />
-              </Link>
+              </ActiveProfileLink>
             </>
           ) : (
             <span className="ml-2">
@@ -93,16 +91,5 @@ export async function Navbar() {
         </div>
       </nav>
     </header>
-  );
-}
-
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="rounded-lg px-3 py-1.5 transition hover:bg-[#f6e9da] hover:text-brand-700"
-    >
-      {children}
-    </Link>
   );
 }

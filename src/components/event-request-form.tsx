@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { CalendarPlus } from "lucide-react";
 import { requestEvent } from "@/app/events/actions";
 import { GoogleSignInButton } from "@/components/auth-button";
@@ -56,15 +55,11 @@ export function EventRequestForm({
             <SubmitButton>Submit for approval</SubmitButton>
           </form>
         ) : (
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="mt-5">
             <GoogleSignInButton
               next={compact ? "/m/events" : "/events"}
-              label="Sign in to request"
               className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
             />
-            <Link href="/events" className="text-sm font-bold text-brand-600 hover:text-brand-700">
-              Browse events
-            </Link>
           </div>
         )}
       </div>

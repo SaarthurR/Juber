@@ -77,6 +77,7 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
   return (
     <Link
       href={`/rides/${ride.id}`}
+      data-motion="card"
       className="group block overflow-hidden rounded-[26px] border border-[#e7dac7] bg-white p-5 shadow-[0_28px_60px_-38px_rgba(92,59,46,0.45)] transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_30px_65px_-34px_rgba(92,59,46,0.45)] active:translate-y-0"
     >
       <div className="flex items-start justify-between gap-4">
@@ -153,6 +154,7 @@ export function RequestCard({ request }: { request: RideRequestWithRider }) {
   return (
     <Link
       href={`/requests/${request.id}`}
+      data-motion="card"
       className="group block overflow-hidden rounded-[26px] border border-[#e7dac7] bg-white p-5 shadow-[0_24px_55px_-38px_rgba(92,59,46,0.42)] transition hover:-translate-y-0.5 hover:border-[#cfd4ff] hover:shadow-[0_30px_65px_-36px_rgba(79,92,247,0.28)] active:translate-y-0"
     >
       <div className="flex items-start justify-between gap-4">

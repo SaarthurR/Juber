@@ -239,7 +239,6 @@ export default async function MobileTripPage({
       <div className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[440px] border-t border-border-soft bg-cream px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
         {!user ? (
           <GoogleSignInButton
-            label="Sign in to reserve a seat"
             className="flex h-[54px] w-full items-center justify-center rounded-[14px] bg-brand-600 text-[15px] font-bold text-white"
           />
         ) : isDriver ? (

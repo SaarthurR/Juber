@@ -77,6 +77,7 @@ export default async function EventsPage() {
           {/* Featured */}
           <Link
             href={`/events/${featured.slug}`}
+            data-motion="card"
             className="group relative mt-7 block overflow-hidden rounded-3xl bg-gradient-to-br from-brand-700 to-brand-500 px-8 py-8 text-white shadow-[0_24px_50px_-28px_rgba(92,59,46,0.55)] sm:px-9"
           >
             <span className="pointer-events-none absolute -right-8 -top-8 h-52 w-52 rounded-full bg-white/[0.08]" />

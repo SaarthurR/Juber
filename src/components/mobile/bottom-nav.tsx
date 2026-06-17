@@ -14,16 +14,30 @@ const TABS = [
 // Only the four tab roots show the bar; sub-pages (trip details, forms) use
 // their own sticky footers instead.
 const TAB_ROOTS = new Set<string>(TABS.map((t) => t.href));
+const TAB_COLUMNS: Record<(typeof TABS)[number]["href"], number> = {
+  "/m": 0,
+  "/m/requests": 1,
+  "/m/events": 3,
+  "/m/profile": 4,
+};
 
 export function BottomNav() {
   const pathname = usePathname();
   if (!pathname || !TAB_ROOTS.has(pathname)) return null;
 
   const [left, right] = [TABS.slice(0, 2), TABS.slice(2)];
+  const activeColumn = TAB_COLUMNS[pathname as keyof typeof TAB_COLUMNS];
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-[440px] border-t border-border bg-white pb-[env(safe-area-inset-bottom)]">
       <div className="relative grid h-20 grid-cols-5 items-center">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-0 top-2 h-14 w-1/5 px-1.5 transition-transform duration-300 ease-out motion-reduce:transition-none"
+          style={{ transform: `translateX(${activeColumn * 100}%)` }}
+        >
+          <span className="block h-full w-full rounded-2xl bg-tint ring-1 ring-brand-100" />
+        </span>
         {left.map((t) => (
           <TabItem key={t.href} {...t} active={pathname === t.href} />
         ))}
@@ -61,7 +75,8 @@ function TabItem({
   return (
     <Link
       href={href}
-      className={`flex flex-col items-center gap-1 ${
+      aria-current={active ? "page" : undefined}
+      className={`relative z-10 flex min-h-14 flex-col items-center justify-center gap-1 transition-colors duration-200 ${
         active ? "text-brand-600" : "text-muted-warm"
       }`}
     >

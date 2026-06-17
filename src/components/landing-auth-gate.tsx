@@ -25,12 +25,12 @@ export function LandingAuthGate({ children }: { children: React.ReactNode }) {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 px-4 backdrop-blur-sm"
+          className="motion-overlay fixed inset-0 z-50 flex items-center justify-center bg-stone-950/45 px-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="landing-auth-title"
         >
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-[0_24px_70px_-28px_rgba(28,25,23,0.65)]">
+          <div className="motion-dialog w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-[0_24px_70px_-28px_rgba(28,25,23,0.65)]">
             <div className="flex justify-end">
               <button
                 type="button"
@@ -49,11 +49,10 @@ export function LandingAuthGate({ children }: { children: React.ReactNode }) {
               Sign in to keep going
             </h2>
             <p className="mt-2 text-sm leading-6 text-stone-500">
-              You can browse the scheduled rides here. Google sign-in unlocks
+              You can browse the scheduled rides here. Signing in unlocks
               details, posting, requests, and messages.
             </p>
             <GoogleSignInButton
-              label="Continue with Google"
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>

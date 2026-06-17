@@ -144,7 +144,6 @@ export default async function RequestDetailPage({
             <div className="mt-5 space-y-3">
               {!user ? (
                 <GoogleSignInButton
-                  label="Sign in to respond"
                   className="flex w-full items-center justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700"
                 />
               ) : isOwner ? (

@@ -25,7 +25,6 @@ export default async function MobileProfilePage() {
           </p>
         </div>
         <GoogleSignInButton
-          label="Sign in with Google"
           className="rounded-full bg-brand-600 px-6 py-3 text-[14px] font-bold text-white"
         />
       </div>

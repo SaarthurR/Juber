@@ -251,7 +251,6 @@ export default async function RideDetailPage({
         <div className="mt-8">
           {!user ? (
             <GoogleSignInButton
-              label="Sign in to reserve a seat"
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-4 text-base font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
             />
           ) : isDriver ? (

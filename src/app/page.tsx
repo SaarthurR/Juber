@@ -73,7 +73,6 @@ export default async function HomePage() {
             </Link>
             {!user ? (
               <GoogleSignInButton
-                label="Sign in to post a ride"
                 className="inline-flex items-center gap-2 rounded-xl border-[1.5px] border-white/70 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-white/10 active:scale-95"
               />
             ) : (

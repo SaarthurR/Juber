@@ -241,7 +241,7 @@ export function NotificationBell({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[48px] z-50 w-[340px] overflow-hidden rounded-2xl border border-[#efe4d3] bg-white shadow-[0_24px_50px_-16px_rgba(92,59,46,0.3)]">
+        <div className="motion-popover absolute right-0 top-[48px] z-50 w-[340px] overflow-hidden rounded-2xl border border-[#efe4d3] bg-white shadow-[0_24px_50px_-16px_rgba(92,59,46,0.3)]">
           <div className="flex items-center justify-between border-b border-[#f3ece1] px-[18px] py-4">
             <span className="text-base font-extrabold text-ink">Notifications</span>
             <button

@@ -57,12 +57,16 @@ export function MessagesNavLink({
   }, [userId, refreshUnread]);
 
   const visibleUnread = pathname.startsWith("/messages") ? unread : unread;
+  const active = pathname.startsWith("/messages");
 
   return (
     <Link
       href="/messages"
       aria-label="Messages"
-      className="relative ml-1 hidden h-[38px] w-[38px] items-center justify-center rounded-full text-[#57534e] transition hover:bg-[#f6e9da] hover:text-brand-700 sm:flex"
+      aria-current={active ? "page" : undefined}
+      className={`relative ml-1 hidden h-[38px] w-[38px] items-center justify-center rounded-full transition-colors duration-200 hover:bg-tint hover:text-brand-700 sm:flex ${
+        active ? "bg-tint text-brand-700 ring-1 ring-brand-200" : "text-[#57534e]"
+      }`}
     >
       <MessageSquare size={19} strokeWidth={2} />
       {visibleUnread > 0 && (

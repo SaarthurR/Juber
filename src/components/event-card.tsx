@@ -23,6 +23,7 @@ export function EventCard({
   return (
     <Link
       href={`/events/${event.slug}`}
+      data-motion="card"
       className="group flex flex-col rounded-2xl border border-[#ebe7e0] bg-white p-[22px] transition hover:-translate-y-0.5 hover:border-[#e0d3bf] hover:shadow-[0_24px_50px_-32px_rgba(92,59,46,0.4)]"
     >
       <div className="mb-3.5 flex items-start justify-between">

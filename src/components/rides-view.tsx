@@ -63,7 +63,7 @@ export function RidesView({
             Post a ride
           </Link>
         ) : (
-          <GoogleSignInButton label="Sign in to post" />
+          <GoogleSignInButton />
         )}
       </div>
 

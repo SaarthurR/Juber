@@ -50,13 +50,13 @@ export function ContactModal({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="motion-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setOpen(false)}
         >
           <div className="absolute inset-0 bg-black/40" />
 
           <div
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+            className="motion-dialog relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-5 text-xl font-bold text-stone-900">Contact</h2>
