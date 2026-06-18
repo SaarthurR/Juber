@@ -303,6 +303,9 @@ export async function cancelRide(rideId: string, reason: string) {
   if (passengerIds.length > 0 && !trimmed) {
     return { error: "Please tell your riders why the ride is cancelled." };
   }
+  // Older deployed versions of cancel_ride require a non-empty reason even
+  // when nobody is booked. Keep empty-ride cancellation compatible with them.
+  const cancellationReason = trimmed || "Ride cancelled before anyone joined.";
   const contactIds = [...new Set([user.id, ...passengerIds])];
   const { data: contacts } = contactIds.length
     ? await supabase
@@ -314,7 +317,7 @@ export async function cancelRide(rideId: string, reason: string) {
 
   const { data: cancelled, error } = await supabase.rpc("cancel_ride", {
     p_ride_id: rideId,
-    p_reason: trimmed,
+    p_reason: cancellationReason,
   });
   if (error) {
     console.error("cancel_ride failed", { code: error.code, rideId });
