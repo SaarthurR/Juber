@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth-button";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 
 export function LandingAuthGate({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  useScrollLock(open);
 
   function onClickCapture(event: React.MouseEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;

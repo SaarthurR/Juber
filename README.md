@@ -41,7 +41,16 @@ Copy `.env.local.example` to `.env.local` and fill in from Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+# Optional: send cancellation texts through Twilio
+TWILIO_ACCOUNT_SID=your-account-sid
+TWILIO_AUTH_TOKEN=your-auth-token
+TWILIO_FROM_NUMBER=+15555555555
 ```
+
+When the Twilio variables are configured, cancelling a ride texts each pending or
+confirmed rider, and cancelling a seat texts the driver. Phone numbers may be stored
+as US numbers or in E.164 format. Cancellation still succeeds if SMS delivery fails.
 
 ### 3. Run locally
 

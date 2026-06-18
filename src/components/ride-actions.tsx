@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 import {
   requestSeat,
   setPassengerStatus,
@@ -146,16 +147,29 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
 export function CancelRideButton({
   rideId,
   variant = "link",
+  onDialogOpenChange,
 }: {
   rideId: string;
   variant?: "link" | "menu";
+  onDialogOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  useScrollLock(open);
+
+  function setDialogOpen(value: boolean) {
+    setOpen(value);
+    onDialogOpenChange?.(value);
+    if (!value) setError(null);
+  }
 
   function submit() {
+    if (!reason.trim()) {
+      setError("Please write a reason so your passengers know why the ride is cancelled.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
@@ -173,7 +187,7 @@ export function CancelRideButton({
     <div className={variant === "menu" ? "" : "mt-3 text-center"}>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setDialogOpen(true)}
         className={
           variant === "menu"
             ? "block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50"
@@ -185,8 +199,8 @@ export function CancelRideButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setOpen(false)}
+          className="visible fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => !pending && setDialogOpen(false)}
         >
           <div className="absolute inset-0 bg-black/40" />
 
@@ -204,19 +218,28 @@ export function CancelRideButton({
             </label>
             <textarea
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={(e) => {
+                setReason(e.target.value);
+                if (error) setError(null);
+              }}
               autoFocus
               rows={3}
               placeholder="e.g. Car trouble — so sorry!"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "cancel-ride-reason-error" : undefined}
               className="mt-1.5 w-full resize-none rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
 
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {error && (
+              <p id="cancel-ride-reason-error" role="alert" className="mt-2 text-sm text-red-600">
+                {error}
+              </p>
+            )}
 
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => setDialogOpen(false)}
                 disabled={pending}
                 className="rounded-full px-4 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-100 transition disabled:opacity-60"
               >
@@ -225,7 +248,7 @@ export function CancelRideButton({
               <button
                 type="button"
                 onClick={submit}
-                disabled={pending || !reason.trim()}
+                disabled={pending}
                 className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {pending ? "Cancelling…" : "Cancel ride"}
@@ -241,13 +264,22 @@ export function CancelRideButton({
 export function CloseRideButton({
   rideId,
   variant = "primary",
+  onDialogOpenChange,
 }: {
   rideId: string;
   variant?: "primary" | "menu";
+  onDialogOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  useScrollLock(open);
+
+  function setDialogOpen(value: boolean) {
+    setOpen(value);
+    onDialogOpenChange?.(value);
+    if (!value) setError(null);
+  }
 
   function submit() {
     setError(null);
@@ -266,7 +298,7 @@ export function CloseRideButton({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setDialogOpen(true)}
         className={
           variant === "menu"
             ? "block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
@@ -278,8 +310,8 @@ export function CloseRideButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setOpen(false)}
+          className="visible fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={() => !pending && setDialogOpen(false)}
         >
           <div className="absolute inset-0 bg-black/40" />
           <div
@@ -294,7 +326,7 @@ export function CloseRideButton({
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => setDialogOpen(false)}
                 disabled={pending}
                 className="rounded-full px-4 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
               >
@@ -318,6 +350,12 @@ export function CloseRideButton({
 
 export function DriverRideOptions({ rideId }: { rideId: string }) {
   const [open, setOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  function handleDialogOpenChange(value: boolean) {
+    setDialogOpen(value);
+    if (value) setOpen(false);
+  }
 
   return (
     <div className="relative">
@@ -332,10 +370,22 @@ export function DriverRideOptions({ rideId }: { rideId: string }) {
         Options
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-11 z-20 w-44 overflow-hidden rounded-xl border border-stone-200 bg-white p-1.5 shadow-[0_18px_45px_-24px_rgba(68,64,60,0.55)]">
-          <CloseRideButton rideId={rideId} variant="menu" />
-          <CancelRideButton rideId={rideId} variant="menu" />
+      {(open || dialogOpen) && (
+        <div
+          className={`absolute right-0 top-11 z-20 w-44 rounded-xl border border-stone-200 bg-white p-1.5 shadow-[0_18px_45px_-24px_rgba(68,64,60,0.55)] ${
+            dialogOpen ? "invisible" : ""
+          }`}
+        >
+          <CloseRideButton
+            rideId={rideId}
+            variant="menu"
+            onDialogOpenChange={handleDialogOpenChange}
+          />
+          <CancelRideButton
+            rideId={rideId}
+            variant="menu"
+            onDialogOpenChange={handleDialogOpenChange}
+          />
         </div>
       )}
     </div>
@@ -353,8 +403,13 @@ export function CancelSeatButton({
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  useScrollLock(open);
 
   function submit() {
+    if (!message.trim()) {
+      setError("Please write a reason so the driver knows why you are cancelling.");
+      return;
+    }
     setError(null);
     startTransition(async () => {
       try {
@@ -397,13 +452,22 @@ export function CancelSeatButton({
             </label>
             <textarea
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                if (error) setError(null);
+              }}
               autoFocus
               rows={3}
               placeholder="e.g. I cannot make it anymore. Sorry for the change."
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "cancel-seat-reason-error" : undefined}
               className="mt-1.5 w-full resize-none rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {error && (
+              <p id="cancel-seat-reason-error" role="alert" className="mt-2 text-sm text-red-600">
+                {error}
+              </p>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -416,7 +480,7 @@ export function CancelSeatButton({
               <button
                 type="button"
                 onClick={submit}
-                disabled={pending || !message.trim()}
+                disabled={pending}
                 className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {pending ? "Cancelling..." : "Cancel seat"}

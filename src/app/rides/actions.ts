@@ -5,6 +5,26 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { JCNC_LABEL } from "@/lib/constants";
+import { sendSms } from "@/lib/sms";
+
+type CancellationContact = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+};
+
+function cancellationName(contact: CancellationContact | undefined, fallback: string) {
+  return contact?.full_name?.trim() || fallback;
+}
+
+async function sendCancellationTexts(messages: Array<Parameters<typeof sendSms>[0]>) {
+  const results = await Promise.allSettled(messages.map(sendSms));
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error("Cancellation SMS failed", result.reason);
+    }
+  }
+}
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -266,12 +286,51 @@ export async function cancelRide(rideId: string, reason: string) {
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
+  const [{ data: ride }, { data: passengers }] = await Promise.all([
+    supabase
+      .from("rides")
+      .select("driver_id,origin_label,destination_label")
+      .eq("id", rideId)
+      .single<{
+        driver_id: string;
+        origin_label: string;
+        destination_label: string;
+      }>(),
+    supabase
+      .from("ride_passengers")
+      .select("passenger_id")
+      .eq("ride_id", rideId)
+      .in("status", ["pending", "confirmed"]),
+  ]);
+  const passengerIds = passengers?.map((passenger) => passenger.passenger_id) ?? [];
+  const contactIds = [...new Set([user.id, ...passengerIds])];
+  const { data: contacts } = contactIds.length
+    ? await supabase
+        .from("profiles")
+        .select("id,full_name,phone")
+        .in("id", contactIds)
+        .returns<CancellationContact[]>()
+    : { data: [] as CancellationContact[] };
+
   const { data: cancelled, error } = await supabase.rpc("cancel_ride", {
     p_ride_id: rideId,
     p_reason: trimmed,
   });
   if (error) throw new Error(error.message);
   if (!cancelled) throw new Error("Only the driver can cancel an active ride.");
+
+  if (ride?.driver_id === user.id) {
+    const contactsById = new Map(contacts?.map((contact) => [contact.id, contact]));
+    const driverName = cancellationName(contactsById.get(user.id), "Your driver");
+    const route = `${ride.origin_label} to ${ride.destination_label}`;
+    await sendCancellationTexts(
+      passengerIds.map((passengerId) => ({
+        to: contactsById.get(passengerId)?.phone ?? null,
+        body: `${driverName} cancelled your ride from ${route}. Reason: ${trimmed}`,
+      })),
+    );
+  }
+
   revalidatePath("/rides");
   revalidatePath("/messages");
   redirect("/rides");
@@ -304,6 +363,23 @@ export async function cancelSeat(rideId: string, message: string, redirectTo?: s
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
+  const { data: ride } = await supabase
+    .from("rides")
+    .select("driver_id,origin_label,destination_label")
+    .eq("id", rideId)
+    .single<{
+      driver_id: string;
+      origin_label: string;
+      destination_label: string;
+    }>();
+  const { data: contacts } = ride
+    ? await supabase
+        .from("profiles")
+        .select("id,full_name,phone")
+        .in("id", [user.id, ride.driver_id])
+        .returns<CancellationContact[]>()
+    : { data: [] as CancellationContact[] };
+
   const { data: cancelled, error } = await supabase.rpc("cancel_seat", {
     p_ride_id: rideId,
     p_reason: trimmed,
@@ -313,6 +389,18 @@ export async function cancelSeat(rideId: string, message: string, redirectTo?: s
     return { error: "We couldn't cancel your seat. Please try again." };
   }
   if (!cancelled) return { error: "You are not currently in this active ride." };
+
+  if (ride) {
+    const contactsById = new Map(contacts?.map((contact) => [contact.id, contact]));
+    const riderName = cancellationName(contactsById.get(user.id), "A rider");
+    const route = `${ride.origin_label} to ${ride.destination_label}`;
+    await sendCancellationTexts([
+      {
+        to: contactsById.get(ride.driver_id)?.phone ?? null,
+        body: `${riderName} cancelled their seat for your ride from ${route}. Reason: ${trimmed}`,
+      },
+    ]);
+  }
 
   revalidatePath("/rides");
   revalidatePath(`/rides/${rideId}`);
