@@ -278,9 +278,6 @@ export async function setPassengerStatus(
 
 export async function cancelRide(rideId: string, reason: string) {
   const trimmed = (reason ?? "").trim();
-  if (!trimmed) {
-    throw new Error("Please tell your riders why the ride is cancelled.");
-  }
 
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
@@ -300,9 +297,12 @@ export async function cancelRide(rideId: string, reason: string) {
       .from("ride_passengers")
       .select("passenger_id")
       .eq("ride_id", rideId)
-      .in("status", ["pending", "confirmed"]),
+      .eq("status", "confirmed"),
   ]);
   const passengerIds = passengers?.map((passenger) => passenger.passenger_id) ?? [];
+  if (passengerIds.length > 0 && !trimmed) {
+    return { error: "Please tell your riders why the ride is cancelled." };
+  }
   const contactIds = [...new Set([user.id, ...passengerIds])];
   const { data: contacts } = contactIds.length
     ? await supabase
@@ -316,8 +316,11 @@ export async function cancelRide(rideId: string, reason: string) {
     p_ride_id: rideId,
     p_reason: trimmed,
   });
-  if (error) throw new Error(error.message);
-  if (!cancelled) throw new Error("Only the driver can cancel an active ride.");
+  if (error) {
+    console.error("cancel_ride failed", { code: error.code, rideId });
+    return { error: "We couldn't cancel this ride. Please try again." };
+  }
+  if (!cancelled) return { error: "Only the driver can cancel an active ride." };
 
   if (ride?.driver_id === user.id) {
     const contactsById = new Map(contacts?.map((contact) => [contact.id, contact]));

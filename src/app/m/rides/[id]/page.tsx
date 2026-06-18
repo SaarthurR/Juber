@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { format } from "date-fns";
 import { ArrowLeftRight, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { formatRideDateTime } from "@/lib/date-time";
 import { getCurrentUser } from "@/lib/auth";
 import { SubHeader } from "@/components/mobile/sub-header";
 import { MAvatar } from "@/components/mobile/m-avatar";
@@ -14,7 +14,7 @@ import { GoogleSignInButton } from "@/components/auth-button";
 import {
   PassengerStatusButtons,
   CancelSeatButton,
-  DriverRideOptions,
+  DriverRideActions,
 } from "@/components/ride-actions";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
 
@@ -89,7 +89,7 @@ export default async function MobileTripPage({
         {/* Dark band — date + timeline */}
         <section className="rounded-[20px] bg-ink p-5 text-white">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-gold-light">
-            {format(new Date(ride.depart_at), "EEEE, MMM d · h:mm a")}
+            {formatRideDateTime(ride.depart_at, "EEEE, MMM d · h:mm a")}
           </p>
           <div className="mt-4 flex gap-4">
             <div className="flex flex-col items-center py-1">
@@ -120,7 +120,7 @@ export default async function MobileTripPage({
               </div>
               {ride.return_depart_at && (
                 <p className="mt-1.5 text-[13px] font-medium text-white/75">
-                  Return leaves {format(new Date(ride.return_depart_at), "EEE, MMM d · h:mm a")}
+                  Return leaves {formatRideDateTime(ride.return_depart_at, "EEE, MMM d · h:mm a")}
                 </p>
               )}
               {ride.return_notes && (
@@ -206,11 +206,10 @@ export default async function MobileTripPage({
         {/* Driver seat-request management */}
         {isDriver && (
           <div className="rounded-[16px] border border-border bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-warm">
                 Seat requests
               </p>
-              {ride.status === "active" && <DriverRideOptions rideId={ride.id} />}
             </div>
             {passengerRows.filter((p) => p.status === "pending").length === 0 ? (
               <p className="text-[13px] text-muted-warm">No requests yet.</p>
@@ -230,6 +229,11 @@ export default async function MobileTripPage({
                     </li>
                   ))}
               </ul>
+            )}
+            {ride.status === "active" && (
+              <div className="mt-4 border-t border-border-soft pt-4">
+                <DriverRideActions rideId={ride.id} confirmedRiderCount={confirmed.length} />
+              </div>
             )}
           </div>
         )}

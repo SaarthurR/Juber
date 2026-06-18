@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
-import { MoreHorizontal } from "lucide-react";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 import {
   requestSeat,
@@ -146,12 +145,10 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
 
 export function CancelRideButton({
   rideId,
-  variant = "link",
-  onDialogOpenChange,
+  confirmedRiderCount,
 }: {
   rideId: string;
-  variant?: "link" | "menu";
-  onDialogOpenChange?: (open: boolean) => void;
+  confirmedRiderCount: number;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -161,40 +158,35 @@ export function CancelRideButton({
 
   function setDialogOpen(value: boolean) {
     setOpen(value);
-    onDialogOpenChange?.(value);
     if (!value) setError(null);
   }
 
-  function submit() {
-    if (!reason.trim()) {
+  async function submit() {
+    if (confirmedRiderCount > 0 && !reason.trim()) {
       setError("Please write a reason so your passengers know why the ride is cancelled.");
       return;
     }
     setError(null);
     startTransition(async () => {
       try {
-        await cancelRide(rideId, reason);
+        const result = await cancelRide(rideId, reason);
+        if (result?.error) setError(result.error);
       } catch (e) {
-        // redirect() throws a special error Next.js handles — only surface real failures.
         if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
-          setError(e.message);
+          setError("We couldn't cancel this ride. Please try again.");
         }
       }
     });
   }
 
   return (
-    <div className={variant === "menu" ? "" : "mt-3 text-center"}>
+    <div>
       <button
         type="button"
         onClick={() => setDialogOpen(true)}
-        className={
-          variant === "menu"
-            ? "block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50"
-            : "text-xs font-medium text-red-500 hover:text-red-600 transition hover:underline"
-        }
+        className="w-full rounded-full border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-50 active:scale-[0.98]"
       >
-        Cancel this ride
+        Cancel ride
       </button>
 
       {open && (
@@ -210,25 +202,31 @@ export function CancelRideButton({
           >
             <h2 className="text-lg font-bold text-stone-900">Cancel this ride?</h2>
             <p className="mt-1 text-sm text-stone-500">
-              Your confirmed riders will be notified with the reason below.
+              {confirmedRiderCount > 0
+                ? "Your confirmed riders will be notified with the reason below."
+                : "Are you sure? This ride will be removed from active listings."}
             </p>
 
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-stone-500">
-              Reason <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={reason}
-              onChange={(e) => {
-                setReason(e.target.value);
-                if (error) setError(null);
-              }}
-              autoFocus
-              rows={3}
-              placeholder="e.g. Car trouble — so sorry!"
-              aria-invalid={Boolean(error)}
-              aria-describedby={error ? "cancel-ride-reason-error" : undefined}
-              className="mt-1.5 w-full resize-none rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-            />
+            {confirmedRiderCount > 0 && (
+              <>
+                <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-stone-500">
+                  Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => {
+                    setReason(e.target.value);
+                    if (error) setError(null);
+                  }}
+                  autoFocus
+                  rows={3}
+                  placeholder="e.g. Car trouble — so sorry!"
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "cancel-ride-reason-error" : undefined}
+                  className="mt-1.5 w-full resize-none rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                />
+              </>
+            )}
 
             {error && (
               <p id="cancel-ride-reason-error" role="alert" className="mt-2 text-sm text-red-600">
@@ -263,12 +261,8 @@ export function CancelRideButton({
 
 export function CloseRideButton({
   rideId,
-  variant = "primary",
-  onDialogOpenChange,
 }: {
   rideId: string;
-  variant?: "primary" | "menu";
-  onDialogOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -277,7 +271,6 @@ export function CloseRideButton({
 
   function setDialogOpen(value: boolean) {
     setOpen(value);
-    onDialogOpenChange?.(value);
     if (!value) setError(null);
   }
 
@@ -299,11 +292,7 @@ export function CloseRideButton({
       <button
         type="button"
         onClick={() => setDialogOpen(true)}
-        className={
-          variant === "menu"
-            ? "block w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-stone-700 transition hover:bg-stone-50"
-            : "w-full rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
-        }
+        className="w-full rounded-full bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
       >
         Close ride
       </button>
@@ -348,46 +337,17 @@ export function CloseRideButton({
   );
 }
 
-export function DriverRideOptions({ rideId }: { rideId: string }) {
-  const [open, setOpen] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  function handleDialogOpenChange(value: boolean) {
-    setDialogOpen(value);
-    if (value) setOpen(false);
-  }
-
+export function DriverRideActions({
+  rideId,
+  confirmedRiderCount,
+}: {
+  rideId: string;
+  confirmedRiderCount: number;
+}) {
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-label="Ride options"
-        className="inline-flex h-9 items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 text-xs font-bold text-stone-500 transition hover:bg-stone-50 hover:text-stone-700"
-      >
-        <MoreHorizontal size={16} />
-        Options
-      </button>
-
-      {(open || dialogOpen) && (
-        <div
-          className={`absolute right-0 top-11 z-20 w-44 rounded-xl border border-stone-200 bg-white p-1.5 shadow-[0_18px_45px_-24px_rgba(68,64,60,0.55)] ${
-            dialogOpen ? "invisible" : ""
-          }`}
-        >
-          <CloseRideButton
-            rideId={rideId}
-            variant="menu"
-            onDialogOpenChange={handleDialogOpenChange}
-          />
-          <CancelRideButton
-            rideId={rideId}
-            variant="menu"
-            onDialogOpenChange={handleDialogOpenChange}
-          />
-        </div>
-      )}
+    <div className="grid grid-cols-2 gap-2">
+      <CloseRideButton rideId={rideId} />
+      <CancelRideButton rideId={rideId} confirmedRiderCount={confirmedRiderCount} />
     </div>
   );
 }

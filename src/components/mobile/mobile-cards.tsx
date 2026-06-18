@@ -2,6 +2,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ArrowLeftRight } from "lucide-react";
 import { MAvatar } from "@/components/mobile/m-avatar";
+import { formatRideDateTime } from "@/lib/date-time";
 import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
 function priceLabel(value: number | null) {
@@ -60,7 +61,7 @@ export function MRideCard({ ride }: { ride: RideWithDriver }) {
 
       <div className="mt-3 flex items-center justify-between">
         <p className="text-xs font-bold text-muted">
-          {format(new Date(ride.depart_at), "EEE, MMM d · h:mm a")}
+          {formatRideDateTime(ride.depart_at, "EEE, MMM d · h:mm a")}
         </p>
         <span className="rounded-full bg-sand px-2.5 py-1 text-[11px] font-bold text-sand-text">
           {seatsLabel}
@@ -70,7 +71,7 @@ export function MRideCard({ ride }: { ride: RideWithDriver }) {
         <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-tint px-2.5 py-1 text-[11px] font-bold text-brand-700">
           <ArrowLeftRight size={12} strokeWidth={2.5} />
           {ride.return_depart_at
-            ? `Round trip · ${format(new Date(ride.return_depart_at), "h:mm a")}`
+            ? `Round trip · ${formatRideDateTime(ride.return_depart_at, "h:mm a")}`
             : "Round trip"}
         </div>
       )}
@@ -117,7 +118,7 @@ export function MProfileRideCard({
       <RouteRow from={ride.origin_label} to={ride.destination_label} />
 
       <p className="mt-3 text-xs font-bold text-muted">
-        {format(new Date(ride.depart_at), "EEE, MMM d · h:mm a")}
+        {formatRideDateTime(ride.depart_at, "EEE, MMM d · h:mm a")}
       </p>
     </Link>
   );
@@ -130,7 +131,7 @@ export function MRequestCard({ request }: { request: RideRequestWithRider }) {
           new Date(`${request.latest_date}T12:00:00`),
           "MMM d",
         )}`
-      : format(new Date(request.depart_at), "EEE, MMM d");
+      : formatRideDateTime(request.depart_at, "EEE, MMM d");
   const priceLine =
     request.max_price != null ? `up to $${Number(request.max_price).toFixed(0)}` : "flexible gas";
 

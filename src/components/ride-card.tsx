@@ -2,6 +2,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ArrowLeftRight, CalendarDays, ChevronRight, CircleDollarSign, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { formatRideDateTime } from "@/lib/date-time";
 import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
 function priceLabel(value: number | null) {
@@ -106,7 +107,7 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <StatPill
           icon={<CalendarDays size={14} />}
-          label={format(new Date(ride.depart_at), "EEE, MMM d · h:mm a")}
+          label={formatRideDateTime(ride.depart_at, "EEE, MMM d · h:mm a")}
         />
         <StatPill
           icon={<Users size={14} />}
@@ -121,7 +122,7 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
             icon={<ArrowLeftRight size={14} />}
             label={
               ride.return_depart_at
-                ? `Round trip · return ${format(new Date(ride.return_depart_at), "h:mm a")}`
+                ? `Round trip · return ${formatRideDateTime(ride.return_depart_at, "h:mm a")}`
                 : "Round trip"
             }
           />
@@ -149,7 +150,7 @@ export function RequestCard({ request }: { request: RideRequestWithRider }) {
           new Date(`${request.latest_date}T12:00:00`),
           "MMM d",
         )}`
-      : format(new Date(request.depart_at), "EEE, MMM d · h:mm a");
+      : formatRideDateTime(request.depart_at, "EEE, MMM d · h:mm a");
 
   return (
     <Link

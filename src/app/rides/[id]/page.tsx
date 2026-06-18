@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { format } from "date-fns";
 import { ArrowLeft, Plus, Ban, ArrowLeftRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { formatRideDateTime } from "@/lib/date-time";
 import { getCurrentUser } from "@/lib/auth";
 import { Avatar } from "@/components/ui/avatar";
 import { ShareButton } from "@/components/share-button";
@@ -12,7 +12,7 @@ import {
   ReserveSeatButton,
   PassengerStatusButtons,
   CancelSeatButton,
-  DriverRideOptions,
+  DriverRideActions,
 } from "@/components/ride-actions";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
 
@@ -125,7 +125,7 @@ export default async function RideDetailPage({
       <div className="mt-5 bg-stone-900 text-white">
         <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6">
           <p className="text-sm font-bold uppercase tracking-wide">
-            {format(new Date(ride.depart_at), "EEEE, MMM d hh:mm a").toUpperCase()}
+            {formatRideDateTime(ride.depart_at, "EEEE, MMM d hh:mm a").toUpperCase()}
           </p>
           <div className="mt-4 flex gap-5">
             <div className="flex flex-col items-center py-1">
@@ -152,7 +152,7 @@ export default async function RideDetailPage({
               </div>
               {ride.return_depart_at && (
                 <p className="mt-2 text-white/80">
-                  Return leaves {format(new Date(ride.return_depart_at), "EEEE, MMM d hh:mm a")}
+                  Return leaves {formatRideDateTime(ride.return_depart_at, "EEEE, MMM d hh:mm a")}
                 </p>
               )}
               {ride.return_notes && (
@@ -289,14 +289,14 @@ function DriverPanel({
   passengerRows: PassengerRow[];
 }) {
   const pendingRequests = passengerRows.filter((p) => p.status === "pending");
+  const confirmedRiderCount = passengerRows.filter((p) => p.status === "confirmed").length;
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3">
         <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
           Seat requests
         </h2>
-        {ride.status === "active" && <DriverRideOptions rideId={ride.id} />}
       </div>
       {pendingRequests.length === 0 ? (
         <p className="text-sm text-stone-500">No requests yet.</p>
@@ -320,6 +320,11 @@ function DriverPanel({
             </li>
           ))}
         </ul>
+      )}
+      {ride.status === "active" && (
+        <div className="mt-5 border-t border-stone-100 pt-4">
+          <DriverRideActions rideId={ride.id} confirmedRiderCount={confirmedRiderCount} />
+        </div>
       )}
     </div>
   );
