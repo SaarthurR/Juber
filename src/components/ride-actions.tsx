@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
+import { useRouter } from "next/navigation";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 import {
   requestSeat,
@@ -150,6 +151,7 @@ export function CancelRideButton({
   rideId: string;
   confirmedRiderCount: number;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [pending, startTransition] = useTransition();
@@ -170,11 +172,15 @@ export function CancelRideButton({
     startTransition(async () => {
       try {
         const result = await cancelRide(rideId, reason);
-        if (result?.error) setError(result.error);
-      } catch (e) {
-        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
-          setError("We couldn't cancel this ride. Please try again.");
+        if (result?.error) {
+          setError(result.error);
+          return;
         }
+        router.push("/rides");
+        router.refresh();
+      } catch (e) {
+        console.error("Cancel ride failed", e);
+        setError("We couldn't cancel this ride. Please try again.");
       }
     });
   }

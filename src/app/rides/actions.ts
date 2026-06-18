@@ -339,7 +339,7 @@ export async function cancelRide(rideId: string, reason: string) {
 
   revalidatePath("/rides");
   revalidatePath("/messages");
-  redirect("/rides");
+  return { success: true };
 }
 
 export async function closeRide(rideId: string) {
