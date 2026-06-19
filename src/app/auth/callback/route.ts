@@ -5,7 +5,13 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/rides";
+  // Only honor internal absolute paths — reject protocol-relative ("//evil")
+  // or backslash-prefixed values that some browsers treat as external.
+  const rawNext = searchParams.get("next") ?? "/rides";
+  const next =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/\\")
+      ? rawNext
+      : "/rides";
 
   if (code) {
     const supabase = await createClient();
@@ -19,7 +25,7 @@ export async function GET(request: Request) {
         .from("profiles")
         .select("phone,whatsapp")
         .eq("id", user?.id ?? "")
-        .single<{ phone: string | null; whatsapp: string | null }>();
+        .maybeSingle<{ phone: string | null; whatsapp: string | null }>();
       if (!profile?.phone?.trim() && !profile?.whatsapp?.trim()) {
         const isMobile = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(
           request.headers.get("user-agent") ?? "",
@@ -55,7 +61,7 @@ async function syncProfileFromProvider(
     .from("profiles")
     .select("full_name, avatar_url")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   const updates: { full_name?: string; avatar_url?: string } = {};
   // Always keep the avatar matching the Google account picture.

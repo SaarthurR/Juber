@@ -21,9 +21,12 @@ export type ThreadSummary = {
 export function MessagesList({
   userId,
   initialThreads,
+  basePath = "/messages",
 }: {
   userId: string;
   initialThreads: ThreadSummary[];
+  /** Route prefix for thread links — "/m/messages" keeps mobile in the phone shell. */
+  basePath?: string;
 }) {
   const [threads, setThreads] = useState(initialThreads);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -247,9 +250,9 @@ export function MessagesList({
               )}
             >
               <Link
-                href={`/messages/${thread.id}`}
-                onMouseEnter={() => router.prefetch(`/messages/${thread.id}`)}
-                onFocus={() => router.prefetch(`/messages/${thread.id}`)}
+                href={`${basePath}/${thread.id}`}
+                onMouseEnter={() => router.prefetch(`${basePath}/${thread.id}`)}
+                onFocus={() => router.prefetch(`${basePath}/${thread.id}`)}
                 className="flex min-w-0 flex-1 items-center gap-3"
               >
                 <Avatar src={thread.other?.avatar_url} name={thread.other?.full_name} size={44} />

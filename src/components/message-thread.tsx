@@ -15,11 +15,14 @@ export function MessageThread({
   currentUserId,
   other,
   initialMessages,
+  backHref = "/messages",
 }: {
   conversationId: string;
   currentUserId: string;
   other: Profile | null;
   initialMessages: Message[];
+  /** Where the back arrow returns to — "/m/messages" on the mobile shell. */
+  backHref?: string;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -76,10 +79,19 @@ export function MessageThread({
     };
   }, [conversationId]);
 
+  // Mark inbound messages read. Realtime pushes mutate `messages` frequently, so
+  // guard with a ref to avoid overlapping calls, and don't let a failed update
+  // throw an unhandled rejection.
+  const markingReadRef = useRef(false);
   useEffect(() => {
-    if (messages.some((m) => m.sender_id !== currentUserId && !m.read_at)) {
-      void markConversationRead(conversationId);
-    }
+    const hasUnread = messages.some((m) => m.sender_id !== currentUserId && !m.read_at);
+    if (!hasUnread || markingReadRef.current) return;
+    markingReadRef.current = true;
+    markConversationRead(conversationId)
+      .catch((e) => console.error("Failed to mark conversation read:", e))
+      .finally(() => {
+        markingReadRef.current = false;
+      });
   }, [conversationId, currentUserId, messages]);
 
   useEffect(() => {
@@ -142,7 +154,7 @@ export function MessageThread({
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-2xl flex-col px-4 sm:px-6">
       <div className="flex items-center gap-3 border-b border-stone-200 py-4">
         <Link
-          href="/messages"
+          href={backHref}
           aria-label="Back to all chats"
           className="flex h-9 w-9 items-center justify-center rounded-full text-brand-600 transition hover:bg-brand-50"
         >

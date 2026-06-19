@@ -183,7 +183,7 @@ function SearchCard({
             aria-label="Ride date"
             value={date}
             onChange={(event) => setDate(event.target.value)}
-            className={`${mobileFieldClassName} pr-12 [&::-webkit-calendar-picker-indicator]:opacity-0`}
+            className={`${mobileFieldClassName} pr-12 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0`}
           />
           {date && (
             <button

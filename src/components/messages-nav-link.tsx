@@ -56,8 +56,8 @@ export function MessagesNavLink({
     };
   }, [userId, refreshUnread]);
 
-  const visibleUnread = pathname.startsWith("/messages") ? unread : unread;
   const active = pathname.startsWith("/messages");
+  const visibleUnread = unread;
 
   return (
     <Link

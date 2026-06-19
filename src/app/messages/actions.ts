@@ -13,10 +13,15 @@ export async function openConversation(otherUserId: string, formData?: FormData)
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
-  if (user.id === otherUserId) redirect("/messages");
+  const selfBase =
+    formData?.get("base")?.toString() === "/m/messages" ? "/m/messages" : "/messages";
+  if (user.id === otherUserId) redirect(selfBase);
 
   const rideId = formData?.get("ride_id")?.toString() || null;
   const requestId = formData?.get("request_id")?.toString() || null;
+  // Mobile callers pass base="/m/messages" so the chat opens inside the phone
+  // shell. Only an allow-listed prefix is honored to avoid open redirects.
+  const base = formData?.get("base")?.toString() === "/m/messages" ? "/m/messages" : "/messages";
   if (!rideId && !requestId) {
     throw new Error("Messaging unlocks after a ride is booked.");
   }
@@ -73,7 +78,7 @@ export async function openConversation(otherUserId: string, formData?: FormData)
     throw new Error(error?.message ?? "Could not start chat");
   }
 
-  redirect(`/messages/${conversationId}`);
+  redirect(`${base}/${conversationId}`);
 }
 
 /** Marks all of the current user's unread notifications as read. */

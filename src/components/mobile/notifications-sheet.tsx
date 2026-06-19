@@ -126,9 +126,9 @@ function NotifRow({
   const href = n.ride_id
     ? `/m/rides/${n.ride_id}`
     : n.request_id
-      ? `/requests/${n.request_id}`
+      ? `/m/requests/${n.request_id}`
       : n.conversation_id
-        ? `/messages/${n.conversation_id}`
+        ? `/m/messages/${n.conversation_id}`
         : null;
 
   const body = (

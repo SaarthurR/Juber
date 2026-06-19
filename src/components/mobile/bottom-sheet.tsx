@@ -5,6 +5,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useState } from "react";
+import { useScrollLock } from "@/lib/use-scroll-lock";
 
 /**
  * Mobile bottom-sheet primitive: a scrim that fades in and a white sheet that
@@ -25,6 +26,10 @@ export function BottomSheet({
   // Mount/unmount with a beat so the enter/exit transitions can play.
   const [mounted, setMounted] = useState(open);
   const [shown, setShown] = useState(false);
+
+  // Lock background scroll while the sheet is open so iOS momentum doesn't
+  // bleed through the scrim and leave the page scrolled when it closes.
+  useScrollLock(open);
 
   useEffect(() => {
     if (open) {

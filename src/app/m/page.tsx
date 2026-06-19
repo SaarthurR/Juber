@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MessageSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { APP_NAME } from "@/lib/constants";
@@ -88,7 +89,7 @@ export default async function MobileHomePage({
   const requests = (requestsData as RideRequestWithRider[]) ?? [];
 
   return (
-    <div className="pb-28">
+    <div className="pb-[calc(5rem+env(safe-area-inset-bottom)+1rem)]">
       {/* Top app bar */}
       <header className="flex items-center justify-between bg-white px-4 py-3">
         <Link href="/m" className="flex items-center gap-1.5">
@@ -100,6 +101,13 @@ export default async function MobileHomePage({
         <div className="flex items-center gap-2.5">
           {user ? (
             <>
+              <Link
+                href="/m/messages"
+                aria-label="Your messages"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-tint text-brand-700 transition active:scale-95"
+              >
+                <MessageSquare size={18} strokeWidth={2.2} />
+              </Link>
               <MNotificationBell notifications={notif.items} unreadCount={notif.unread} />
               <Link href="/m/profile" aria-label="Your profile" className="active:scale-95">
                 <MAvatar src={profile?.avatar_url} name={profile?.full_name} seed={user.id} size={40} />

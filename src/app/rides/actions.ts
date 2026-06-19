@@ -259,8 +259,9 @@ export async function requestSeat(rideId: string) {
     .select()
     .single();
 
-  // Ignore duplicate-join errors (unique constraint).
-  if (error && !error.message.includes("duplicate")) throw new Error(error.message);
+  // Ignore duplicate-join errors (unique constraint 23505); the message text is
+  // locale/version-dependent, so match on the stable Postgres error code.
+  if (error && error.code !== "23505") throw new Error(error.message);
   revalidatePath(`/rides/${rideId}`);
 }
 

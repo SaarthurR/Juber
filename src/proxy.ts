@@ -11,6 +11,7 @@ const MOBILE_ROUTE: Record<string, string> = {
   "/requests/new": "/m/requests/new",
   "/profile": "/m/profile",
   "/events": "/m/events",
+  "/messages": "/m/messages",
 };
 
 const MOBILE_UA = /Mobi|Android|iPhone|iPod|Windows Phone|BlackBerry|webOS|Opera Mini|IEMobile/i;

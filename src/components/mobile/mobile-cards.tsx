@@ -137,7 +137,7 @@ export function MRequestCard({ request }: { request: RideRequestWithRider }) {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-white p-[15px] shadow-[0_14px_30px_-26px_rgba(28,25,23,0.4)]">
-      <Link href={`/requests/${request.id}`} className="block">
+      <Link href={`/m/requests/${request.id}`} className="block">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <MAvatar
@@ -174,7 +174,7 @@ export function MRequestCard({ request }: { request: RideRequestWithRider }) {
       </Link>
 
       <Link
-        href={`/requests/${request.id}`}
+        href={`/m/requests/${request.id}`}
         className="mt-3.5 flex w-full items-center justify-center rounded-[13px] border-[1.5px] border-brand-600 px-4 py-3 text-[13px] font-bold text-brand-600 transition active:scale-[0.99]"
       >
         Offer a ride

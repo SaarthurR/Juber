@@ -42,7 +42,7 @@ export default async function MobileEventsPage() {
   }
 
   return (
-    <div className="pb-28">
+    <div className="pb-[calc(5rem+env(safe-area-inset-bottom)+1rem)]">
       <header className="bg-white px-4 pb-4 pt-5">
         <h1 className="text-[23px] font-extrabold tracking-[-0.02em] text-ink">Events</h1>
         <p className="mt-0.5 text-[13px] text-muted-warm">

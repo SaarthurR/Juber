@@ -56,7 +56,7 @@ export default async function MobileProfilePage() {
   const metaLine = [profile?.pronouns, profile?.neighborhood].filter(Boolean).join(" · ");
 
   return (
-    <div className="pb-28">
+    <div className="pb-[calc(5rem+env(safe-area-inset-bottom)+1rem)]">
       {/* Identity header */}
       <header className="flex flex-col items-center bg-white px-4 pb-6 pt-8 text-center">
         <MAvatar src={profile?.avatar_url} name={profile?.full_name} seed={user.id} size={88} />

@@ -94,6 +94,7 @@ export function ContactSheet({
           )}
           <form action={openConversation.bind(null, driverId)}>
             <input type="hidden" name="ride_id" value={rideId} />
+            <input type="hidden" name="base" value="/m/messages" />
             <ContactRow
               as="button"
               icon={<MessageCircle size={17} className="text-brand-600" />}

@@ -1,10 +1,12 @@
 "use client";
 
+import { useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { ArrowLeftRight, Search, X } from "lucide-react";
 import { CityCombobox } from "@/components/city-combobox";
 
 export function RideFilters() {
+  const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -33,16 +35,19 @@ export function RideFilters() {
   }
 
   function swap() {
+    const form = formRef.current;
+    const currentFrom = (form?.elements.namedItem("from") as HTMLInputElement | null)?.value ?? "";
+    const currentTo = (form?.elements.namedItem("to") as HTMLInputElement | null)?.value ?? "";
+
     pushWith({
-      from: params.get("to") ?? "",
-      to: params.get("from") ?? "",
-      date: params.get("date") ?? "",
-      trip: params.get("trip") ?? "",
+      from: currentTo,
+      to: currentFrom,
     });
   }
 
   return (
     <form
+      ref={formRef}
       action={update}
       className="rounded-2xl border border-[#efe4d3] bg-white p-4 shadow-[0_24px_50px_-36px_rgba(92,59,46,0.4)] sm:p-5"
     >

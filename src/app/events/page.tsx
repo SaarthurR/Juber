@@ -87,7 +87,7 @@ export default async function EventsPage() {
                 FEATURED · HIGH DEMAND
               </span>
               <h2 className="mt-3.5 text-3xl font-extrabold tracking-tight">{featured.name}</h2>
-              <p className="mt-1.5 text-[15px] text-white/90">
+              <p className="mt-1.5 line-clamp-2 text-[15px] text-white/90">
                 {eventDates(featured)}
                 {featured.venue_label ? ` · ${featured.venue_label}` : ""}
                 {featured.description ? ` · ${featured.description}` : ""}
