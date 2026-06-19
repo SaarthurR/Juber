@@ -31,7 +31,7 @@ export default async function MobileHomePage({
   const from = one(sp.from) ?? "";
   const to = one(sp.to) ?? "";
   const requestedDate = one(sp.date);
-  const date = requestedDate === "all" ? "" : requestedDate || today;
+  const date = requestedDate === "all" ? "" : requestedDate ?? "";
   const trip = one(sp.trip);
   const tripFilter = trip === "round" || trip === "one" ? trip : null;
 

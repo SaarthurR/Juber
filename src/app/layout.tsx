@@ -6,7 +6,9 @@ import "./globals.css";
 import { Navbar } from "@/components/navbar";
 import { SiteChrome } from "@/components/site-chrome";
 import { TempleLogo } from "@/components/temple-logo";
+import { ContactRequiredGate } from "@/components/contact-required-gate";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
+import { getCurrentUser } from "@/lib/auth";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -19,11 +21,16 @@ export const metadata: Metadata = {
   description: APP_TAGLINE,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { user, profile } = await getCurrentUser();
+  const contactRequired = Boolean(
+    user && !profile?.phone?.trim() && !profile?.whatsapp?.trim(),
+  );
+
   return (
     <html
       lang="en"
@@ -31,6 +38,7 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
     >
       <body className="flex min-h-full flex-col">
+        <ContactRequiredGate required={contactRequired}>
         <SiteChrome
           navbar={<Navbar />}
           footer={
@@ -100,6 +108,7 @@ export default function RootLayout({
         >
           {children}
         </SiteChrome>
+        </ContactRequiredGate>
       </body>
     </html>
   );

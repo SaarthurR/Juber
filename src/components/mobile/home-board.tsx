@@ -115,9 +115,10 @@ function SearchCard({
     const params = new URLSearchParams();
     if (from.trim()) params.set("from", from.trim());
     if (to.trim() && to.trim() !== "JCNC") params.set("to", to.trim());
-    params.set("date", nextDate || "all");
+    if (nextDate) params.set("date", nextDate);
     if (tripFilter) params.set("trip", tripFilter);
-    router.push(`/m?${params.toString()}`);
+    const query = params.toString();
+    router.push(query ? `/m?${query}` : "/m");
   }
 
   function clearDate() {

@@ -13,13 +13,11 @@ export function RidesView({
   requests,
   requestCount,
   signedIn,
-  defaultDate,
 }: {
   rides: RideWithDriver[];
   requests: RideRequestWithRider[];
   requestCount: number;
   signedIn: boolean;
-  defaultDate: string;
 }) {
   const params = useSearchParams();
   const showRequests = params.get("tab") === "requests";
@@ -69,7 +67,7 @@ export function RidesView({
         )}
       </div>
 
-      <RideFilters defaultDate={defaultDate} />
+      <RideFilters />
 
       {signedIn && (
         <div className="mb-5 mt-3 flex justify-end">
