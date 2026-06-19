@@ -107,6 +107,17 @@ export function RideFilters() {
         <div className="grid grid-cols-2 gap-2 sm:flex">
           <TripButton label="One way" value="one" active={tripFilter === "one"} onSelect={pushWith} />
           <TripButton label="Round trip" value="round" active={tripFilter === "round"} onSelect={pushWith} />
+          {tripFilter && (
+            <button
+              type="button"
+              onClick={() => pushWith({ trip: "" })}
+              aria-label="Clear trip type"
+              className="col-span-2 flex h-10 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold text-[#9b846c] transition hover:bg-tint hover:text-brand-700 sm:col-span-1"
+            >
+              <X size={15} strokeWidth={2.4} />
+              Clear
+            </button>
+          )}
         </div>
         <button
           type="submit"

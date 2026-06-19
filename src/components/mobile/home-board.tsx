@@ -220,6 +220,18 @@ function SearchCard({
           active={tripFilter === "round"}
           onClick={() => setTripFilter((value) => (value === "round" ? null : "round"))}
         />
+        {tripFilter && (
+          <button
+            type="button"
+            data-auth-allowed="true"
+            onClick={() => setTripFilter(null)}
+            aria-label="Clear trip type"
+            className="col-span-2 flex h-9 items-center justify-center gap-1.5 rounded-xl text-[12px] font-bold text-muted-warm transition active:bg-tint active:scale-[0.98]"
+          >
+            <X size={15} strokeWidth={2.4} />
+            Clear trip type
+          </button>
+        )}
       </div>
 
     </div>

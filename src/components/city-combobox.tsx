@@ -27,9 +27,12 @@ export function CityCombobox({
   const rootRef = useRef<HTMLDivElement>(null);
   const [internalValue, setInternalValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
+  const [filtering, setFiltering] = useState(false);
   const currentValue = value ?? internalValue;
   const query = currentValue.trim().toLocaleLowerCase();
-  const options = CITY_OPTIONS.filter((city) => city.toLocaleLowerCase().includes(query));
+  const options = filtering
+    ? CITY_OPTIONS.filter((city) => city.toLocaleLowerCase().includes(query))
+    : CITY_OPTIONS;
 
   useEffect(() => {
     function closeOnOutsideClick(event: PointerEvent) {
@@ -52,10 +55,17 @@ export function CityCombobox({
         value={currentValue}
         onChange={(event) => {
           update(event.target.value);
+          setFiltering(true);
           setOpen(true);
         }}
-        onFocus={() => setOpen(true)}
-        onClick={() => setOpen(true)}
+        onFocus={() => {
+          setFiltering(false);
+          setOpen(true);
+        }}
+        onClick={() => {
+          setFiltering(false);
+          setOpen(true);
+        }}
         onKeyDown={(event) => {
           if (event.key === "Escape") setOpen(false);
           if (event.key === "ArrowDown") setOpen(true);
@@ -91,6 +101,7 @@ export function CityCombobox({
                 aria-selected={city === currentValue}
                 onClick={() => {
                   update(city);
+                  setFiltering(false);
                   setOpen(false);
                 }}
                 className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-[14px] font-semibold text-ink transition hover:bg-tint active:bg-brand-100"
