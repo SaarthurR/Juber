@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftRight, CalendarDays, Search, X } from "lucide-react";
+import { CityCombobox } from "@/components/city-combobox";
 import { Segmented } from "@/components/mobile/segmented";
 import { MRideCard, MRequestCard } from "@/components/mobile/mobile-cards";
-import { CITY_SUGGESTIONS, JCNC_LABEL } from "@/lib/constants";
 import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
 export function HomeBoard({
@@ -128,75 +128,88 @@ function SearchCard({
 
   return (
     <div className="rounded-[18px] border border-border bg-white p-4">
-      <div className="flex items-center gap-3">
-        <label className="min-w-0 flex-1">
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-muted-warm">
+      <div className="space-y-2">
+        <div>
+          <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-warm">
             From
           </span>
-          <input
+          <CityCombobox
+            ariaLabel="From city or neighborhood"
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            list="mobile-from-cities"
-            placeholder="San Jose"
-            className="w-full bg-transparent text-[14px] font-semibold text-ink outline-none placeholder:text-muted-warm placeholder:font-medium"
+            onValueChange={setFrom}
+            placeholder="City or neighborhood"
+            inputClassName={mobileFieldClassName}
           />
-        </label>
+        </div>
         <button
           type="button"
+          data-auth-allowed="true"
           aria-label="Swap from and to"
           onClick={() => {
             setFrom(to);
             setTo(from);
           }}
-          className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[11px] bg-tint text-brand-600 transition active:scale-95"
+          className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-tint text-brand-600 transition active:scale-95"
         >
           <ArrowLeftRight size={16} strokeWidth={2.2} />
         </button>
-        <label className="min-w-0 flex-1 text-right">
-          <span className="block text-[10px] font-extrabold uppercase tracking-[0.1em] text-muted-warm">
+        <div>
+          <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-warm">
             To
           </span>
-          <input
+          <CityCombobox
+            ariaLabel="To city or neighborhood"
             value={to}
-            onChange={(e) => setTo(e.target.value)}
-            list="mobile-to-cities"
-            placeholder="JCNC, Milpitas"
-            className="w-full bg-transparent text-right text-[14px] font-semibold text-ink outline-none placeholder:text-muted-warm placeholder:font-medium"
+            onValueChange={setTo}
+            placeholder="City or neighborhood"
+            inputClassName={mobileFieldClassName}
           />
-        </label>
+        </div>
       </div>
 
-      <div className="my-3 h-px bg-border-soft" />
+      <div className="my-4 h-px bg-border-soft" />
 
-      <div className="flex items-center gap-3">
-        <CalendarDays size={16} className="shrink-0 text-muted-warm" />
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-muted outline-none"
-        />
-        {date && (
-          <button
-            type="button"
-            onClick={clearDate}
-            aria-label="Clear date and show rides on all dates"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-warm transition active:bg-tint active:scale-95"
-          >
-            <X size={17} strokeWidth={2.4} />
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => navigate()}
-          className="flex shrink-0 items-center gap-1.5 rounded-[11px] bg-brand-600 px-4 py-2 text-[13px] font-bold text-white transition hover:bg-brand-700 active:scale-95"
-        >
-          <Search size={14} strokeWidth={2.5} />
-          Search
-        </button>
+      <div>
+        <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-warm">
+          Date
+        </span>
+        <div className="relative">
+          <CalendarDays
+            size={18}
+            className={`pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-muted-warm ${date ? "opacity-0" : ""}`}
+          />
+          <input
+            type="date"
+            aria-label="Ride date"
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            className={`${mobileFieldClassName} pr-12 [&::-webkit-calendar-picker-indicator]:opacity-0`}
+          />
+          {date && (
+            <button
+              type="button"
+              data-auth-allowed="true"
+              onClick={clearDate}
+              aria-label="Clear date and show rides on all dates"
+              className="absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-brand-500 transition active:bg-tint active:scale-95"
+            >
+              <X size={19} strokeWidth={2.4} />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        data-auth-allowed="true"
+        onClick={() => navigate()}
+        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 text-[14px] font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
+      >
+        <Search size={16} strokeWidth={2.5} />
+        Search rides
+      </button>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border-soft pt-4">
         <TripToggle
           label="One way only"
           active={tripFilter === "one"}
@@ -209,22 +222,12 @@ function SearchCard({
         />
       </div>
 
-      <CityOptions id="mobile-from-cities" includeJcnc />
-      <CityOptions id="mobile-to-cities" includeJcnc />
     </div>
   );
 }
 
-function CityOptions({ id, includeJcnc = false }: { id: string; includeJcnc?: boolean }) {
-  return (
-    <datalist id={id}>
-      {includeJcnc && <option value={JCNC_LABEL} />}
-      {CITY_SUGGESTIONS.map((city) => (
-        <option key={city} value={city} />
-      ))}
-    </datalist>
-  );
-}
+const mobileFieldClassName =
+  "h-[52px] w-full rounded-xl border border-[#dfcdb5] bg-white pl-4 pr-11 text-[15px] font-semibold text-ink outline-none placeholder:font-medium placeholder:text-muted-warm focus:border-brand-600 focus:ring-2 focus:ring-brand-100";
 
 function TripToggle({
   label,
@@ -238,6 +241,7 @@ function TripToggle({
   return (
     <button
       type="button"
+      data-auth-allowed="true"
       aria-pressed={active}
       onClick={onClick}
       className={`rounded-[13px] px-3 py-2.5 text-[12px] font-bold transition active:scale-[0.98] ${
