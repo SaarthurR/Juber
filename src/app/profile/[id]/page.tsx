@@ -17,6 +17,8 @@ const TABS = [
   { key: "requests", label: "Ride Requests" },
 ] as const;
 
+const CONTACT_LOCKED_MESSAGE = "Reserve a ride to contact this person";
+
 type TabKey = (typeof TABS)[number]["key"];
 type JoinedRideRow = { ride: RideWithDriver | null };
 
@@ -115,25 +117,14 @@ export default async function PublicProfilePage({
   }
 
   if (user && !isMe) {
-    const [{ data: userPassengerRows }, { data: profilePassengerRows }] = await Promise.all([
-      supabase
-        .from("ride_passengers")
-        .select("ride:rides!ride_passengers_ride_id_fkey(driver_id)")
-        .eq("passenger_id", user.id)
-        .eq("status", "confirmed"),
-      supabase
-        .from("ride_passengers")
-        .select("ride:rides!ride_passengers_ride_id_fkey(driver_id)")
-        .eq("passenger_id", id)
-        .eq("status", "confirmed"),
-    ]);
-    canViewContact =
-      ((userPassengerRows as { ride: { driver_id: string } | null }[] | null) ?? []).some(
-        (row) => row.ride?.driver_id === id,
-      ) ||
-      ((profilePassengerRows as { ride: { driver_id: string } | null }[] | null) ?? []).some(
-        (row) => row.ride?.driver_id === user.id,
-      );
+    const { data: userPassengerRows } = await supabase
+      .from("ride_passengers")
+      .select("ride:rides!ride_passengers_ride_id_fkey(driver_id)")
+      .eq("passenger_id", user.id)
+      .eq("status", "confirmed");
+    canViewContact = (
+      (userPassengerRows as { ride: { driver_id: string } | null }[] | null) ?? []
+    ).some((row) => row.ride?.driver_id === id);
   }
 
   // Merge + deduplicate for "all" tab, then split live vs past
@@ -185,34 +176,26 @@ export default async function PublicProfilePage({
 
         <div className="rounded-2xl bg-[#f7f5f2] p-[22px]">
           <p className="mb-4 text-[15px] font-extrabold text-ink">Contact</p>
-          {canViewContact ? (
-            <>
-              <ContactRow
-                icon={<Phone size={15} className="text-[#15803d]" />}
-                tint="bg-[#dcfce7]"
-                label="Phone"
-                value={profile.phone ?? "Not provided"}
-                preferred={preferred === "phone"}
-              />
-              <ContactRow
-                icon={<WhatsAppIcon />}
-                tint="bg-[#dcfce7]"
-                label="WhatsApp"
-                value={profile.whatsapp ?? "Not provided"}
-                preferred={preferred === "whatsapp"}
-              />
-            </>
-          ) : (
-            <p className="mb-4 rounded-xl bg-white px-3 py-2.5 text-[13px] font-semibold text-stone-500">
-              Contact details unlock after a seat is confirmed.
-            </p>
-          )}
+          <ContactRow
+            icon={<Phone size={15} className="text-[#15803d]" />}
+            tint="bg-[#dcfce7]"
+            label="Phone"
+            value={canViewContact ? profile.phone ?? "Not provided" : CONTACT_LOCKED_MESSAGE}
+            preferred={canViewContact && preferred === "phone"}
+          />
+          <ContactRow
+            icon={<WhatsAppIcon />}
+            tint="bg-[#dcfce7]"
+            label="WhatsApp"
+            value={canViewContact ? profile.whatsapp ?? "Not provided" : CONTACT_LOCKED_MESSAGE}
+            preferred={canViewContact && preferred === "whatsapp"}
+          />
           <ContactRow
             icon={<MessageCircle size={15} className="text-brand-600" />}
             tint="bg-tint"
             label="In-app message"
-            value="Reach out through Juber"
-            preferred={preferred === "message"}
+            value={canViewContact ? "Reach out through Juber" : CONTACT_LOCKED_MESSAGE}
+            preferred={canViewContact && preferred === "message"}
             last
           />
         </div>
@@ -224,12 +207,19 @@ export default async function PublicProfilePage({
           >
             <Pencil size={15} /> Edit profile
           </Link>
-        ) : user ? (
+        ) : user && canViewContact ? (
           <form action={openConversation.bind(null, profile.id)} className="mt-3.5">
             <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700">
               <MessageCircle size={15} /> Message {profile.full_name?.split(" ")[0] ?? "member"}
             </button>
           </form>
+        ) : user ? (
+          <Link
+            href="/rides"
+            className="mt-3.5 flex items-center justify-center rounded-xl border-[1.5px] border-[#e2ddd5] px-4 py-2.5 text-center text-sm font-bold text-stone-500 transition hover:bg-stone-50"
+          >
+            {CONTACT_LOCKED_MESSAGE}
+          </Link>
         ) : null}
       </div>
 

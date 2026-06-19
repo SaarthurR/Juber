@@ -7,8 +7,8 @@ export function RideFilters() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const roundTripOnly = params.get("trip") === "round";
-  const hasFilters = Boolean(params.get("from") || params.get("to") || params.get("date") || roundTripOnly);
+  const tripFilter = params.get("trip");
+  const hasFilters = Boolean(params.get("from") || params.get("to") || params.get("date") || tripFilter);
 
   function pushWith(values: { from?: string; to?: string; date?: string; trip?: string }) {
     const next = new URLSearchParams(params.toString());
@@ -80,17 +80,10 @@ export function RideFilters() {
         />
       </label>
 
-      <label className="flex h-[50px] min-w-[160px] cursor-pointer items-center gap-2 rounded-xl border border-[#ead9c2] px-4 text-sm font-bold text-[#7b6650] transition hover:border-brand-200 hover:bg-tint">
-        <input
-          name="trip"
-          type="checkbox"
-          value="round"
-          defaultChecked={roundTripOnly}
-          onChange={(e) => e.currentTarget.form?.requestSubmit()}
-          className="h-4 w-4 accent-brand-600"
-        />
-        Round trips only
-      </label>
+      <div className="flex h-[50px] overflow-hidden rounded-xl border border-[#ead9c2]">
+        <TripButton label="One way only" value="one" active={tripFilter === "one"} onSelect={pushWith} />
+        <TripButton label="Round trips only" value="round" active={tripFilter === "round"} onSelect={pushWith} />
+      </div>
 
       {hasFilters && (
         <button
@@ -103,6 +96,31 @@ export function RideFilters() {
         </button>
       )}
     </form>
+  );
+}
+
+function TripButton({
+  label,
+  value,
+  active,
+  onSelect,
+}: {
+  label: string;
+  value: "one" | "round";
+  active: boolean;
+  onSelect: (values: { trip?: string }) => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => onSelect({ trip: active ? "" : value })}
+      className={`px-4 text-sm font-bold transition first:border-r first:border-[#ead9c2] ${
+        active ? "bg-brand-600 text-white" : "text-[#7b6650] hover:bg-tint"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 

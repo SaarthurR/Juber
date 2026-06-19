@@ -21,7 +21,8 @@ export default async function RidesPage({
   const from = one(sp.from);
   const to = one(sp.to);
   const date = one(sp.date);
-  const roundTripOnly = one(sp.trip) === "round";
+  const trip = one(sp.trip);
+  const tripFilter = trip === "round" || trip === "one" ? trip : null;
 
   const { user } = await getCurrentUser();
   const supabase = await createClient();
@@ -43,7 +44,7 @@ export default async function RidesPage({
   ): T {
     if (from) q = q.ilike("origin_label", `%${from}%`);
     if (to) q = q.ilike("destination_label", `%${to}%`);
-    if (roundTripOnly) q = q.eq("round_trip", true);
+    if (tripFilter) q = q.eq("round_trip", tripFilter === "round");
     if (dayRange) q = q.gte("depart_at", dayRange.gte).lt("depart_at", dayRange.lt);
     else q = q.gte("depart_at", nowIso);
     return q;
@@ -72,7 +73,7 @@ export default async function RidesPage({
         p_to: to ?? null,
         p_date: date ?? null,
         p_limit: 100,
-        p_round_trip: roundTripOnly ? true : null,
+        p_round_trip: tripFilter === null ? null : tripFilter === "round",
       });
   const requestsQuery = applyRequestFilters(
       supabase

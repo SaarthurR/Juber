@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { postRide } from "@/app/rides/actions";
 import { JCNC_LABEL } from "@/lib/constants";
@@ -27,6 +27,8 @@ export function NewRideForm({
   const [returnDepartAt, setReturnDepartAt] = useState("");
   const [pickupLocation, setPickupLocation] = useState("");
   const [dropoffLocation, setDropoffLocation] = useState("");
+  const [validationError, setValidationError] = useState("");
+  const [formState, formAction] = useActionState(postRide, null);
 
   const progress = useMemo(() => {
     const completed = [
@@ -45,7 +47,12 @@ export function NewRideForm({
     direction === "from_jcnc" ? "Destination city / neighborhood" : "Starting city / neighborhood";
 
   return (
-    <form action={postRide} className="space-y-8">
+    <form
+      action={formAction}
+      className="space-y-8"
+      onSubmit={() => setValidationError("")}
+      onInvalid={() => setValidationError("Please complete all required fields before posting your ride.")}
+    >
       <div className="h-2 overflow-hidden rounded-full bg-[#efe9e1]">
         <div
           className="h-full rounded-full bg-brand-600 transition-all duration-300"
@@ -105,7 +112,7 @@ export function NewRideForm({
 
       <section className="space-y-4">
         <h2 className="text-[18px] font-extrabold text-ink">When are you leaving?</h2>
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
+        <div>
           <input
             name="depart_at"
             type="datetime-local"
@@ -115,13 +122,6 @@ export function NewRideForm({
             onChange={(event) => setDepartAt(event.target.value)}
             className="w-full rounded-xl border border-[#d8d0c5] bg-white px-3.5 py-3 text-[15px] outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
           />
-          <select
-            name="repeat"
-            defaultValue="none"
-            className="w-full rounded-xl border border-[#e2ddd5] bg-white px-3.5 py-3 text-[15px] text-stone-500 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
-          >
-            <option value="none">Does not repeat</option>
-          </select>
         </div>
       </section>
 
@@ -221,6 +221,14 @@ export function NewRideForm({
       </label>
 
       <PlacesDatalist places={places} />
+      {(validationError || formState?.error) && (
+        <p
+          role="alert"
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
+        >
+          {validationError || formState?.error}
+        </p>
+      )}
       <SubmitButton>Post ride</SubmitButton>
     </form>
   );

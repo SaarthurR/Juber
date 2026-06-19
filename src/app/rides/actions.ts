@@ -59,64 +59,74 @@ function isoDate(v: FormDataEntryValue | null) {
   return d.toISOString();
 }
 
-export async function postRide(formData: FormData) {
+export type RideFormState = { error: string } | null;
+
+export async function postRide(
+  _previousState: RideFormState,
+  formData: FormData,
+): Promise<RideFormState> {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const seats = parsePositiveInt(formData.get("seats_total"), 1, "Seats available");
-  const gas = parseNonNegativeNumber(formData.get("gas_contribution"), "Gas contribution");
-  const eventId = str(formData.get("event_id"));
-  const direction = str(formData.get("direction"));
-  const routePlace = str(formData.get("route_place"));
-  const fallbackOrigin = str(formData.get("origin_label"));
-  const fallbackDestination = str(formData.get("destination_label"));
-  const origin =
-    direction === "from_jcnc" ? JCNC_LABEL : routePlace ?? fallbackOrigin;
-  const destination =
-    direction === "from_jcnc" ? routePlace ?? fallbackDestination : JCNC_LABEL;
-  const departAt = isoDate(formData.get("depart_at"));
-  const roundTrip = str(formData.get("round_trip")) === "true";
-  const returnDepartAt = roundTrip ? isoDate(formData.get("return_depart_at")) : null;
+  try {
+    const seats = parsePositiveInt(formData.get("seats_total"), 1, "Seats available");
+    const gas = parseNonNegativeNumber(formData.get("gas_contribution"), "Gas contribution");
+    const eventId = str(formData.get("event_id"));
+    const direction = str(formData.get("direction"));
+    const routePlace = str(formData.get("route_place"));
+    const fallbackOrigin = str(formData.get("origin_label"));
+    const fallbackDestination = str(formData.get("destination_label"));
+    const origin =
+      direction === "from_jcnc" ? JCNC_LABEL : routePlace ?? fallbackOrigin;
+    const destination =
+      direction === "from_jcnc" ? routePlace ?? fallbackDestination : JCNC_LABEL;
+    const departAt = isoDate(formData.get("depart_at"));
+    const roundTrip = str(formData.get("round_trip")) === "true";
+    const returnDepartAt = roundTrip ? isoDate(formData.get("return_depart_at")) : null;
 
-  if (!origin || !destination) {
-    throw new Error("Please choose whether this ride is to or from JCNC and add the city.");
-  }
-
-  if (returnDepartAt && new Date(returnDepartAt) <= new Date(departAt)) {
-    throw new Error("Return time must be after the outbound departure.");
-  }
-
-  if (eventId) {
-    const { data: event } = await supabase
-      .from("events")
-      .select("id")
-      .eq("id", eventId)
-      .eq("is_active", true)
-      .single<{ id: string }>();
-    if (!event) {
-      throw new Error("Please choose a live event, or select no specific event.");
+    if (!origin || !destination) {
+      throw new Error("Please choose whether this ride is to or from JCNC and add the city.");
     }
+
+    if (returnDepartAt && new Date(returnDepartAt) <= new Date(departAt)) {
+      throw new Error("Return time must be after the outbound departure.");
+    }
+
+    if (eventId) {
+      const { data: event } = await supabase
+        .from("events")
+        .select("id")
+        .eq("id", eventId)
+        .eq("is_active", true)
+        .single<{ id: string }>();
+      if (!event) {
+        throw new Error("Please choose a live event, or select no specific event.");
+      }
+    }
+
+    const { error } = await supabase.from("rides").insert({
+      driver_id: user.id,
+      origin_label: origin,
+      destination_label: destination,
+      pickup_location: str(formData.get("pickup_location")),
+      dropoff_location: str(formData.get("dropoff_location")),
+      depart_at: departAt,
+      round_trip: roundTrip,
+      return_depart_at: returnDepartAt,
+      return_notes: roundTrip ? str(formData.get("return_notes")) : null,
+      seats_total: seats,
+      seats_available: seats,
+      gas_contribution: gas,
+      notes: str(formData.get("notes")),
+      event_id: eventId,
+    });
+
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Unable to post this ride." };
   }
 
-  const { error } = await supabase.from("rides").insert({
-    driver_id: user.id,
-    origin_label: origin,
-    destination_label: destination,
-    pickup_location: str(formData.get("pickup_location")),
-    dropoff_location: str(formData.get("dropoff_location")),
-    depart_at: departAt,
-    round_trip: roundTrip,
-    return_depart_at: returnDepartAt,
-    return_notes: roundTrip ? str(formData.get("return_notes")) : null,
-    seats_total: seats,
-    seats_available: seats,
-    gas_contribution: gas,
-    notes: str(formData.get("notes")),
-    event_id: eventId,
-  });
-
-  if (error) throw new Error(error.message);
   revalidatePath("/rides");
   redirect("/rides");
 }

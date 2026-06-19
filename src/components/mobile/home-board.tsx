@@ -13,14 +13,14 @@ export function HomeBoard({
   initialFrom,
   initialTo,
   initialDate,
-  initialRoundTripOnly,
+  initialTripFilter,
 }: {
   rides: RideWithDriver[];
   requests: RideRequestWithRider[];
   initialFrom: string;
   initialTo: string;
   initialDate: string;
-  initialRoundTripOnly: boolean;
+  initialTripFilter: "one" | "round" | null;
 }) {
   const [tab, setTab] = useState<"carpools" | "requests">("carpools");
 
@@ -40,7 +40,7 @@ export function HomeBoard({
         initialFrom={initialFrom}
         initialTo={initialTo}
         initialDate={initialDate}
-        initialRoundTripOnly={initialRoundTripOnly}
+        initialTripFilter={initialTripFilter}
       />
 
       {tab === "carpools" ? (
@@ -97,25 +97,25 @@ function SearchCard({
   initialFrom,
   initialTo,
   initialDate,
-  initialRoundTripOnly,
+  initialTripFilter,
 }: {
   initialFrom: string;
   initialTo: string;
   initialDate: string;
-  initialRoundTripOnly: boolean;
+  initialTripFilter: "one" | "round" | null;
 }) {
   const router = useRouter();
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo || "JCNC");
   const [date, setDate] = useState(initialDate);
-  const [roundTripOnly, setRoundTripOnly] = useState(initialRoundTripOnly);
+  const [tripFilter, setTripFilter] = useState<"one" | "round" | null>(initialTripFilter);
 
   function search() {
     const params = new URLSearchParams();
     if (from.trim()) params.set("from", from.trim());
     if (to.trim() && to.trim() !== "JCNC") params.set("to", to.trim());
     if (date) params.set("date", date);
-    if (roundTripOnly) params.set("trip", "round");
+    if (tripFilter) params.set("trip", tripFilter);
     const qs = params.toString();
     router.push(qs ? `/m?${qs}` : "/m");
   }
@@ -178,15 +178,41 @@ function SearchCard({
         </button>
       </div>
 
-      <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-[13px] bg-tint px-3 py-2.5 text-[13px] font-bold text-brand-700">
-        <input
-          type="checkbox"
-          checked={roundTripOnly}
-          onChange={(e) => setRoundTripOnly(e.target.checked)}
-          className="h-4 w-4 accent-brand-600"
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <TripToggle
+          label="One way only"
+          active={tripFilter === "one"}
+          onClick={() => setTripFilter((value) => (value === "one" ? null : "one"))}
         />
-        Round trips only
-      </label>
+        <TripToggle
+          label="Round trips only"
+          active={tripFilter === "round"}
+          onClick={() => setTripFilter((value) => (value === "round" ? null : "round"))}
+        />
+      </div>
     </div>
+  );
+}
+
+function TripToggle({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`rounded-[13px] px-3 py-2.5 text-[12px] font-bold transition active:scale-[0.98] ${
+        active ? "bg-brand-600 text-white" : "bg-tint text-brand-700"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
