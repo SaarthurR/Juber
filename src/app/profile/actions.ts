@@ -15,15 +15,26 @@ export async function updateProfile(formData: FormData) {
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
+  const phone = str(formData.get("phone"));
+  const whatsapp = str(formData.get("whatsapp"));
+  if (!phone && !whatsapp) redirect("/profile?contact_required=1");
+  const requestedContact = str(formData.get("preferred_contact"));
+  const preferredContact =
+    requestedContact === "phone" && !phone
+      ? "whatsapp"
+      : requestedContact === "whatsapp" && !whatsapp
+        ? "phone"
+        : requestedContact;
+
   const { error } = await supabase
     .from("profiles")
     .update({
       full_name: str(formData.get("full_name")),
       pronouns: str(formData.get("pronouns")),
       neighborhood: str(formData.get("neighborhood")),
-      phone: str(formData.get("phone")),
-      whatsapp: str(formData.get("whatsapp")),
-      preferred_contact: str(formData.get("preferred_contact")),
+      phone,
+      whatsapp,
+      preferred_contact: preferredContact,
       car_make_model: str(formData.get("car_make_model")),
       car_color: str(formData.get("car_color")),
       bio: str(formData.get("bio")),

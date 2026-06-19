@@ -75,6 +75,17 @@ export async function updateProfileMobile(formData: FormData) {
   const user = await getAuthUser(supabase);
   if (!user) redirect("/m");
 
+  const phone = str(formData.get("phone"));
+  const whatsapp = str(formData.get("whatsapp"));
+  if (!phone && !whatsapp) redirect("/m/profile/edit?contact_required=1");
+  const requestedContact = str(formData.get("preferred_contact"));
+  const preferredContact =
+    requestedContact === "phone" && !phone
+      ? "whatsapp"
+      : requestedContact === "whatsapp" && !whatsapp
+        ? "phone"
+        : requestedContact;
+
   const first = str(formData.get("first_name")) ?? "";
   const lastInitial = str(formData.get("last_initial")) ?? "";
   const fullName = [first, lastInitial].filter(Boolean).join(" ") || null;
@@ -85,9 +96,9 @@ export async function updateProfileMobile(formData: FormData) {
       full_name: fullName,
       pronouns: str(formData.get("pronouns")),
       neighborhood: str(formData.get("neighborhood")),
-      phone: str(formData.get("phone")),
-      whatsapp: str(formData.get("whatsapp")),
-      preferred_contact: str(formData.get("preferred_contact")),
+      phone,
+      whatsapp,
+      preferred_contact: preferredContact,
       car_make_model: str(formData.get("car_make_model")),
     })
     .eq("id", user.id);

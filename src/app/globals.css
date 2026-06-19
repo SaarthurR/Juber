@@ -214,6 +214,35 @@ a, button, [role="button"], label, summary, input[type="submit"] {
   }
 }
 
+.route-loading-car {
+  animation: route-loading-drive 1.45s linear infinite;
+  will-change: transform;
+}
+
+.route-loading-car svg {
+  animation: route-loading-bounce 280ms ease-in-out infinite alternate;
+}
+
+.route-loading-wheel {
+  animation: route-loading-wheel 420ms linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes route-loading-drive {
+  from { transform: translateX(-140px); }
+  to { transform: translateX(calc(100vw + 140px)); }
+}
+
+@keyframes route-loading-bounce {
+  from { transform: translateY(0); }
+  to { transform: translateY(-2px); }
+}
+
+@keyframes route-loading-wheel {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

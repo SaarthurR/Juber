@@ -7,7 +7,12 @@ import { initials } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-export default async function EditProfilePage() {
+export default async function EditProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ onboarding?: string; contact_required?: string }>;
+}) {
+  const sp = await searchParams;
   const { user, profile } = await getCurrentUser();
   if (!user) redirect("/");
 
@@ -23,6 +28,12 @@ export default async function EditProfilePage() {
           <h1 className="text-[30px] font-extrabold tracking-tight text-ink">Edit profile</h1>
           <div className="mt-5 h-px bg-[#efece6]" />
         </div>
+
+        {(sp.onboarding === "1" || sp.contact_required === "1") && (
+          <div className="rounded-xl border border-brand-200 bg-tint px-4 py-3 text-sm font-semibold text-brand-700">
+            Add a phone or WhatsApp number to continue using Juber.
+          </div>
+        )}
 
         {/* Personal Information */}
         <div>
@@ -48,14 +59,15 @@ export default async function EditProfilePage() {
         <div>
           <h2 className="mb-4 text-base font-extrabold text-ink">Contact</h2>
           <div className="space-y-4">
-            <FormField label="Phone (optional)" name="phone" type="tel" defaultValue={profile?.phone ?? ""} />
+            <FormField label="Phone" name="phone" type="tel" defaultValue={profile?.phone ?? ""} />
             <FormField
-              label="WhatsApp number (optional)"
+              label="WhatsApp number"
               name="whatsapp"
               type="tel"
               defaultValue={profile?.whatsapp ?? ""}
               placeholder="e.g. +1 555 555 5555"
             />
+            <p className="text-xs font-medium text-stone-500">At least one contact number is required.</p>
           </div>
         </div>
 

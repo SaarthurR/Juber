@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { postRide } from "@/app/rides/actions";
 import { JCNC_LABEL } from "@/lib/constants";
@@ -29,6 +29,9 @@ export function NewRideForm({
   const [dropoffLocation, setDropoffLocation] = useState("");
   const [validationError, setValidationError] = useState("");
   const [formState, formAction] = useActionState(postRide, null);
+  const directionSectionRef = useRef<HTMLElement>(null);
+  const firstDirectionButtonRef = useRef<HTMLButtonElement>(null);
+  const handledInvalidRef = useRef(false);
 
   const progress = useMemo(() => {
     const completed = [
@@ -46,12 +49,64 @@ export function NewRideForm({
   const routePlaceholder =
     direction === "from_jcnc" ? "Destination city / neighborhood" : "Starting city / neighborhood";
 
+  function scrollToField(field: HTMLElement, focusTarget = field) {
+    field.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => focusTarget.focus({ preventScroll: true }), 300);
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    setValidationError("");
+    handledInvalidRef.current = false;
+
+    if (!direction) {
+      event.preventDefault();
+      setValidationError("Please choose whether this ride is to or from JCNC.");
+      if (directionSectionRef.current && firstDirectionButtonRef.current) {
+        scrollToField(directionSectionRef.current, firstDirectionButtonRef.current);
+      }
+      return;
+    }
+
+    if (!event.currentTarget.checkValidity()) {
+      event.preventDefault();
+    }
+  }
+
+  function handleInvalid(event: React.InvalidEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (handledInvalidRef.current) return;
+    handledInvalidRef.current = true;
+
+    const field = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    const labels: Record<string, string> = {
+      route_place: routeQuestion,
+      depart_at: "Departure date and time",
+      return_depart_at: "Return date and time",
+      dropoff_location: "Drop off location",
+      pickup_location: "Pick up location",
+      seats_total: "Seats available",
+    };
+    const label = labels[field.name] ?? "This field";
+    let message = field.validationMessage;
+    if (field.validity.valueMissing) {
+      message = `Please fill in ${label.toLowerCase()}.`;
+    } else if (field.name === "seats_total" && field.validity.rangeUnderflow) {
+      message = "Seats available must be at least 1.";
+    } else if (field.validity.rangeUnderflow) {
+      message = `${label} must be later than the minimum shown.`;
+    }
+
+    setValidationError(message);
+    scrollToField(field.closest<HTMLElement>("label, section") ?? field, field);
+  }
+
   return (
     <form
       action={formAction}
       className="space-y-8"
-      onSubmit={() => setValidationError("")}
-      onInvalid={() => setValidationError("Please complete all required fields before posting your ride.")}
+      noValidate
+      onSubmit={handleSubmit}
+      onInvalid={handleInvalid}
     >
       <div className="h-2 overflow-hidden rounded-full bg-[#efe9e1]">
         <div
@@ -60,12 +115,13 @@ export function NewRideForm({
         />
       </div>
 
-      <section className="space-y-4">
+      <section ref={directionSectionRef} className="space-y-4">
         <h2 className="text-[18px] font-extrabold text-ink">Where are you heading?</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <DirectionButton
             active={direction === "to_jcnc"}
             onClick={() => setDirection("to_jcnc")}
+            buttonRef={firstDirectionButtonRef}
           >
             To {JCNC_LABEL}
           </DirectionButton>
@@ -214,7 +270,7 @@ export function NewRideForm({
         <span className="mb-1 block text-[15px] font-bold text-ink">Notes (optional)</span>
         <textarea
           name="notes"
-          placeholder="Return trip, luggage room, contact preferences, etc."
+          placeholder="Return trip details, contact preferences, etc."
           rows={3}
           className="w-full rounded-xl border border-[#e2ddd5] px-3.5 py-3 text-[15px] outline-none placeholder:text-[#a8a29e] focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
         />
@@ -237,15 +293,18 @@ export function NewRideForm({
 function DirectionButton({
   active,
   onClick,
+  buttonRef,
   children,
 }: {
   active: boolean;
   onClick: () => void;
+  buttonRef?: React.Ref<HTMLButtonElement>;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
+      ref={buttonRef}
       aria-pressed={active}
       onClick={onClick}
       className={`min-h-14 rounded-xl border-2 px-4 text-[17px] font-extrabold transition active:scale-[0.98] ${

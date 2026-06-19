@@ -147,10 +147,16 @@ export default async function RequestDetailPage({
                   className="flex w-full items-center justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700"
                 />
               ) : isOwner ? (
-                <OwnerActions requestId={request.id} isActive={isActive} />
+                <OwnerActions
+                  requestId={request.id}
+                  isActive={isActive}
+                  acceptedDriverId={request.accepted_driver_id}
+                />
               ) : isActive ? (
-                <ResponderActions
-                  riderId={request.rider_id}
+                <ResponderActions requestId={request.id} />
+              ) : request.status === "fulfilled" && user.id === request.accepted_driver_id ? (
+                <BookedMessageButton
+                  otherUserId={request.rider_id}
                   requestId={request.id}
                 />
               ) : (
@@ -181,9 +187,19 @@ function InfoCard({
   );
 }
 
-function OwnerActions({ requestId, isActive }: { requestId: string; isActive: boolean }) {
+function OwnerActions({
+  requestId,
+  isActive,
+  acceptedDriverId,
+}: {
+  requestId: string;
+  isActive: boolean;
+  acceptedDriverId: string | null;
+}) {
   if (!isActive) {
-    return (
+    return acceptedDriverId ? (
+      <BookedMessageButton otherUserId={acceptedDriverId} requestId={requestId} />
+    ) : (
       <div className="rounded-xl bg-stone-100 px-4 py-3 text-sm font-semibold text-stone-500">
         This request is closed.
       </div>
@@ -195,34 +211,37 @@ function OwnerActions({ requestId, isActive }: { requestId: string; isActive: bo
   );
 }
 
-function ResponderActions({
-  riderId,
+function ResponderActions({ requestId }: { requestId: string }) {
+  return (
+    <form action={acceptRideRequest.bind(null, requestId)}>
+      <button
+        type="submit"
+        className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
+      >
+        <CheckCircle2 size={17} />
+        Accept request
+      </button>
+    </form>
+  );
+}
+
+function BookedMessageButton({
+  otherUserId,
   requestId,
 }: {
-  riderId: string;
+  otherUserId: string;
   requestId: string;
 }) {
   return (
-    <>
-      <form action={acceptRideRequest.bind(null, requestId)}>
-        <button
-          type="submit"
-          className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
-        >
-          <CheckCircle2 size={17} />
-          Accept request
-        </button>
-      </form>
-      <form action={openConversation.bind(null, riderId)}>
-        <input type="hidden" name="request_id" value={requestId} />
-        <button
-          type="submit"
-          className="flex w-full items-center justify-center gap-2 rounded-full border border-stone-200 px-5 py-3 text-sm font-bold text-stone-700 transition hover:bg-white active:scale-[0.98]"
-        >
-          <MessageCircle size={17} />
-          Message rider
-        </button>
-      </form>
-    </>
+    <form action={openConversation.bind(null, otherUserId)}>
+      <input type="hidden" name="request_id" value={requestId} />
+      <button
+        type="submit"
+        className="flex w-full items-center justify-center gap-2 rounded-full border border-stone-200 px-5 py-3 text-sm font-bold text-stone-700 transition hover:bg-white active:scale-[0.98]"
+      >
+        <MessageCircle size={17} />
+        Message ride partner
+      </button>
+    </form>
   );
 }

@@ -3,12 +3,14 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { ArrowLeftRight, Search, X } from "lucide-react";
 
-export function RideFilters() {
+export function RideFilters({ defaultDate }: { defaultDate: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const tripFilter = params.get("trip");
-  const hasFilters = Boolean(params.get("from") || params.get("to") || params.get("date") || tripFilter);
+  const requestedDate = params.get("date");
+  const selectedDate = requestedDate === "all" ? "" : requestedDate || defaultDate;
+  const hasFilters = Boolean(params.get("from") || params.get("to") || selectedDate || tripFilter);
 
   function pushWith(values: { from?: string; to?: string; date?: string; trip?: string }) {
     const next = new URLSearchParams(params.toString());
@@ -43,7 +45,7 @@ export function RideFilters() {
     const next = new URLSearchParams(params.toString());
     next.delete("from");
     next.delete("to");
-    next.delete("date");
+    next.set("date", "all");
     next.delete("trip");
     const query = next.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
@@ -71,13 +73,26 @@ export function RideFilters() {
         <span className="mb-1.5 block text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#a8927a]">
           Date
         </span>
-        <input
-          name="date"
-          type="date"
-          defaultValue={params.get("date") ?? ""}
-          onChange={(e) => e.currentTarget.form?.requestSubmit()}
-          className="h-[50px] w-full rounded-xl border border-[#ead9c2] px-3.5 text-[15px] text-stone-700 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
-        />
+        <div className="flex gap-2">
+          <input
+            key={selectedDate || "all"}
+            name="date"
+            type="date"
+            defaultValue={selectedDate}
+            onChange={(e) => e.currentTarget.form?.requestSubmit()}
+            className="h-[50px] min-w-0 flex-1 rounded-xl border border-[#ead9c2] px-3.5 text-[15px] text-stone-700 outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+          />
+          {selectedDate && (
+            <button
+              type="button"
+              onClick={() => pushWith({ date: "all" })}
+              aria-label="Clear date and show rides on all dates"
+              className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-xl border border-[#ead9c2] text-[#a8927a] transition hover:border-brand-200 hover:bg-tint hover:text-brand-600"
+            >
+              <X size={17} />
+            </button>
+          )}
+        </div>
       </label>
 
       <div className="flex h-[50px] overflow-hidden rounded-xl border border-[#ead9c2]">

@@ -7,6 +7,7 @@ import { MAvatar } from "@/components/mobile/m-avatar";
 import { HomeBoard } from "@/components/mobile/home-board";
 import { MNotificationBell } from "@/components/mobile/notifications-sheet";
 import { GoogleSignInButton } from "@/components/auth-button";
+import { getTodayDateInputValue } from "@/lib/date-time";
 import type {
   NotificationWithContext,
   RideRequestWithRider,
@@ -24,18 +25,18 @@ export default async function MobileHomePage({
   searchParams: Promise<SP>;
 }) {
   const sp = await searchParams;
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const today = getTodayDateInputValue(now);
   const from = one(sp.from) ?? "";
   const to = one(sp.to) ?? "";
-  const date = one(sp.date) ?? "";
+  const requestedDate = one(sp.date);
+  const date = requestedDate === "all" ? "" : requestedDate || today;
   const trip = one(sp.trip);
   const tripFilter = trip === "round" || trip === "one" ? trip : null;
 
   const { user, profile } = await getCurrentUser();
   const supabase = await createClient();
-
-  const now = new Date();
-  const nowIso = now.toISOString();
-  const today = nowIso.slice(0, 10);
 
   let dayRange: { gte: string; lt: string } | null = null;
   if (date) {

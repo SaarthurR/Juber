@@ -17,6 +17,51 @@ export async function openConversation(otherUserId: string, formData?: FormData)
 
   const rideId = formData?.get("ride_id")?.toString() || null;
   const requestId = formData?.get("request_id")?.toString() || null;
+  if (!rideId && !requestId) {
+    throw new Error("Messaging unlocks after a ride is booked.");
+  }
+
+  if (rideId) {
+    const { data: bookings } = await supabase
+      .from("ride_passengers")
+      .select("passenger_id,ride:rides!ride_passengers_ride_id_fkey(driver_id,status)")
+      .eq("ride_id", rideId)
+      .eq("status", "confirmed")
+      .returns<Array<{
+        passenger_id: string;
+        ride: { driver_id: string; status: string } | null;
+      }>>();
+    const booking = bookings?.find((row) => {
+      const participants = new Set([row.passenger_id, row.ride?.driver_id]);
+      return participants.has(user.id) && participants.has(otherUserId);
+    });
+    const participants = new Set([booking?.passenger_id, booking?.ride?.driver_id]);
+    if (
+      booking?.ride?.status !== "active" ||
+      !participants.has(user.id) ||
+      !participants.has(otherUserId)
+    ) {
+      throw new Error("Messaging unlocks after this ride is booked.");
+    }
+  } else if (requestId) {
+    const { data: request } = await supabase
+      .from("ride_requests")
+      .select("rider_id,accepted_driver_id,status")
+      .eq("id", requestId)
+      .maybeSingle<{
+        rider_id: string;
+        accepted_driver_id: string | null;
+        status: string;
+      }>();
+    const participants = new Set([request?.rider_id, request?.accepted_driver_id]);
+    if (
+      request?.status !== "fulfilled" ||
+      !participants.has(user.id) ||
+      !participants.has(otherUserId)
+    ) {
+      throw new Error("Messaging unlocks after this request is accepted.");
+    }
+  }
 
   const { data: conversationId, error } = await supabase.rpc("open_conversation", {
     p_other_user_id: otherUserId,

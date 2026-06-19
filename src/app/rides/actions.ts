@@ -70,6 +70,14 @@ export async function postRide(
   if (!user) redirect("/");
 
   try {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("phone,whatsapp")
+      .eq("id", user.id)
+      .single<{ phone: string | null; whatsapp: string | null }>();
+    if (!profile?.phone?.trim() && !profile?.whatsapp?.trim()) {
+      throw new Error("Add a phone or WhatsApp number to your profile before posting a ride.");
+    }
     const seats = parsePositiveInt(formData.get("seats_total"), 1, "Seats available");
     const gas = parseNonNegativeNumber(formData.get("gas_contribution"), "Gas contribution");
     const eventId = str(formData.get("event_id"));

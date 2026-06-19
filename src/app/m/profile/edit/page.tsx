@@ -17,7 +17,12 @@ function Caption({ children }: { children: React.ReactNode }) {
   return <span className="mb-1.5 block text-[12px] font-semibold text-muted">{children}</span>;
 }
 
-export default async function MobileEditProfilePage() {
+export default async function MobileEditProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ onboarding?: string; contact_required?: string }>;
+}) {
+  const sp = await searchParams;
   const { user, profile } = await getCurrentUser();
   if (!user) redirect("/m");
 
@@ -42,6 +47,11 @@ export default async function MobileEditProfilePage() {
       <SubHeader title="Edit profile" backFallback="/m/profile" />
 
       <div className="space-y-7 px-4 pt-2">
+        {(sp.onboarding === "1" || sp.contact_required === "1") && (
+          <div className="rounded-[14px] border border-brand-200 bg-tint px-4 py-3 text-[13px] font-bold text-brand-700">
+            Add a phone or WhatsApp number to continue using Juber.
+          </div>
+        )}
         {/* Avatar uploader */}
         <div className="flex flex-col items-center text-center">
           <div className="relative">
@@ -112,7 +122,7 @@ export default async function MobileEditProfilePage() {
           </h2>
           <div className="space-y-3.5">
             <label className="block">
-              <Caption>Phone (recommended)</Caption>
+              <Caption>Phone</Caption>
               <input
                 name="phone"
                 type="tel"
@@ -122,7 +132,7 @@ export default async function MobileEditProfilePage() {
               />
             </label>
             <label className="block">
-              <Caption>WhatsApp (optional)</Caption>
+              <Caption>WhatsApp</Caption>
               <input
                 name="whatsapp"
                 type="tel"
@@ -131,6 +141,7 @@ export default async function MobileEditProfilePage() {
                 className={inputCls}
               />
             </label>
+            <p className="text-[12px] font-medium text-muted-warm">At least one contact number is required.</p>
             <label className="block">
               <Caption>Car make &amp; model (optional)</Caption>
               <input

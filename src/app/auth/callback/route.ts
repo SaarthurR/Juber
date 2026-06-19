@@ -12,6 +12,23 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
       await syncProfileFromProvider(supabase);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("phone,whatsapp")
+        .eq("id", user?.id ?? "")
+        .single<{ phone: string | null; whatsapp: string | null }>();
+      if (!profile?.phone?.trim() && !profile?.whatsapp?.trim()) {
+        const isMobile = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(
+          request.headers.get("user-agent") ?? "",
+        );
+        const onboardingPath = isMobile
+          ? "/m/profile/edit?onboarding=1"
+          : "/profile?onboarding=1";
+        return NextResponse.redirect(`${origin}${onboardingPath}`);
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

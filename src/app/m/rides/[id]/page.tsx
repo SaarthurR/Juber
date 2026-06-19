@@ -7,7 +7,6 @@ import { getCurrentUser } from "@/lib/auth";
 import { SubHeader } from "@/components/mobile/sub-header";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { ContactSheet } from "@/components/mobile/contact-sheet";
-import { TrunkControl } from "@/components/mobile/trunk-control";
 import { MReserveButton } from "@/components/mobile/m-reserve";
 import { ShareButton } from "@/components/share-button";
 import { GoogleSignInButton } from "@/components/auth-button";
@@ -158,14 +157,6 @@ export default async function MobileTripPage({
               preferredContact={ride.driver?.preferred_contact ?? null}
             />
           )}
-        </div>
-
-        {/* Trunk space */}
-        <div>
-          <p className="mb-2 text-[11px] font-extrabold uppercase tracking-[0.1em] text-brand-600">
-            Trunk space
-          </p>
-          <TrunkControl />
         </div>
 
         {/* Note from driver */}

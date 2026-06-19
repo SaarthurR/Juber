@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { NewRideForm } from "@/components/new-ride-form";
+import { getDateTimeInputValue } from "@/lib/date-time";
 import type { EventRow, Place } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +16,12 @@ export default async function NewRidePage({
   const eventId = Array.isArray(sp.event_id) ? sp.event_id[0] : sp.event_id;
   const minDepartDate = new Date();
   minDepartDate.setMinutes(minDepartDate.getMinutes() + 15);
-  const minDepartAt = [
-    minDepartDate.getFullYear(),
-    String(minDepartDate.getMonth() + 1).padStart(2, "0"),
-    String(minDepartDate.getDate()).padStart(2, "0"),
-  ].join("-") + `T${String(minDepartDate.getHours()).padStart(2, "0")}:${String(
-    minDepartDate.getMinutes(),
-  ).padStart(2, "0")}`;
-  const { user } = await getCurrentUser();
+  const minDepartAt = getDateTimeInputValue(minDepartDate);
+  const { user, profile } = await getCurrentUser();
   if (!user) redirect("/");
+  if (!profile?.phone?.trim() && !profile?.whatsapp?.trim()) {
+    redirect("/profile?contact_required=1");
+  }
 
   const supabase = await createClient();
   const [{ data: places }, { data: events }] = await Promise.all([

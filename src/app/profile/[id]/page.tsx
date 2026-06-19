@@ -76,6 +76,7 @@ export default async function PublicProfilePage({
 
   const isMe = user?.id === id;
   let canViewContact = isMe;
+  let messagingRideId: string | null = null;
 
   const nowIso = new Date().toISOString();
 
@@ -117,14 +118,27 @@ export default async function PublicProfilePage({
   }
 
   if (user && !isMe) {
-    const { data: userPassengerRows } = await supabase
-      .from("ride_passengers")
-      .select("ride:rides!ride_passengers_ride_id_fkey(driver_id)")
-      .eq("passenger_id", user.id)
-      .eq("status", "confirmed");
-    canViewContact = (
-      (userPassengerRows as { ride: { driver_id: string } | null }[] | null) ?? []
-    ).some((row) => row.ride?.driver_id === id);
+    const [{ data: userPassengerRows }, { data: profilePassengerRows }] = await Promise.all([
+      supabase
+        .from("ride_passengers")
+        .select("ride:rides!ride_passengers_ride_id_fkey(id,driver_id,status)")
+        .eq("passenger_id", user.id)
+        .eq("status", "confirmed"),
+      supabase
+        .from("ride_passengers")
+        .select("ride:rides!ride_passengers_ride_id_fkey(id,driver_id,status)")
+        .eq("passenger_id", id)
+        .eq("status", "confirmed"),
+    ]);
+    type BookingRow = { ride: { id: string; driver_id: string; status: string } | null };
+    const userBooking = ((userPassengerRows as BookingRow[] | null) ?? []).find(
+      (row) => row.ride?.driver_id === id && row.ride.status === "active",
+    );
+    const profileBooking = ((profilePassengerRows as BookingRow[] | null) ?? []).find(
+      (row) => row.ride?.driver_id === user.id && row.ride.status === "active",
+    );
+    canViewContact = Boolean(userBooking);
+    messagingRideId = userBooking?.ride?.id ?? profileBooking?.ride?.id ?? null;
   }
 
   // Merge + deduplicate for "all" tab, then split live vs past
@@ -194,8 +208,8 @@ export default async function PublicProfilePage({
             icon={<MessageCircle size={15} className="text-brand-600" />}
             tint="bg-tint"
             label="In-app message"
-            value={canViewContact ? "Reach out through Juber" : CONTACT_LOCKED_MESSAGE}
-            preferred={canViewContact && preferred === "message"}
+            value={messagingRideId ? "Reach out through Juber" : CONTACT_LOCKED_MESSAGE}
+            preferred={Boolean(messagingRideId) && preferred === "message"}
             last
           />
         </div>
@@ -207,8 +221,9 @@ export default async function PublicProfilePage({
           >
             <Pencil size={15} /> Edit profile
           </Link>
-        ) : user && canViewContact ? (
+        ) : user && messagingRideId ? (
           <form action={openConversation.bind(null, profile.id)} className="mt-3.5">
+            <input type="hidden" name="ride_id" value={messagingRideId} />
             <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700">
               <MessageCircle size={15} /> Message {profile.full_name?.split(" ")[0] ?? "member"}
             </button>

@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeftRight, CalendarDays, Search } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, Search, X } from "lucide-react";
 import { Segmented } from "@/components/mobile/segmented";
 import { MRideCard, MRequestCard } from "@/components/mobile/mobile-cards";
+import { CITY_SUGGESTIONS, JCNC_LABEL } from "@/lib/constants";
 import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
 export function HomeBoard({
@@ -110,14 +111,18 @@ function SearchCard({
   const [date, setDate] = useState(initialDate);
   const [tripFilter, setTripFilter] = useState<"one" | "round" | null>(initialTripFilter);
 
-  function search() {
+  function navigate(nextDate = date) {
     const params = new URLSearchParams();
     if (from.trim()) params.set("from", from.trim());
     if (to.trim() && to.trim() !== "JCNC") params.set("to", to.trim());
-    if (date) params.set("date", date);
+    params.set("date", nextDate || "all");
     if (tripFilter) params.set("trip", tripFilter);
-    const qs = params.toString();
-    router.push(qs ? `/m?${qs}` : "/m");
+    router.push(`/m?${params.toString()}`);
+  }
+
+  function clearDate() {
+    setDate("");
+    navigate("");
   }
 
   return (
@@ -130,6 +135,7 @@ function SearchCard({
           <input
             value={from}
             onChange={(e) => setFrom(e.target.value)}
+            list="mobile-from-cities"
             placeholder="San Jose"
             className="w-full bg-transparent text-[14px] font-semibold text-ink outline-none placeholder:text-muted-warm placeholder:font-medium"
           />
@@ -152,6 +158,7 @@ function SearchCard({
           <input
             value={to}
             onChange={(e) => setTo(e.target.value)}
+            list="mobile-to-cities"
             placeholder="JCNC, Milpitas"
             className="w-full bg-transparent text-right text-[14px] font-semibold text-ink outline-none placeholder:text-muted-warm placeholder:font-medium"
           />
@@ -168,9 +175,19 @@ function SearchCard({
           onChange={(e) => setDate(e.target.value)}
           className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-muted outline-none"
         />
+        {date && (
+          <button
+            type="button"
+            onClick={clearDate}
+            aria-label="Clear date and show rides on all dates"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-warm transition active:bg-tint active:scale-95"
+          >
+            <X size={17} strokeWidth={2.4} />
+          </button>
+        )}
         <button
           type="button"
-          onClick={search}
+          onClick={() => navigate()}
           className="flex shrink-0 items-center gap-1.5 rounded-[11px] bg-brand-600 px-4 py-2 text-[13px] font-bold text-white transition hover:bg-brand-700 active:scale-95"
         >
           <Search size={14} strokeWidth={2.5} />
@@ -190,7 +207,21 @@ function SearchCard({
           onClick={() => setTripFilter((value) => (value === "round" ? null : "round"))}
         />
       </div>
+
+      <CityOptions id="mobile-from-cities" includeJcnc />
+      <CityOptions id="mobile-to-cities" includeJcnc />
     </div>
+  );
+}
+
+function CityOptions({ id, includeJcnc = false }: { id: string; includeJcnc?: boolean }) {
+  return (
+    <datalist id={id}>
+      {includeJcnc && <option value={JCNC_LABEL} />}
+      {CITY_SUGGESTIONS.map((city) => (
+        <option key={city} value={city} />
+      ))}
+    </datalist>
   );
 }
 

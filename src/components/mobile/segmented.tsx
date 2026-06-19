@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * The JCNC segmented control used across the mobile system (Home toggle, trunk
- * size, profile tabs). Track is `seg-track`; the active segment is a white pill
+ * The JCNC segmented control used across the mobile system (Home toggle and
+ * profile tabs). Track is `seg-track`; the active segment is a white pill
  * with brand text and a soft shadow.
  */
 export function Segmented<T extends string>({

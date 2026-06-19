@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { TempleLogo } from "@/components/temple-logo";
 import { RidesView } from "@/components/rides-view";
 import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
+import { getTodayDateInputValue } from "@/lib/date-time";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,12 @@ export default async function RidesPage({
   searchParams: Promise<SP>;
 }) {
   const sp = await searchParams;
+  const now = new Date();
+  const today = getTodayDateInputValue(now);
   const from = one(sp.from);
   const to = one(sp.to);
-  const date = one(sp.date);
+  const requestedDate = one(sp.date);
+  const date = requestedDate === "all" ? "" : requestedDate || today;
   const trip = one(sp.trip);
   const tripFilter = trip === "round" || trip === "one" ? trip : null;
 
@@ -35,9 +39,7 @@ export default async function RidesPage({
     dayRange = { gte: start.toISOString(), lt: end.toISOString() };
   }
 
-  const now = new Date();
   const nowIso = now.toISOString();
-  const today = now.toISOString().slice(0, 10);
 
   function applyRideFilters<T extends { eq: (c: string, v: boolean | string) => T; gte: (c: string, v: string) => T; lt: (c: string, v: string) => T; ilike: (c: string, v: string) => T }>(
     q: T,
@@ -128,6 +130,7 @@ export default async function RidesPage({
         requests={requests}
         requestCount={requestCount ?? 0}
         signedIn={Boolean(user)}
+        defaultDate={date}
       />
     </div>
   );
