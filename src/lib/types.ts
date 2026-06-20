@@ -2,13 +2,14 @@
 // After connecting a real project you can regenerate with:
 //   npx supabase gen types typescript --project-id <id> > src/lib/database.types.ts
 
+// NOTE: phone/whatsapp are intentionally NOT on Profile. They are not selectable
+// from `profiles` (column-level RLS, migration 0020) and must be read via the
+// booking-scoped RPCs in `@/lib/contact` (getContact / hasContact).
 export type Profile = {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   neighborhood: string | null;
-  phone: string | null;
-  whatsapp: string | null;
   instagram: string | null;
   pronouns: string | null;
   preferred_contact: "phone" | "whatsapp" | "message" | null;

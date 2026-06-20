@@ -70,12 +70,10 @@ export async function postRide(
   if (!user) redirect("/");
 
   try {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("phone,whatsapp")
-      .eq("id", user.id)
-      .single<{ phone: string | null; whatsapp: string | null }>();
-    if (!profile?.phone?.trim() && !profile?.whatsapp?.trim()) {
+    const { data: contactReady } = await supabase.rpc("profile_has_contact", {
+      p_profile_id: user.id,
+    });
+    if (!contactReady) {
       throw new Error("Add a phone or WhatsApp number to your profile before posting a ride.");
     }
     const seats = parsePositiveInt(formData.get("seats_total"), 1, "Seats available");
@@ -326,13 +324,10 @@ export async function cancelRide(rideId: string, reason: string) {
   // when nobody is booked. Keep empty-ride cancellation compatible with them.
   const cancellationReason = trimmed || "Ride cancelled before anyone joined.";
   const contactIds = [...new Set([user.id, ...passengerIds])];
-  const { data: contacts } = contactIds.length
-    ? await supabase
-        .from("profiles")
-        .select("id,full_name,phone")
-        .in("id", contactIds)
-        .returns<CancellationContact[]>()
-    : { data: [] as CancellationContact[] };
+  const { data: contactsData } = contactIds.length
+    ? await supabase.rpc("contacts_for_booking", { p_user_ids: contactIds })
+    : { data: [] };
+  const contacts = (contactsData as CancellationContact[] | null) ?? [];
 
   const { data: cancelled, error } = await supabase.rpc("cancel_ride", {
     p_ride_id: rideId,
@@ -397,13 +392,10 @@ export async function cancelSeat(rideId: string, message: string, redirectTo?: s
       origin_label: string;
       destination_label: string;
     }>();
-  const { data: contacts } = ride
-    ? await supabase
-        .from("profiles")
-        .select("id,full_name,phone")
-        .in("id", [user.id, ride.driver_id])
-        .returns<CancellationContact[]>()
-    : { data: [] as CancellationContact[] };
+  const { data: contactsData } = ride
+    ? await supabase.rpc("contacts_for_booking", { p_user_ids: [user.id, ride.driver_id] })
+    : { data: [] };
+  const contacts = (contactsData as CancellationContact[] | null) ?? [];
 
   const { data: cancelled, error } = await supabase.rpc("cancel_seat", {
     p_ride_id: rideId,

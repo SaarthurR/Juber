@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { SubHeader } from "@/components/mobile/sub-header";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { ContactSheet } from "@/components/mobile/contact-sheet";
+import { getContact } from "@/lib/contact";
 import { MReserveButton } from "@/components/mobile/m-reserve";
 import { ShareButton } from "@/components/share-button";
 import { GoogleSignInButton } from "@/components/auth-button";
@@ -46,6 +47,10 @@ export default async function MobileTripPage({
   const passengerRows = (passengers as PassengerRow[]) ?? [];
   const isDriver = user?.id === ride.driver_id;
   const myJoin = passengerRows.find((p) => p.passenger_id === user?.id);
+  const driverContact =
+    user && !isDriver && myJoin?.status === "confirmed"
+      ? await getContact(supabase, ride.driver_id)
+      : { phone: null, whatsapp: null };
   const confirmed = passengerRows.filter((p) => p.status === "confirmed");
   const confirmedCount = Math.max(confirmed.length, ride.seats_total - ride.seats_available);
   const emptySlots = Math.max(0, ride.seats_total - confirmed.length);
@@ -152,8 +157,8 @@ export default async function MobileTripPage({
               driverId={ride.driver_id}
               driverFullName={ride.driver?.full_name ?? null}
               rideId={ride.id}
-              phone={ride.driver?.phone ?? null}
-              whatsapp={ride.driver?.whatsapp ?? null}
+              phone={driverContact.phone}
+              whatsapp={driverContact.whatsapp}
               preferredContact={ride.driver?.preferred_contact ?? null}
             />
           )}

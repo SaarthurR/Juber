@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
-import { Camera, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { getContact } from "@/lib/contact";
 import { updateProfileMobile } from "@/app/m/actions";
 import { SubHeader } from "@/components/mobile/sub-header";
-import { MAvatar } from "@/components/mobile/m-avatar";
+import { AvatarUploader } from "@/components/avatar-uploader";
 import { MSubmitButton } from "@/components/mobile/m-submit";
 import type { Place } from "@/lib/types";
 
@@ -35,6 +36,8 @@ export default async function MobileEditProfilePage({
   const neighborhoods = ((places as Place[]) ?? []).filter((p) => p.kind !== "event");
   const options = neighborhoods.length ? neighborhoods : ((places as Place[]) ?? []);
 
+  const contact = await getContact(supabase, user.id);
+
   const fullName = (profile?.full_name ?? "").trim();
   const parts = fullName ? fullName.split(/\s+/) : [];
   const lastInitial = parts.length > 1 ? parts[parts.length - 1][0] : "";
@@ -53,16 +56,13 @@ export default async function MobileEditProfilePage({
           </div>
         )}
         {/* Avatar uploader */}
-        <div className="flex flex-col items-center text-center">
-          <div className="relative">
-            <MAvatar src={profile?.avatar_url} name={profile?.full_name} seed={user.id} size={96} />
-            <span className="absolute -bottom-1 -right-1 flex h-[34px] w-[34px] items-center justify-center rounded-full border-[3px] border-cream bg-brand-600 text-white">
-              <Camera size={16} strokeWidth={2.2} />
-            </span>
-          </div>
-          <p className="mt-3 text-[13px] font-bold text-ink">Update photo</p>
-          <p className="text-[12px] text-muted-warm">JPG or PNG, up to 4MB</p>
-        </div>
+        <AvatarUploader
+          userId={user.id}
+          name={profile?.full_name ?? null}
+          initialUrl={profile?.avatar_url ?? null}
+          size={96}
+          tone="brand"
+        />
 
         {/* Personal information */}
         <section>
@@ -126,7 +126,7 @@ export default async function MobileEditProfilePage({
               <input
                 name="phone"
                 type="tel"
-                defaultValue={profile?.phone ?? ""}
+                defaultValue={contact.phone ?? ""}
                 placeholder="(555) 555-5555"
                 className={inputCls}
               />
@@ -136,7 +136,7 @@ export default async function MobileEditProfilePage({
               <input
                 name="whatsapp"
                 type="tel"
-                defaultValue={profile?.whatsapp ?? ""}
+                defaultValue={contact.whatsapp ?? ""}
                 placeholder="+1 555 555 5555"
                 className={inputCls}
               />

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Phone, MessageCircle, Pencil, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { getContact } from "@/lib/contact";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { ProfileTabs } from "@/components/mobile/profile-tabs";
 import { GoogleSignInButton } from "@/components/auth-button";
@@ -52,6 +53,7 @@ export default async function MobileProfilePage() {
     .map((r) => r.ride)
     .filter((r): r is RideWithDriver => Boolean(r));
 
+  const contact = await getContact(supabase, user.id);
   const preferred = profile?.preferred_contact ?? "message";
   const metaLine = [profile?.pronouns, profile?.neighborhood].filter(Boolean).join(" · ");
 
@@ -91,13 +93,13 @@ export default async function MobileProfilePage() {
           <ContactRow
             icon={<Phone size={16} className="text-brand-600" />}
             label="Phone"
-            value={profile?.phone ?? "Not provided"}
+            value={contact.phone ?? "Not provided"}
             preferred={preferred === "phone"}
           />
           <ContactRow
             icon={<WhatsAppIcon />}
             label="WhatsApp"
-            value={profile?.whatsapp ?? "Not provided"}
+            value={contact.whatsapp ?? "Not provided"}
             preferred={preferred === "whatsapp"}
           />
           <ContactRow

@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { initials } from "@/lib/utils";
 import { RideCard, RequestCard } from "@/components/ride-card";
 import { openConversation } from "@/app/messages/actions";
+import { getContact } from "@/lib/contact";
 import type { Profile, RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -141,6 +142,11 @@ export default async function PublicProfilePage({
     messagingRideId = userBooking?.ride?.id ?? profileBooking?.ride?.id ?? null;
   }
 
+  // Numbers come from the booking-scoped RPC, not the profile row.
+  const contact = canViewContact
+    ? await getContact(supabase, id)
+    : { phone: null, whatsapp: null };
+
   // Merge + deduplicate for "all" tab, then split live vs past
   let liveRides: RideWithDriver[] = [];
   let pastRides: RideWithDriver[] = [];
@@ -194,14 +200,14 @@ export default async function PublicProfilePage({
             icon={<Phone size={15} className="text-[#15803d]" />}
             tint="bg-[#dcfce7]"
             label="Phone"
-            value={canViewContact ? profile.phone ?? "Not provided" : CONTACT_LOCKED_MESSAGE}
+            value={canViewContact ? contact.phone ?? "Not provided" : CONTACT_LOCKED_MESSAGE}
             preferred={canViewContact && preferred === "phone"}
           />
           <ContactRow
             icon={<WhatsAppIcon />}
             tint="bg-[#dcfce7]"
             label="WhatsApp"
-            value={canViewContact ? profile.whatsapp ?? "Not provided" : CONTACT_LOCKED_MESSAGE}
+            value={canViewContact ? contact.whatsapp ?? "Not provided" : CONTACT_LOCKED_MESSAGE}
             preferred={canViewContact && preferred === "whatsapp"}
           />
           <ContactRow

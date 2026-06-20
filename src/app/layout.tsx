@@ -9,6 +9,8 @@ import { TempleLogo } from "@/components/temple-logo";
 import { ContactRequiredGate } from "@/components/contact-required-gate";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { getCurrentUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { hasContact } from "@/lib/contact";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -36,10 +38,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { user, profile } = await getCurrentUser();
-  const contactRequired = Boolean(
-    user && !profile?.phone?.trim() && !profile?.whatsapp?.trim(),
-  );
+  const { user } = await getCurrentUser();
+  let contactRequired = false;
+  if (user) {
+    const supabase = await createClient();
+    contactRequired = !(await hasContact(supabase, user.id));
+  }
 
   return (
     <html

@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { ShareButton } from "@/components/share-button";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { ContactModal } from "@/components/contact-modal";
+import { getContact } from "@/lib/contact";
 import {
   ReserveSeatButton,
   PassengerStatusButtons,
@@ -66,6 +67,13 @@ export default async function RideDetailPage({
     confirmed.length,
     ride.seats_total - ride.seats_available,
   );
+
+  // phone/whatsapp aren't on the profile join anymore (column-level RLS); read
+  // the driver's numbers through the booking-scoped RPC, only when entitled.
+  const driverContact =
+    user && !isDriver && myJoin?.status === "confirmed"
+      ? await getContact(supabase, ride.driver_id)
+      : { phone: null, whatsapp: null };
 
   const price = ride.gas_contribution
     ? `$${Number(ride.gas_contribution).toFixed(0)}`
@@ -200,8 +208,8 @@ export default async function RideDetailPage({
           {user && !isDriver && myJoin?.status === "confirmed" && (
             <ContactModal
               driverName={ride.driver?.full_name?.split(" ")[0] ?? "Driver"}
-              phone={ride.driver?.phone ?? null}
-              whatsapp={ride.driver?.whatsapp ?? null}
+              phone={driverContact.phone}
+              whatsapp={driverContact.whatsapp}
               preferredContact={ride.driver?.preferred_contact ?? null}
               rideId={ride.id}
               driverId={ride.driver_id}

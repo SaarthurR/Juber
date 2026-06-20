@@ -21,12 +21,10 @@ export async function GET(request: Request) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("phone,whatsapp")
-        .eq("id", user?.id ?? "")
-        .maybeSingle<{ phone: string | null; whatsapp: string | null }>();
-      if (!profile?.phone?.trim() && !profile?.whatsapp?.trim()) {
+      const { data: contactReady } = await supabase.rpc("profile_has_contact", {
+        p_profile_id: user?.id ?? "",
+      });
+      if (!contactReady) {
         const isMobile = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(
           request.headers.get("user-agent") ?? "",
         );
@@ -64,8 +62,9 @@ async function syncProfileFromProvider(
     .maybeSingle();
 
   const updates: { full_name?: string; avatar_url?: string } = {};
-  // Always keep the avatar matching the Google account picture.
-  if (avatarUrl && avatarUrl !== profile?.avatar_url) {
+  // Seed the avatar from Google only if the user hasn't set one — otherwise a
+  // custom uploaded avatar would be overwritten on every login.
+  if (avatarUrl && !profile?.avatar_url) {
     updates.avatar_url = avatarUrl;
   }
   // Backfill the name only if the user hasn't set their own.

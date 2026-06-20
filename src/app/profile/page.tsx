@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
-import { Camera } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { getContact } from "@/lib/contact";
 import { updateProfile } from "@/app/profile/actions";
 import { FormField, SubmitButton } from "@/components/form-bits";
-import { initials } from "@/lib/utils";
+import { AvatarUploader } from "@/components/avatar-uploader";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ export default async function EditProfilePage({
   const { user, profile } = await getCurrentUser();
   if (!user) redirect("/");
 
+  const supabase = await createClient();
+  const contact = await getContact(supabase, user.id);
   const preferredContact = profile?.preferred_contact ?? "message";
 
   const radioBase =
@@ -59,12 +62,12 @@ export default async function EditProfilePage({
         <div>
           <h2 className="mb-4 text-base font-extrabold text-ink">Contact</h2>
           <div className="space-y-4">
-            <FormField label="Phone" name="phone" type="tel" defaultValue={profile?.phone ?? ""} />
+            <FormField label="Phone" name="phone" type="tel" defaultValue={contact.phone ?? ""} />
             <FormField
               label="WhatsApp number"
               name="whatsapp"
               type="tel"
-              defaultValue={profile?.whatsapp ?? ""}
+              defaultValue={contact.whatsapp ?? ""}
               placeholder="e.g. +1 555 555 5555"
             />
             <p className="text-xs font-medium text-stone-500">At least one contact number is required.</p>
@@ -129,17 +132,13 @@ export default async function EditProfilePage({
       </form>
 
       {/* Avatar column */}
-      <div className="flex min-w-[200px] flex-1 flex-col items-center pt-2 text-center sm:pt-14">
-        <div className="relative mb-4">
-          <div className="flex h-[120px] w-[120px] items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[42px] font-extrabold text-white">
-            {initials(profile?.full_name)}
-          </div>
-          <span className="absolute bottom-1 right-1 flex h-[34px] w-[34px] items-center justify-center rounded-full border border-[#e2ddd5] bg-white text-stone-500">
-            <Camera size={16} />
-          </span>
-        </div>
-        <p className="text-sm font-bold text-stone-700">Update photo</p>
-        <p className="mt-0.5 text-[13px] text-[#a8a29e]">JPG or PNG, up to 4MB</p>
+      <div className="flex min-w-[200px] flex-1 flex-col items-center pt-2 sm:pt-14">
+        <AvatarUploader
+          userId={user.id}
+          name={profile?.full_name ?? null}
+          initialUrl={profile?.avatar_url ?? null}
+          size={120}
+        />
       </div>
     </div>
   );

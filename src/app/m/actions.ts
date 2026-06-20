@@ -90,14 +90,18 @@ export async function updateProfileMobile(formData: FormData) {
   const lastInitial = str(formData.get("last_initial")) ?? "";
   const fullName = [first, lastInitial].filter(Boolean).join(" ") || null;
 
+  // phone/whatsapp live in the booking-scoped profile_contacts table (0020).
+  const { error: contactError } = await supabase
+    .from("profile_contacts")
+    .upsert({ user_id: user.id, phone, whatsapp, updated_at: new Date().toISOString() });
+  if (contactError) throw new Error(contactError.message);
+
   const { error } = await supabase
     .from("profiles")
     .update({
       full_name: fullName,
       pronouns: str(formData.get("pronouns")),
       neighborhood: str(formData.get("neighborhood")),
-      phone,
-      whatsapp,
       preferred_contact: preferredContact,
       car_make_model: str(formData.get("car_make_model")),
     })

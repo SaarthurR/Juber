@@ -26,14 +26,19 @@ export async function updateProfile(formData: FormData) {
         ? "phone"
         : requestedContact;
 
+  // phone/whatsapp live in the booking-scoped profile_contacts table (0020).
+  // Upsert that first so the active-driver contact-retention guard can fire.
+  const { error: contactError } = await supabase
+    .from("profile_contacts")
+    .upsert({ user_id: user.id, phone, whatsapp, updated_at: new Date().toISOString() });
+  if (contactError) throw new Error(contactError.message);
+
   const { error } = await supabase
     .from("profiles")
     .update({
       full_name: str(formData.get("full_name")),
       pronouns: str(formData.get("pronouns")),
       neighborhood: str(formData.get("neighborhood")),
-      phone,
-      whatsapp,
       preferred_contact: preferredContact,
       car_make_model: str(formData.get("car_make_model")),
       car_color: str(formData.get("car_color")),
