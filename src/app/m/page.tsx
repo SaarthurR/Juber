@@ -85,13 +85,14 @@ export default async function MobileHomePage({
             <>
               <Link
                 href="/m/messages"
+                prefetch
                 aria-label="Your messages"
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-tint text-brand-700 transition active:scale-95"
               >
                 <MessageSquare size={18} strokeWidth={2.2} />
               </Link>
               <MNotificationBell notifications={notif.items} unreadCount={notif.unread} />
-              <Link href="/m/profile" aria-label="Your profile" className="active:scale-95">
+              <Link href="/m/profile" prefetch aria-label="Your profile" className="active:scale-95">
                 <MAvatar src={profile?.avatar_url} name={profile?.full_name} seed={user.id} size={40} />
               </Link>
             </>

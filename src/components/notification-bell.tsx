@@ -232,7 +232,7 @@ export function NotificationBell({
           });
         }}
         aria-label="Notifications"
-        className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-tint text-brand-600 transition hover:brightness-95 active:scale-95"
+        className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-tint text-brand-600 hover:brightness-95 active:scale-95"
       >
         <Bell size={19} strokeWidth={2} />
         {unread > 0 && (
@@ -294,6 +294,7 @@ export function NotificationBell({
                   <Link
                     key={n.id}
                     href={href}
+                    prefetch
                     onClick={() => {
                       setOpen(false);
                       void markOneRead(n.id);
@@ -311,6 +312,7 @@ export function NotificationBell({
 
           <Link
             href="/messages?tab=notifications"
+            prefetch
             onClick={() => setOpen(false)}
             className="block border-t border-[#f3ece1] px-[18px] py-3 text-center text-[13px] font-bold text-brand-600 transition hover:bg-[#fbf6ee]"
           >

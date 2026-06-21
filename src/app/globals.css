@@ -78,7 +78,11 @@ a, button, [role="button"], label, summary, input[type="submit"] {
 .is-pressed {
   opacity: 0.7;
   transform: scale(0.97);
-  transition: transform 0.05s ease, opacity 0.05s ease;
+  transition: none;
+}
+
+.mobile-shell :where(a, button, [role="button"], [role="tab"]) {
+  transition-duration: 0s !important;
 }
 
 /* Desktop interaction system. Scoped away from /m so the phone UI keeps its
@@ -88,12 +92,12 @@ a, button, [role="button"], label, summary, input[type="submit"] {
 }
 
 .desktop-shell :where(a, button) {
-  transition-duration: 240ms;
+  transition-duration: 0ms;
 }
 
 .desktop-shell :where(input, select, textarea) {
   transition-property: color, background-color, border-color, box-shadow, outline-color;
-  transition-duration: 220ms;
+  transition-duration: 0ms;
 }
 
 .desktop-shell :where(button, [role="button"]):not(:disabled):active,
@@ -109,7 +113,7 @@ a, button, [role="button"], label, summary, input[type="submit"] {
 }
 
 .desktop-page {
-  animation: desktop-page-in 420ms var(--ease-fluid) both;
+  animation: none;
 }
 
 .desktop-nav-progress {
@@ -134,22 +138,22 @@ a, button, [role="button"], label, summary, input[type="submit"] {
 
 .desktop-shell [data-motion="card"] {
   transition-property: transform, scale, box-shadow, border-color, background-color;
-  transition-duration: 380ms;
+  transition-duration: 0ms;
   transition-timing-function: var(--ease-fluid);
   will-change: transform;
 }
 
 .motion-overlay {
-  animation: motion-overlay-in 220ms ease-out both;
+  animation: none;
 }
 
 .motion-dialog {
-  animation: motion-dialog-in 360ms var(--ease-fluid) both;
+  animation: none;
   transform-origin: center bottom;
 }
 
 .motion-popover {
-  animation: motion-popover-in 280ms var(--ease-fluid) both;
+  animation: none;
   transform-origin: top right;
 }
 

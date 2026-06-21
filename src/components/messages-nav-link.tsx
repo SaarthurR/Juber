@@ -62,6 +62,7 @@ export function MessagesNavLink({
   return (
     <Link
       href="/messages"
+      prefetch
       aria-label="Messages"
       aria-current={active ? "page" : undefined}
       className={`relative ml-1 hidden h-[38px] w-[38px] items-center justify-center rounded-full transition-colors duration-200 hover:bg-tint hover:text-brand-700 sm:flex ${

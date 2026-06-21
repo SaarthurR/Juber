@@ -28,10 +28,11 @@ export function Segmented<T extends string>({
           <button
             key={opt.value}
             type="button"
+            data-auth-allowed="true"
             role="tab"
             aria-selected={active}
             onClick={() => onChange(opt.value)}
-            className={`flex-1 rounded-[10px] px-3 py-2.5 text-[13px] font-bold transition ${
+            className={`flex-1 rounded-[10px] px-3 py-2.5 text-[13px] font-bold ${
               active
                 ? "bg-white text-brand-600 shadow-[0_2px_6px_-2px_rgba(28,25,23,0.18)]"
                 : "text-[#8a7256]"

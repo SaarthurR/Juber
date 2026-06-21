@@ -74,7 +74,7 @@ export function MNotificationBell({
         type="button"
         aria-label="Notifications"
         onClick={open_}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-tint text-brand-700 transition active:scale-95"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-tint text-brand-700 active:scale-95"
       >
         <Bell size={18} strokeWidth={2.2} />
         {hasUnread && (
@@ -171,7 +171,7 @@ function NotifRow({
   if (href) {
     return (
       <li>
-        <Link href={href} onClick={onNavigate} className="block active:opacity-70">
+        <Link href={href} prefetch onClick={onNavigate} className="block active:opacity-70">
           {body}
         </Link>
       </li>

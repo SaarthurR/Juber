@@ -40,7 +40,7 @@ function VisibleBottomNav({ pathname }: { pathname: string }) {
       <div className="relative grid h-20 grid-cols-5 items-center">
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute left-0 top-2 h-14 w-1/5 px-1.5 transition-transform duration-300 ease-out motion-reduce:transition-none"
+          className="pointer-events-none absolute left-0 top-2 h-14 w-1/5 px-1.5"
           style={{ transform: `translateX(${activeColumn * 100}%)` }}
         >
           <span className="block h-full w-full rounded-2xl bg-tint ring-1 ring-brand-100" />
@@ -97,7 +97,7 @@ function TabItem({
       prefetch
       onClick={() => onSelect(href)}
       aria-current={active ? "page" : undefined}
-      className={`relative z-10 flex min-h-14 flex-col items-center justify-center gap-1 transition-colors duration-200 ${
+      className={`relative z-10 flex min-h-14 flex-col items-center justify-center gap-1 ${
         active ? "text-brand-600" : "text-muted-warm"
       }`}
     >

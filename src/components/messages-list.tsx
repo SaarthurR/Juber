@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCheck, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -31,7 +30,6 @@ export function MessagesList({
   const [threads, setThreads] = useState(initialThreads);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-  const router = useRouter();
   const refreshVersion = useRef(0);
   const initialKey = useMemo(
     () =>
@@ -251,8 +249,7 @@ export function MessagesList({
             >
               <Link
                 href={`${basePath}/${thread.id}`}
-                onMouseEnter={() => router.prefetch(`${basePath}/${thread.id}`)}
-                onFocus={() => router.prefetch(`${basePath}/${thread.id}`)}
+                prefetch
                 className="flex min-w-0 flex-1 items-center gap-3"
               >
                 <Avatar src={thread.other?.avatar_url} name={thread.other?.full_name} size={44} />

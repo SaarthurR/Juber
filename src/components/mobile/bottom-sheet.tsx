@@ -1,10 +1,6 @@
 "use client";
 
-// The enter/exit slide+fade is driven by toggling mount/visibility state in
-// response to the `open` prop — an intentional external-synchronization effect.
-/* eslint-disable react-hooks/set-state-in-effect */
-
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 
 /**
@@ -23,24 +19,9 @@ export function BottomSheet({
   children: React.ReactNode;
   labelledBy?: string;
 }) {
-  // Mount/unmount with a beat so the enter/exit transitions can play.
-  const [mounted, setMounted] = useState(open);
-  const [shown, setShown] = useState(false);
-
   // Lock background scroll while the sheet is open so iOS momentum doesn't
   // bleed through the scrim and leave the page scrolled when it closes.
   useScrollLock(open);
-
-  useEffect(() => {
-    if (open) {
-      setMounted(true);
-      const t = requestAnimationFrame(() => setShown(true));
-      return () => cancelAnimationFrame(t);
-    }
-    setShown(false);
-    const t = setTimeout(() => setMounted(false), 280);
-    return () => clearTimeout(t);
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -51,24 +32,20 @@ export function BottomSheet({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!mounted) return null;
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50">
       <div
         aria-hidden
         onClick={onClose}
-        className={`absolute inset-0 bg-[rgba(28,25,23,0.5)] transition-opacity duration-200 ${
-          shown ? "opacity-100" : "opacity-0"
-        }`}
+        className="absolute inset-0 bg-[rgba(28,25,23,0.5)]"
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        className={`absolute inset-x-0 bottom-0 mx-auto flex max-h-[78vh] w-full max-w-[440px] flex-col rounded-t-[26px] bg-white pb-[max(20px,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_-12px_rgba(28,25,23,0.4)] transition-transform duration-[280ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] ${
-          shown ? "translate-y-0" : "translate-y-full"
-        }`}
+        className="absolute inset-x-0 bottom-0 mx-auto flex max-h-[78vh] w-full max-w-[440px] flex-col rounded-t-[26px] bg-white pb-[max(20px,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_-12px_rgba(28,25,23,0.4)]"
       >
         <div className="flex justify-center pt-3">
           <span className="h-1.5 w-10 rounded-full bg-[#e7dcca]" />

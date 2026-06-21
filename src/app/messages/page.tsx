@@ -164,7 +164,8 @@ function TabLink({
   return (
     <Link
       href={href}
-      className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium transition ${
+      prefetch
+      className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium ${
         active ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
       }`}
     >
