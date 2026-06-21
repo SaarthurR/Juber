@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Car, MessageSquare, Calendar, User, Plus } from "lucide-react";
 
 const TABS = [
@@ -25,8 +26,14 @@ export function BottomNav() {
   const pathname = usePathname();
   if (!pathname || !TAB_ROOTS.has(pathname)) return null;
 
+  return <VisibleBottomNav key={pathname} pathname={pathname} />;
+}
+
+function VisibleBottomNav({ pathname }: { pathname: string }) {
+  const [selectedPath, setSelectedPath] = useState(pathname);
+
   const [left, right] = [TABS.slice(0, 2), TABS.slice(2)];
-  const activeColumn = TAB_COLUMNS[pathname as keyof typeof TAB_COLUMNS];
+  const activeColumn = TAB_COLUMNS[selectedPath as keyof typeof TAB_COLUMNS];
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-[440px] border-t border-border bg-white pb-[env(safe-area-inset-bottom)]">
@@ -39,7 +46,12 @@ export function BottomNav() {
           <span className="block h-full w-full rounded-2xl bg-tint ring-1 ring-brand-100" />
         </span>
         {left.map((t) => (
-          <TabItem key={t.href} {...t} active={pathname === t.href} />
+          <TabItem
+            key={t.href}
+            {...t}
+            active={selectedPath === t.href}
+            onSelect={setSelectedPath}
+          />
         ))}
 
         {/* Center Post action — raised FAB */}
@@ -54,7 +66,12 @@ export function BottomNav() {
         </div>
 
         {right.map((t) => (
-          <TabItem key={t.href} {...t} active={pathname === t.href} />
+          <TabItem
+            key={t.href}
+            {...t}
+            active={selectedPath === t.href}
+            onSelect={setSelectedPath}
+          />
         ))}
       </div>
     </nav>
@@ -66,15 +83,19 @@ function TabItem({
   label,
   icon: Icon,
   active,
+  onSelect,
 }: {
   href: string;
   label: string;
   icon: typeof Car;
   active: boolean;
+  onSelect: (href: string) => void;
 }) {
   return (
     <Link
       href={href}
+      prefetch
+      onClick={() => onSelect(href)}
       aria-current={active ? "page" : undefined}
       className={`relative z-10 flex min-h-14 flex-col items-center justify-center gap-1 transition-colors duration-200 ${
         active ? "text-brand-600" : "text-muted-warm"

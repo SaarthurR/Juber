@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeftRight, CalendarDays, Search, X } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, X } from "lucide-react";
 import { CityCombobox } from "@/components/city-combobox";
 import { Segmented } from "@/components/mobile/segmented";
 import { MRideCard, MRequestCard } from "@/components/mobile/mobile-cards";
@@ -24,6 +23,46 @@ export function HomeBoard({
   initialTripFilter: "one" | "round" | null;
 }) {
   const [tab, setTab] = useState<"carpools" | "requests">("carpools");
+  const [filters, setFilters] = useState({
+    from: initialFrom,
+    to: initialTo || "JCNC",
+    date: initialDate,
+    trip: initialTripFilter,
+  });
+  const fromQuery = filters.from.trim().toLocaleLowerCase();
+  const toQuery = filters.to.trim().toLocaleLowerCase();
+  const filteredRides = rides.filter((ride) => {
+    if (fromQuery && !ride.origin_label.toLocaleLowerCase().includes(fromQuery)) return false;
+    if (toQuery && toQuery !== "jcnc" && !ride.destination_label.toLocaleLowerCase().includes(toQuery)) {
+      return false;
+    }
+    if (filters.date && ride.depart_at.slice(0, 10) !== filters.date) return false;
+    if (filters.trip && ride.round_trip !== (filters.trip === "round")) return false;
+    return true;
+  });
+  const filteredRequests = requests.filter((request) => {
+    if (fromQuery && !request.origin_label.toLocaleLowerCase().includes(fromQuery)) return false;
+    if (toQuery && toQuery !== "jcnc" && !request.destination_label.toLocaleLowerCase().includes(toQuery)) {
+      return false;
+    }
+    if (!filters.date) return true;
+    const earliest = request.earliest_date ?? request.depart_at.slice(0, 10);
+    const latest = request.latest_date ?? request.depart_at.slice(0, 10);
+    return earliest <= filters.date && latest >= filters.date;
+  });
+
+  function updateFilters(next: Partial<typeof filters>) {
+    const updated = { ...filters, ...next };
+    setFilters(updated);
+
+    const params = new URLSearchParams();
+    if (updated.from.trim()) params.set("from", updated.from.trim());
+    if (updated.to.trim() && updated.to.trim() !== "JCNC") params.set("to", updated.to.trim());
+    if (updated.date) params.set("date", updated.date);
+    if (updated.trip) params.set("trip", updated.trip);
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `/m?${query}` : "/m");
+  }
 
   return (
     <div className="space-y-4">
@@ -38,31 +77,33 @@ export function HomeBoard({
       />
 
       <SearchCard
-        initialFrom={initialFrom}
-        initialTo={initialTo}
-        initialDate={initialDate}
-        initialTripFilter={initialTripFilter}
+        from={filters.from}
+        to={filters.to}
+        date={filters.date}
+        tripFilter={filters.trip}
+        onChange={updateFilters}
       />
 
-      {tab === "carpools" ? (
+      <div hidden={tab !== "carpools"}>
         <List
-          label={`${rides.length} ride${rides.length === 1 ? "" : "s"} this week`}
+          label={`${filteredRides.length} matching ride${filteredRides.length === 1 ? "" : "s"}`}
           empty="No carpools match yet. Be the first to offer one."
         >
-          {rides.map((ride) => (
+          {filteredRides.map((ride) => (
             <MRideCard key={ride.id} ride={ride} />
           ))}
         </List>
-      ) : (
+      </div>
+      <div hidden={tab !== "requests"}>
         <List
-          label={`${requests.length} open request${requests.length === 1 ? "" : "s"}`}
+          label={`${filteredRequests.length} matching request${filteredRequests.length === 1 ? "" : "s"}`}
           empty="No one is asking for a ride right now."
         >
-          {requests.map((request) => (
+          {filteredRequests.map((request) => (
             <MRequestCard key={request.id} request={request} />
           ))}
         </List>
-      )}
+      </div>
     </div>
   );
 }
@@ -95,37 +136,25 @@ function List({
 }
 
 function SearchCard({
-  initialFrom,
-  initialTo,
-  initialDate,
-  initialTripFilter,
+  from,
+  to,
+  date,
+  tripFilter,
+  onChange,
 }: {
-  initialFrom: string;
-  initialTo: string;
-  initialDate: string;
-  initialTripFilter: "one" | "round" | null;
+  from: string;
+  to: string;
+  date: string;
+  tripFilter: "one" | "round" | null;
+  onChange: (
+    next: Partial<{
+      from: string;
+      to: string;
+      date: string;
+      trip: "one" | "round" | null;
+    }>,
+  ) => void;
 }) {
-  const router = useRouter();
-  const [from, setFrom] = useState(initialFrom);
-  const [to, setTo] = useState(initialTo || "JCNC");
-  const [date, setDate] = useState(initialDate);
-  const [tripFilter, setTripFilter] = useState<"one" | "round" | null>(initialTripFilter);
-
-  function navigate(nextDate = date) {
-    const params = new URLSearchParams();
-    if (from.trim()) params.set("from", from.trim());
-    if (to.trim() && to.trim() !== "JCNC") params.set("to", to.trim());
-    if (nextDate) params.set("date", nextDate);
-    if (tripFilter) params.set("trip", tripFilter);
-    const query = params.toString();
-    router.push(query ? `/m?${query}` : "/m");
-  }
-
-  function clearDate() {
-    setDate("");
-    navigate("");
-  }
-
   return (
     <div className="rounded-[18px] border border-border bg-white p-4">
       <div className="space-y-2">
@@ -136,7 +165,7 @@ function SearchCard({
           <CityCombobox
             ariaLabel="From city or neighborhood"
             value={from}
-            onValueChange={setFrom}
+            onValueChange={(value) => onChange({ from: value })}
             placeholder="City or neighborhood"
             inputClassName={mobileFieldClassName}
           />
@@ -146,8 +175,7 @@ function SearchCard({
           data-auth-allowed="true"
           aria-label="Swap from and to"
           onClick={() => {
-            setFrom(to);
-            setTo(from);
+            onChange({ from: to, to: from });
           }}
           className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-tint text-brand-600 transition active:scale-95"
         >
@@ -160,7 +188,7 @@ function SearchCard({
           <CityCombobox
             ariaLabel="To city or neighborhood"
             value={to}
-            onValueChange={setTo}
+            onValueChange={(value) => onChange({ to: value })}
             placeholder="City or neighborhood"
             inputClassName={mobileFieldClassName}
           />
@@ -182,14 +210,14 @@ function SearchCard({
             type="date"
             aria-label="Ride date"
             value={date}
-            onChange={(event) => setDate(event.target.value)}
+            onChange={(event) => onChange({ date: event.target.value })}
             className={`${mobileFieldClassName} pr-12 [color-scheme:light] [&::-webkit-calendar-picker-indicator]:opacity-0`}
           />
           {date && (
             <button
               type="button"
               data-auth-allowed="true"
-              onClick={clearDate}
+              onClick={() => onChange({ date: "" })}
               aria-label="Clear date and show rides on all dates"
               className="absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-brand-500 transition active:bg-tint active:scale-95"
             >
@@ -199,32 +227,22 @@ function SearchCard({
         </div>
       </div>
 
-      <button
-        type="button"
-        data-auth-allowed="true"
-        onClick={() => navigate()}
-        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 text-[14px] font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
-      >
-        <Search size={16} strokeWidth={2.5} />
-        Search rides
-      </button>
-
       <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border-soft pt-4">
         <TripToggle
           label="One way only"
           active={tripFilter === "one"}
-          onClick={() => setTripFilter((value) => (value === "one" ? null : "one"))}
+          onClick={() => onChange({ trip: tripFilter === "one" ? null : "one" })}
         />
         <TripToggle
           label="Round trips only"
           active={tripFilter === "round"}
-          onClick={() => setTripFilter((value) => (value === "round" ? null : "round"))}
+          onClick={() => onChange({ trip: tripFilter === "round" ? null : "round" })}
         />
         {tripFilter && (
           <button
             type="button"
             data-auth-allowed="true"
-            onClick={() => setTripFilter(null)}
+            onClick={() => onChange({ trip: null })}
             aria-label="Clear trip type"
             className="col-span-2 flex h-9 items-center justify-center gap-1.5 rounded-xl text-[12px] font-bold text-muted-warm transition active:bg-tint active:scale-[0.98]"
           >
@@ -256,7 +274,7 @@ function TripToggle({
       data-auth-allowed="true"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-[13px] px-3 py-2.5 text-[12px] font-bold transition active:scale-[0.98] ${
+      className={`rounded-[13px] px-3 py-2.5 text-[12px] font-bold active:scale-[0.98] ${
         active ? "bg-brand-600 text-white" : "bg-tint text-brand-700"
       }`}
     >

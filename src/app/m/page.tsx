@@ -39,34 +39,19 @@ export default async function MobileHomePage({
   const { user, profile } = await getCurrentUser();
   const supabase = await createClient();
 
-  let dayRange: { gte: string; lt: string } | null = null;
-  if (date) {
-    const start = new Date(`${date}T00:00:00`);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
-    dayRange = { gte: start.toISOString(), lt: end.toISOString() };
-  }
-
   const ridesQuery = user
-    ? (() => {
-        let q = supabase
-          .from("rides")
-          .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
-          .eq("status", "active")
-          .order("depart_at", { ascending: true });
-        if (from) q = q.ilike("origin_label", `%${from}%`);
-        if (to) q = q.ilike("destination_label", `%${to}%`);
-        if (tripFilter) q = q.eq("round_trip", tripFilter === "round");
-        if (dayRange) q = q.gte("depart_at", dayRange.gte).lt("depart_at", dayRange.lt);
-        else q = q.gte("depart_at", nowIso);
-        return q;
-      })()
+    ? supabase
+        .from("rides")
+        .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+        .eq("status", "active")
+        .gte("depart_at", nowIso)
+        .order("depart_at", { ascending: true })
     : supabase.rpc("public_upcoming_rides", {
-        p_from: from || null,
-        p_to: to || null,
-        p_date: date || null,
+        p_from: null,
+        p_to: null,
+        p_date: null,
         p_limit: 100,
-        p_round_trip: tripFilter === null ? null : tripFilter === "round",
+        p_round_trip: null,
       });
 
   let requestsQuery = supabase
@@ -74,10 +59,7 @@ export default async function MobileHomePage({
     .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
     .eq("status", "active")
     .order("depart_at", { ascending: true });
-  if (from) requestsQuery = requestsQuery.ilike("origin_label", `%${from}%`);
-  if (to) requestsQuery = requestsQuery.ilike("destination_label", `%${to}%`);
-  if (date) requestsQuery = requestsQuery.lte("earliest_date", date).gte("latest_date", date);
-  else requestsQuery = requestsQuery.gte("latest_date", today);
+  requestsQuery = requestsQuery.gte("latest_date", today);
 
   const [{ data: ridesData }, { data: requestsData }, notif] = await Promise.all([
     ridesQuery,
