@@ -72,15 +72,6 @@ a, button, [role="button"], label, summary, input[type="submit"] {
   touch-action: manipulation;
 }
 
-/* Instant pressed state driven by <TapFeedback>. Fires the moment a finger
-   lands — independent of iOS Safari's unreliable `:active` timing. Opacity +
-   scale read clearly without fighting any element's own active styles. */
-.is-pressed {
-  opacity: 0.7;
-  transform: scale(0.97);
-  transition: none;
-}
-
 .mobile-shell :where(a, button, [role="button"], [role="tab"]) {
   transition-duration: 0s !important;
 }

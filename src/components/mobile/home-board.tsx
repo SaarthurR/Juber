@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { ArrowLeftRight, CalendarDays, X } from "lucide-react";
 import { CityCombobox } from "@/components/city-combobox";
 import { Segmented } from "@/components/mobile/segmented";
@@ -29,15 +29,16 @@ export function HomeBoard({
     date: initialDate,
     trip: initialTripFilter,
   });
-  const fromQuery = filters.from.trim().toLocaleLowerCase();
-  const toQuery = filters.to.trim().toLocaleLowerCase();
+  const deferredFilters = useDeferredValue(filters);
+  const fromQuery = deferredFilters.from.trim().toLocaleLowerCase();
+  const toQuery = deferredFilters.to.trim().toLocaleLowerCase();
   const filteredRides = rides.filter((ride) => {
     if (fromQuery && !ride.origin_label.toLocaleLowerCase().includes(fromQuery)) return false;
     if (toQuery && toQuery !== "jcnc" && !ride.destination_label.toLocaleLowerCase().includes(toQuery)) {
       return false;
     }
-    if (filters.date && ride.depart_at.slice(0, 10) !== filters.date) return false;
-    if (filters.trip && ride.round_trip !== (filters.trip === "round")) return false;
+    if (deferredFilters.date && ride.depart_at.slice(0, 10) !== deferredFilters.date) return false;
+    if (deferredFilters.trip && ride.round_trip !== (deferredFilters.trip === "round")) return false;
     return true;
   });
   const filteredRequests = requests.filter((request) => {
@@ -45,23 +46,14 @@ export function HomeBoard({
     if (toQuery && toQuery !== "jcnc" && !request.destination_label.toLocaleLowerCase().includes(toQuery)) {
       return false;
     }
-    if (!filters.date) return true;
+    if (!deferredFilters.date) return true;
     const earliest = request.earliest_date ?? request.depart_at.slice(0, 10);
     const latest = request.latest_date ?? request.depart_at.slice(0, 10);
-    return earliest <= filters.date && latest >= filters.date;
+    return earliest <= deferredFilters.date && latest >= deferredFilters.date;
   });
 
   function updateFilters(next: Partial<typeof filters>) {
-    const updated = { ...filters, ...next };
-    setFilters(updated);
-
-    const params = new URLSearchParams();
-    if (updated.from.trim()) params.set("from", updated.from.trim());
-    if (updated.to.trim() && updated.to.trim() !== "JCNC") params.set("to", updated.to.trim());
-    if (updated.date) params.set("date", updated.date);
-    if (updated.trip) params.set("trip", updated.trip);
-    const query = params.toString();
-    window.history.replaceState(null, "", query ? `/m?${query}` : "/m");
+    setFilters((current) => ({ ...current, ...next }));
   }
 
   return (
