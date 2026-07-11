@@ -8,6 +8,7 @@ import { formatDistanceToNow, format } from "date-fns";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { markNotificationsRead } from "@/app/messages/actions";
+import { mobileNotificationDestination } from "@/lib/route-targets";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
 
 const ICON: Record<NotificationType, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -136,13 +137,7 @@ function NotifRow({
     : n.request
       ? format(new Date(n.request.depart_at), "EEE, MMM d")
       : null;
-  const href = n.ride_id
-    ? `/m/rides/${n.ride_id}`
-    : n.request_id
-      ? `/m/requests/${n.request_id}`
-      : n.conversation_id
-        ? `/m/messages/${n.conversation_id}`
-        : null;
+  const href = mobileNotificationDestination(n);
 
   const body = (
     <div className="flex gap-3 py-3.5">

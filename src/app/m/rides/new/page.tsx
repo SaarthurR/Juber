@@ -46,6 +46,7 @@ export default async function MobileNewRidePage({
           places={(places as Place[]) ?? []}
           defaultEventId={eventId ?? ""}
           minDepartAt={minDepartAt}
+          base="/m"
         />
       </div>
     </div>

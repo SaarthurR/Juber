@@ -72,6 +72,8 @@ export async function postRequestMobile(
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Unable to post this request." };
   }
+  revalidatePath("/rides");
+  revalidatePath("/m");
   revalidatePath("/m/requests");
   redirect("/m/requests");
 }
@@ -115,6 +117,7 @@ export async function updateProfileMobile(formData: FormData) {
     .eq("id", user.id);
 
   if (error) throw new Error(error.message);
+  revalidatePath("/profile");
   revalidatePath("/m/profile");
   redirect("/m/profile");
 }

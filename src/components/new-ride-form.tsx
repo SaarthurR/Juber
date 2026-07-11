@@ -14,11 +14,13 @@ export function NewRideForm({
   places,
   defaultEventId,
   minDepartAt,
+  base = "/rides",
 }: {
   events: EventRow[];
   places: Place[];
   defaultEventId?: string;
   minDepartAt: string;
+  base?: "/rides" | "/m";
 }) {
   const [direction, setDirection] = useState<Direction | null>(null);
   const [routePlace, setRoutePlace] = useState("");
@@ -108,6 +110,7 @@ export function NewRideForm({
       onSubmit={handleSubmit}
       onInvalid={handleInvalid}
     >
+      <input type="hidden" name="base" value={base} />
       <div className="h-2 overflow-hidden rounded-full bg-[#efe9e1]">
         <div
           className="h-full rounded-full bg-brand-600 transition-all duration-300"

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { AUTH_CALLBACK_TARGETS, pickAllowed } from "@/lib/route-targets";
+import { authCallbackDestination } from "@/lib/route-targets";
 
 // Handles the OAuth redirect from Supabase, exchanging the code for a session.
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = pickAllowed(searchParams.get("next"), AUTH_CALLBACK_TARGETS, "/rides");
+  const next = authCallbackDestination(searchParams.get("next"), "/rides");
 
   if (code) {
     const supabase = await createClient();

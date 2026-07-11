@@ -141,7 +141,7 @@ export default async function MobileTripPage({
 
         {ride.event && (
           <Link
-            href={`/events/${ride.event.slug}`}
+            href={`/m/events/${ride.event.slug}`}
             className="inline-block rounded-full bg-brand-50 px-3 py-1 text-[11px] font-bold text-brand-700"
           >
             {ride.event.name}
@@ -150,7 +150,7 @@ export default async function MobileTripPage({
 
         {/* Driver row */}
         <div className="flex items-center justify-between gap-3">
-          <Link href={`/profile/${ride.driver_id}`} className="flex min-w-0 items-center gap-3 active:opacity-80">
+          <Link href={`/m/profile/${ride.driver_id}`} className="flex min-w-0 items-center gap-3 active:opacity-80">
             <MAvatar src={ride.driver?.avatar_url} name={ride.driver?.full_name} seed={ride.driver_id} size={48} />
             <div className="min-w-0">
               <p className="truncate text-[15px] font-bold text-ink">{ride.driver?.full_name ?? "Driver"}</p>
@@ -189,7 +189,7 @@ export default async function MobileTripPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {confirmed.map((p) => (
-              <Link key={p.id} href={`/profile/${p.passenger_id}`} className="active:scale-95">
+              <Link key={p.id} href={`/m/profile/${p.passenger_id}`} className="active:scale-95">
                 <MAvatar src={p.passenger?.avatar_url} name={p.passenger?.full_name} seed={p.passenger_id} size={46} />
               </Link>
             ))}
@@ -220,7 +220,7 @@ export default async function MobileTripPage({
                   .filter((p) => p.status === "pending")
                   .map((p) => (
                     <li key={p.id} className="flex items-center justify-between gap-2">
-                      <Link href={`/profile/${p.passenger_id}`} className="flex min-w-0 items-center gap-2.5">
+                      <Link href={`/m/profile/${p.passenger_id}`} className="flex min-w-0 items-center gap-2.5">
                         <MAvatar src={p.passenger?.avatar_url} name={p.passenger?.full_name} seed={p.passenger_id} size={34} />
                         <span className="truncate text-[13px] font-semibold text-ink">
                           {p.passenger?.full_name ?? "Member"}
@@ -260,6 +260,7 @@ export default async function MobileTripPage({
       <div className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[440px] border-t border-border-soft bg-cream px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3">
         {!user ? (
           <GoogleSignInButton
+            next={`/m/rides/${ride.id}`}
             className="flex h-[54px] w-full items-center justify-center rounded-[14px] bg-brand-600 text-[15px] font-bold text-white"
           />
         ) : isDriver ? (

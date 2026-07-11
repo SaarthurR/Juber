@@ -57,7 +57,7 @@ function VisibleBottomNav({ pathname }: { pathname: string }) {
         {/* Center Post action — raised FAB */}
         <div className="flex justify-center">
           <Link
-            href="/rides/new"
+            href="/m/rides/new"
             aria-label="Post a ride"
             className="-mt-[22px] flex h-[58px] w-[58px] items-center justify-center rounded-[19px] bg-brand-600 text-white shadow-[0_14px_24px_-12px_rgba(166,83,41,0.7)] transition active:scale-95"
           >

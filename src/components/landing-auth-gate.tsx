@@ -1,12 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { X } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth-button";
+import { authCallbackDestination } from "@/lib/route-targets";
 import { useScrollLock } from "@/lib/use-scroll-lock";
 
 export function LandingAuthGate({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const [nextPath, setNextPath] = useState(() => authCallbackDestination(pathname, "/rides"));
   useScrollLock(open);
 
   function onClickCapture(event: React.MouseEvent<HTMLDivElement>) {
@@ -16,6 +20,10 @@ export function LandingAuthGate({ children }: { children: React.ReactNode }) {
     const action = target.closest("a,button");
     if (!action) return;
 
+    const href = action instanceof HTMLAnchorElement
+      ? action.getAttribute("href")
+      : null;
+    setNextPath(authCallbackDestination(href ?? pathname, authCallbackDestination(pathname, "/rides")));
     event.preventDefault();
     event.stopPropagation();
     setOpen(true);
@@ -55,6 +63,7 @@ export function LandingAuthGate({ children }: { children: React.ReactNode }) {
               details, posting, requests, and messages.
             </p>
             <GoogleSignInButton
+              next={nextPath}
               googleBranding
               className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             />

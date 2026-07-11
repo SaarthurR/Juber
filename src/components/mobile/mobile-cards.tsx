@@ -32,6 +32,7 @@ export function MRideCard({ ride }: { ride: RideWithDriver }) {
   return (
     <Link
       href={`/m/rides/${ride.id}`}
+      data-auth-allowed="true"
       className="block overflow-hidden rounded-2xl border border-border border-l-4 border-l-gold bg-white p-[15px] shadow-[0_14px_30px_-26px_rgba(28,25,23,0.4)] transition active:scale-[0.99]"
     >
       <div className="flex items-start justify-between gap-3">
@@ -92,6 +93,7 @@ export function MProfileRideCard({
   return (
     <Link
       href={`/m/rides/${ride.id}`}
+      data-auth-allowed="true"
       className={`block overflow-hidden rounded-2xl border border-border border-l-4 border-l-gold p-[15px] transition active:scale-[0.99] ${
         past ? "bg-[#FBF6EE] opacity-[0.85]" : "bg-white shadow-[0_14px_30px_-26px_rgba(28,25,23,0.4)]"
       }`}

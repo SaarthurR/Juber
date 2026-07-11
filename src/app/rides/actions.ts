@@ -96,6 +96,7 @@ export async function postRide(
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
+  const base = pickAllowed(formData.get("base")?.toString(), RIDE_LIST_TARGETS, "/rides");
 
   try {
     const { data: contactReady } = await supabase.rpc("profile_has_contact", {
@@ -162,7 +163,8 @@ export async function postRide(
   }
 
   revalidatePath("/rides");
-  redirect("/rides");
+  revalidatePath("/m");
+  redirect(base);
 }
 
 export async function postRequest(
@@ -208,6 +210,7 @@ export async function postRequest(
     return { error: error instanceof Error ? error.message : "Unable to post this request." };
   }
   revalidatePath("/rides");
+  revalidatePath("/m");
   redirect("/rides?tab=requests");
 }
 
