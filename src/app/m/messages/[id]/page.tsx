@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { MessageThread } from "@/components/message-thread";
 import type { Message, Profile } from "@/lib/types";
+import { newestThreadMessages } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -35,15 +36,17 @@ export default async function MobileThreadPage({
     .from("messages")
     .select("*")
     .eq("conversation_id", id)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   return (
     <MessageThread
       conversationId={id}
       currentUserId={user.id}
       other={other}
-      initialMessages={(messages as Message[]) ?? []}
+      initialMessages={newestThreadMessages((messages as Message[]) ?? [])}
       backHref="/m/messages"
+      profileBase="/m/profile"
     />
   );
 }

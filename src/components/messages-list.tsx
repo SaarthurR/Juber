@@ -9,13 +9,7 @@ import { deleteConversation } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Message, Profile } from "@/lib/types";
-
-export type ThreadSummary = {
-  id: string;
-  other: Profile | null;
-  last: Message | null;
-  unread: number;
-};
+import type { ConversationMembership, ThreadSummary } from "@/lib/messages";
 
 export function MessagesList({
   userId,
@@ -44,6 +38,7 @@ export function MessagesList({
             t.last?.created_at ?? "",
             t.last?.read_at ?? "",
             t.unread,
+            t.hiddenAt ?? "",
           ].join(":"),
         )
         .join("|"),
@@ -61,40 +56,30 @@ export function MessagesList({
     const supabase = createClient();
     const { data: mine } = await supabase
       .from("conversation_participants")
-      .select("conversation_id")
+      .select("conversation_id, hidden_at")
       .eq("user_id", userId);
-    const convoIds = (mine ?? []).map((row) => row.conversation_id);
+    const memberships = ((mine as ConversationMembership[] | null) ?? []);
+    const convoIds = memberships.map((row) => row.conversation_id);
     if (!convoIds.length) {
       if (version !== refreshVersion.current) return;
       setThreads([]);
       return;
     }
 
-    const [{ data: others }, { data: messages }] = await Promise.all([
-      supabase
-        .from("conversation_participants")
-        .select("conversation_id, user:profiles!conversation_participants_user_id_fkey(*)")
-        .in("conversation_id", convoIds)
-        .neq("user_id", userId),
-      supabase
-        .from("messages")
-        .select("*")
-        .in("conversation_id", convoIds)
-        .order("created_at", { ascending: false }),
-    ]);
+    const { data: others } = await supabase
+      .from("conversation_participants")
+      .select("conversation_id, user:profiles!conversation_participants_user_id_fkey(*)")
+      .in("conversation_id", convoIds)
+      .neq("user_id", userId);
 
-    const messageRows = (messages as Message[] | null) ?? [];
-    const next = convoIds.map((id) => {
+    const summaries = await Promise.all(memberships.map(async (membership) => {
       const other =
-        (others?.find((o) => o.conversation_id === id)?.user as unknown as Profile) ?? null;
-      const inThread = messageRows.filter((m) => m.conversation_id === id);
-      return {
-        id,
-        other,
-        last: inThread[0] ?? null,
-        unread: inThread.filter((m) => m.sender_id !== userId && !m.read_at).length,
-      };
-    });
+        (others?.find((o) => o.conversation_id === membership.conversation_id)
+          ?.user as unknown as Profile) ?? null;
+      const summary = await fetchThreadSummary(membership, other, userId);
+      return summary;
+    }));
+    const next = summaries.filter((summary): summary is ThreadSummary => summary !== null);
 
     next.sort((a, b) => (b.last?.created_at ?? "").localeCompare(a.last?.created_at ?? ""));
     if (version !== refreshVersion.current) return;
@@ -104,32 +89,29 @@ export function MessagesList({
   const refreshThread = useCallback(async (conversationId: string) => {
     const version = ++refreshVersion.current;
     const supabase = createClient();
-    const [{ data: otherRows }, { data: messageRows }] = await Promise.all([
+    const [{ data: mine }, { data: otherRows }] = await Promise.all([
+      supabase
+        .from("conversation_participants")
+        .select("conversation_id, hidden_at")
+        .eq("conversation_id", conversationId)
+        .eq("user_id", userId)
+        .maybeSingle<ConversationMembership>(),
       supabase
         .from("conversation_participants")
         .select("conversation_id, user:profiles!conversation_participants_user_id_fkey(*)")
         .eq("conversation_id", conversationId)
         .neq("user_id", userId),
-      supabase
-        .from("messages")
-        .select("*")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: false }),
     ]);
 
-    const messages = (messageRows as Message[] | null) ?? [];
-    const nextThread: ThreadSummary = {
-      id: conversationId,
-      other:
-        (otherRows?.find((row) => row.conversation_id === conversationId)
-          ?.user as unknown as Profile) ?? null,
-      last: messages[0] ?? null,
-      unread: messages.filter((m) => m.sender_id !== userId && !m.read_at).length,
-    };
+    const other =
+      (otherRows?.find((row) => row.conversation_id === conversationId)
+        ?.user as unknown as Profile) ?? null;
+    const nextThread = mine ? await fetchThreadSummary(mine, other, userId) : null;
 
     if (version !== refreshVersion.current) return;
     setThreads((prev) => {
       const without = prev.filter((thread) => thread.id !== conversationId);
+      if (!nextThread) return without;
       const next = [nextThread, ...without];
       next.sort((a, b) => (b.last?.created_at ?? "").localeCompare(a.last?.created_at ?? ""));
       return next;
@@ -154,6 +136,8 @@ export function MessagesList({
 
             const next = [...prev];
             const existing = next[index];
+            if (existing.last?.id === msg.id) return prev;
+            if (existing.hiddenAt !== null && msg.created_at <= existing.hiddenAt) return prev;
             next[index] = {
               ...existing,
               last:
@@ -170,7 +154,6 @@ export function MessagesList({
             );
             return next;
           });
-          void refreshThread(msg.conversation_id);
         },
       )
       .on(
@@ -196,6 +179,11 @@ export function MessagesList({
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "conversation_participants" },
+        () => void refreshThreads(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "conversation_participants" },
         () => void refreshThreads(),
       )
       .on(
@@ -296,4 +284,47 @@ export function MessagesList({
       })}
     </ul>
   );
+}
+
+async function fetchThreadSummary(
+  membership: ConversationMembership,
+  other: Profile | null,
+  userId: string,
+): Promise<ThreadSummary | null> {
+  const supabase = createClient();
+  let latestQuery = supabase
+    .from("messages")
+    .select("*")
+    .eq("conversation_id", membership.conversation_id)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  let unreadQuery = supabase
+    .from("messages")
+    .select("id", { count: "exact", head: true })
+    .eq("conversation_id", membership.conversation_id)
+    .neq("sender_id", userId)
+    .is("read_at", null);
+
+  if (membership.hidden_at !== null) {
+    latestQuery = latestQuery.gt("created_at", membership.hidden_at);
+    unreadQuery = unreadQuery.gt("created_at", membership.hidden_at);
+  }
+
+  const [{ data: latest, error: latestError }, { count, error: unreadError }] = await Promise.all([
+    latestQuery,
+    unreadQuery,
+  ]);
+  if (latestError) console.error("messages latest failed", latestError.message);
+  if (unreadError) console.error("messages unread count failed", unreadError.message);
+
+  const last = ((latest as Message[] | null) ?? [])[0] ?? null;
+  if (membership.hidden_at !== null && !last) return null;
+
+  return {
+    id: membership.conversation_id,
+    other,
+    last,
+    unread: count ?? 0,
+    hiddenAt: membership.hidden_at,
+  };
 }

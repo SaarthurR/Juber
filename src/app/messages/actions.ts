@@ -84,11 +84,12 @@ export async function markNotificationsRead() {
   const user = await getAuthUser(supabase);
   if (!user) return;
 
-  await supabase
+  const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .eq("recipient_id", user.id)
     .is("read_at", null);
+  if (error) throw new Error(error.message);
 
   revalidatePath("/messages");
 }

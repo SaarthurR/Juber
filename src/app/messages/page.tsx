@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { NotificationCard } from "@/components/notification-card";
-import { MessagesList, type ThreadSummary } from "@/components/messages-list";
+import { MessagesList } from "@/components/messages-list";
 import type { Message, Profile, NotificationWithContext } from "@/lib/types";
+import type { ConversationMembership, ThreadSummary } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -56,16 +57,12 @@ async function MessagesTab({ userId }: { userId: string }) {
 
   const { data: mine } = await supabase
     .from("conversation_participants")
-    .select("conversation_id")
+    .select("conversation_id, hidden_at")
     .eq("user_id", userId);
-  const convoIds = (mine ?? []).map((r) => r.conversation_id);
+  const memberships = ((mine as ConversationMembership[] | null) ?? []);
+  const convoIds = memberships.map((r) => r.conversation_id);
 
-  let threads: {
-    id: string;
-    other: Profile | null;
-    last: Message | null;
-    unread: number;
-  }[] = [];
+  let threads: ThreadSummary[] = [];
 
   if (convoIds.length) {
     const { data: others } = await supabase
@@ -74,29 +71,50 @@ async function MessagesTab({ userId }: { userId: string }) {
       .in("conversation_id", convoIds)
       .neq("user_id", userId);
 
-    const { data: messages } = await supabase
-      .from("messages")
-      .select("*")
-      .in("conversation_id", convoIds)
-      .order("created_at", { ascending: false });
-
-    threads = convoIds.map((id) => {
+    const summaries = await Promise.all(memberships.map(async (membership): Promise<ThreadSummary | null> => {
       const other =
-        (others?.find((o) => o.conversation_id === id)?.user as unknown as Profile) ?? null;
-      const inThread = ((messages as Message[] | null) ?? []).filter(
-        (m) => m.conversation_id === id,
-      );
-      const last = inThread[0] ?? null;
-      const unread = inThread.filter((m) => m.sender_id !== userId && !m.read_at).length;
-      return { id, other, last, unread };
-    });
+        ((others?.find((o) => o.conversation_id === membership.conversation_id)?.user ?? null) as
+          | Profile
+          | null);
+      let latestQuery = supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", membership.conversation_id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      let unreadQuery = supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .eq("conversation_id", membership.conversation_id)
+        .neq("sender_id", userId)
+        .is("read_at", null);
+      if (membership.hidden_at !== null) {
+        latestQuery = latestQuery.gt("created_at", membership.hidden_at);
+        unreadQuery = unreadQuery.gt("created_at", membership.hidden_at);
+      }
+      const [{ data: latest, error: latestError }, { count, error: unreadError }] =
+        await Promise.all([latestQuery, unreadQuery]);
+      if (latestError) console.error("messages latest failed", latestError.message);
+      if (unreadError) console.error("messages unread count failed", unreadError.message);
+      const last = ((latest as Message[] | null) ?? [])[0] ?? null;
+      if (membership.hidden_at !== null && !last) return null;
+      return {
+        id: membership.conversation_id,
+        other,
+        last,
+        unread: count ?? 0,
+        hiddenAt: membership.hidden_at,
+      } satisfies ThreadSummary;
+    }));
+
+    threads = summaries.filter((summary): summary is ThreadSummary => summary !== null);
 
     threads.sort((a, b) =>
       (b.last?.created_at ?? "").localeCompare(a.last?.created_at ?? ""),
     );
   }
 
-  return <MessagesList userId={userId} initialThreads={threads as ThreadSummary[]} />;
+  return <MessagesList userId={userId} initialThreads={threads} />;
 }
 
 async function NotificationsTab({ userId }: { userId: string; hasUnread: boolean }) {

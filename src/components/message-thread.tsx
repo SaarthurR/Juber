@@ -8,7 +8,10 @@ import { createClient } from "@/lib/supabase/client";
 import { markConversationRead } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { newestThreadMessages } from "@/lib/messages";
 import type { Message, Profile } from "@/lib/types";
+
+type ProfileBase = "/profile" | "/m/profile";
 
 export function MessageThread({
   conversationId,
@@ -16,6 +19,7 @@ export function MessageThread({
   other,
   initialMessages,
   backHref = "/messages",
+  profileBase = "/profile",
 }: {
   conversationId: string;
   currentUserId: string;
@@ -23,10 +27,12 @@ export function MessageThread({
   initialMessages: Message[];
   /** Where the back arrow returns to — "/m/messages" on the mobile shell. */
   backHref?: string;
+  profileBase?: ProfileBase;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const scrollRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const messagesRef = useRef(messages);
 
   // Subscribe to new messages in this conversation via Supabase Realtime.
   useEffect(() => {
@@ -51,11 +57,11 @@ export function MessageThread({
                 m.sender_id === msg.sender_id &&
                 m.body === msg.body,
             );
-            if (pendingIndex === -1) return [...prev, msg];
+            if (pendingIndex === -1) return newestThreadMessages([...prev, msg]);
 
             const next = [...prev];
             next[pendingIndex] = msg;
-            return next;
+            return newestThreadMessages(next);
           });
         },
       )
@@ -83,15 +89,34 @@ export function MessageThread({
   // guard with a ref to avoid overlapping calls, and don't let a failed update
   // throw an unhandled rejection.
   const markingReadRef = useRef(false);
+  const rerunMarkReadRef = useRef(false);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   useEffect(() => {
     const hasUnread = messages.some((m) => m.sender_id !== currentUserId && !m.read_at);
-    if (!hasUnread || markingReadRef.current) return;
-    markingReadRef.current = true;
-    markConversationRead(conversationId)
-      .catch((e) => console.error("Failed to mark conversation read:", e))
-      .finally(() => {
-        markingReadRef.current = false;
-      });
+    if (!hasUnread) return;
+    if (markingReadRef.current) {
+      rerunMarkReadRef.current = true;
+      return;
+    }
+
+    function runMarkRead() {
+      markingReadRef.current = true;
+      rerunMarkReadRef.current = false;
+      markConversationRead(conversationId)
+        .catch((e) => console.error("Failed to mark conversation read:", e))
+        .finally(() => {
+          markingReadRef.current = false;
+          const shouldRerun =
+            rerunMarkReadRef.current &&
+            messagesRef.current.some((m) => m.sender_id !== currentUserId && !m.read_at);
+          if (shouldRerun) runMarkRead();
+        });
+    }
+
+    runMarkRead();
   }, [conversationId, currentUserId, messages]);
 
   useEffect(() => {
@@ -119,7 +144,7 @@ export function MessageThread({
     };
 
     formRef.current?.reset();
-    setMessages((prev) => [...prev, pendingMessage]);
+    setMessages((prev) => newestThreadMessages([...prev, pendingMessage]));
 
     const supabase = createClient();
     const { data, error } = await supabase
@@ -142,7 +167,7 @@ export function MessageThread({
       if (prev.some((m) => m.id === data.id)) {
         return prev.filter((m) => m.id !== pendingId);
       }
-      return prev.map((m) => (m.id === pendingId ? data : m));
+      return newestThreadMessages(prev.map((m) => (m.id === pendingId ? data : m)));
     });
   }
 
@@ -161,7 +186,7 @@ export function MessageThread({
           <ArrowLeft size={20} />
         </Link>
         <Avatar src={other?.avatar_url} name={other?.full_name} size={40} />
-        <Link href={other ? `/profile/${other.id}` : "#"} className="font-semibold">
+        <Link href={other ? `${profileBase}/${other.id}` : "#"} className="font-semibold">
           {other?.full_name ?? "Member"}
         </Link>
       </div>
