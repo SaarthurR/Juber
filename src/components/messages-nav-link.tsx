@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
@@ -14,16 +13,8 @@ export function MessagesNavLink({
   initialUnread: number;
 }) {
   const pathname = usePathname();
-  const [unread, setUnread] = useState(initialUnread);
-  const [syncedTo, setSyncedTo] = useState(initialUnread);
-
-  if (syncedTo !== initialUnread) {
-    setSyncedTo(initialUnread);
-    setUnread(initialUnread);
-  }
-
   const active = pathname.startsWith("/messages");
-  const visibleUnread = unread;
+  const visibleUnread = initialUnread;
 
   return (
     <Link

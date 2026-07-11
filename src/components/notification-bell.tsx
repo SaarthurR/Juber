@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
@@ -11,6 +11,14 @@ import {
   failClosedNotificationState,
   loadVisibleNotificationIds,
 } from "@/lib/messages";
+import {
+  createNotificationControllerState,
+  isCurrentNotificationRefresh,
+  notificationControllerKey,
+  notificationControllerReducer,
+  subscribeToNotificationChanges,
+  type NotificationSnapshot,
+} from "@/lib/notifications-controller";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
 
 const NOTIFICATION_SELECT =
@@ -100,29 +108,67 @@ export function NotificationBell({
   userId: string;
   initialError?: string | null;
 }) {
+  const initialSnapshot = {
+    items: initial,
+    unread: initialUnread,
+    error: initialError,
+  };
+
+  return (
+    <NotificationBellController
+      key={notificationControllerKey(initialSnapshot)}
+      userId={userId}
+      initialSnapshot={initialSnapshot}
+    />
+  );
+}
+
+function NotificationBellController({
+  userId,
+  initialSnapshot,
+}: {
+  userId: string;
+  initialSnapshot: NotificationSnapshot;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [items, setItems] = useState(initial);
-  const [unread, setUnread] = useState(initialUnread);
-  const [notificationError, setNotificationError] = useState<string | null>(initialError);
-  const [markingAll, setMarkingAll] = useState(false);
-  const initialKey = `${initialUnread}:${initialError ?? ""}:${initial.map((n) => n.id).join(",")}`;
-  const [syncedTo, setSyncedTo] = useState(initialKey);
+  const [state, dispatch] = useReducer(
+    notificationControllerReducer,
+    initialSnapshot,
+    createNotificationControllerState,
+  );
   const ref = useRef<HTMLDivElement>(null);
+  const refreshGeneration = useRef(0);
+  const active = useRef(true);
 
   const refreshNotifications = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
     const supabase = createClient();
     function failClosed(message: string) {
       const failed = failClosedNotificationState<NotificationWithContext>(message);
-      setUnread(failed.unread);
-      setItems(failed.items);
-      setNotificationError(failed.error);
+      if (
+        isCurrentNotificationRefresh(
+          generation,
+          refreshGeneration.current,
+          active.current,
+        )
+      ) {
+        dispatch({ type: "reconcile-failed", error: failed.error });
+      }
     }
     try {
       const [unreadResult, notificationResult] = await Promise.all([
         loadVisibleNotificationIds(supabase, null, true),
         loadVisibleNotificationIds(supabase, 6, false),
       ]);
+      if (
+        !isCurrentNotificationRefresh(
+          generation,
+          refreshGeneration.current,
+          active.current,
+        )
+      ) {
+        return;
+      }
       if (unreadResult.error || notificationResult.error) {
         failClosed(
           unreadResult.error ?? notificationResult.error ?? "Could not refresh notifications.",
@@ -139,6 +185,15 @@ export function NotificationBell({
             .in("id", notificationIds)
             .order("created_at", { ascending: false })
         : { data: [] as NotificationWithContext[], error: null };
+      if (
+        !isCurrentNotificationRefresh(
+          generation,
+          refreshGeneration.current,
+          active.current,
+        )
+      ) {
+        return;
+      }
 
       let data = notificationsResult.data;
       if (notificationsResult.error) {
@@ -151,64 +206,46 @@ export function NotificationBell({
         if (fallback.error) throw new Error("Could not load notifications.");
         data = fallback.data;
       }
-
-      setUnread(unreadIds.length);
-      setItems(
-        ((data ?? []) as NotificationWithContext[]).map((n) => ({
-          ...n,
-          request: n.request ?? null,
-        })),
-      );
-      setNotificationError(null);
+      if (
+        !isCurrentNotificationRefresh(
+          generation,
+          refreshGeneration.current,
+          active.current,
+        )
+      ) {
+        return;
+      }
+      dispatch({
+        type: "reconcile",
+        snapshot: {
+          unread: unreadIds.length,
+          items: ((data ?? []) as NotificationWithContext[]).map((n) => ({
+            ...n,
+            request: n.request ?? null,
+          })),
+          error: null,
+        },
+      });
     } catch {
       failClosed("Could not refresh notifications.");
     }
   }, [userId]);
 
-  // Keep in sync when the server hands fresh data on navigation. This render-time
-  // adjustment avoids the extra cascading render that a syncing effect would add.
-  if (syncedTo !== initialKey) {
-    setSyncedTo(initialKey);
-    setUnread(initialUnread);
-    setItems(initial);
-    setNotificationError(initialError);
-  }
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+      refreshGeneration.current += 1;
+    };
+  }, []);
 
   // Live arrivals bump the dot + refresh the server data.
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
-      .channel(`bell:${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `recipient_id=eq.${userId}`,
-        },
-        () => {
-          void refreshNotifications();
-          router.refresh();
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "notifications",
-          filter: `recipient_id=eq.${userId}`,
-        },
-        () => {
-          void refreshNotifications();
-          router.refresh();
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return subscribeToNotificationChanges(supabase, "bell", userId, () => {
+      void refreshNotifications();
+      router.refresh();
+    });
   }, [userId, router, refreshNotifications]);
 
   useEffect(() => {
@@ -223,12 +260,14 @@ export function NotificationBell({
 
   // Click-out + Esc close the popover.
   useEffect(() => {
-    if (!open) return;
+    if (!state.open) return;
     function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        dispatch({ type: "close" });
+      }
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") dispatch({ type: "close" });
     }
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
@@ -236,42 +275,50 @@ export function NotificationBell({
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [state.open]);
 
   async function markAllRead() {
-    setMarkingAll(true);
+    if (state.unread === 0 || state.bulkStatus === "pending") return;
+    dispatch({ type: "mark-all-start" });
     try {
       await markNotificationsRead();
-      const readAt = new Date().toISOString();
-      setUnread(0);
-      setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? readAt })));
-      setNotificationError(null);
+      if (!active.current) return;
+      dispatch({
+        type: "mark-all-success",
+        readAt: new Date().toISOString(),
+      });
       router.refresh();
     } catch {
-      setNotificationError("Could not mark notifications read.");
-    } finally {
-      setMarkingAll(false);
+      if (!active.current) return;
+      dispatch({
+        type: "mark-all-failed",
+        error: "Could not mark notifications read.",
+      });
     }
   }
 
   async function markOneRead(id: string) {
-    const readAt = new Date().toISOString();
-    const target = items.find((n) => n.id === id);
+    const target = state.items.find((n) => n.id === id);
     if (!target || target.read_at) return;
 
+    dispatch({ type: "mark-one-start", id });
+    const readAt = new Date().toISOString();
     const supabase = createClient();
     const { error } = await supabase
       .from("notifications")
       .update({ read_at: readAt })
       .eq("id", id)
       .eq("recipient_id", userId);
+    if (!active.current) return;
     if (error) {
-      setNotificationError("Could not mark this notification read.");
+      dispatch({
+        type: "mark-one-failed",
+        id,
+        error: "Could not mark this notification read.",
+      });
       return;
     }
-    setUnread((n) => Math.max(0, n - 1));
-    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: readAt } : n)));
-    setNotificationError(null);
+    dispatch({ type: "mark-one-success", id, readAt });
     router.refresh();
   }
 
@@ -279,47 +326,52 @@ export function NotificationBell({
     <div className="relative" ref={ref}>
       <button
         onClick={() => {
-          setOpen((o) => {
-            const next = !o;
-            if (next) void refreshNotifications();
-            return next;
-          });
+          if (state.open) {
+            dispatch({ type: "close" });
+          } else {
+            dispatch({ type: "open" });
+            void refreshNotifications();
+          }
         }}
         aria-label="Notifications"
         className="relative flex h-[38px] w-[38px] items-center justify-center rounded-full bg-tint text-brand-600 hover:brightness-95 active:scale-95"
       >
         <Bell size={19} strokeWidth={2} />
-        {unread > 0 && (
+        {state.unread > 0 && (
           <span className="absolute right-[7px] top-[6px] h-2 w-2 rounded-full bg-[#c2410c] ring-2 ring-white" />
         )}
       </button>
 
-      {open && (
+      {state.open && (
         <div className="motion-popover absolute right-0 top-[48px] z-50 w-[340px] overflow-hidden rounded-2xl border border-[#efe4d3] bg-white shadow-[0_24px_50px_-16px_rgba(92,59,46,0.3)]">
           <div className="flex items-center justify-between border-b border-[#f3ece1] px-[18px] py-4">
             <span className="text-base font-extrabold text-ink">Notifications</span>
             <button
               onClick={markAllRead}
-              disabled={markingAll}
+              disabled={state.unread === 0 || state.bulkStatus === "pending"}
               className="whitespace-nowrap text-[13px] font-bold text-brand-600 transition hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {markingAll ? "Marking…" : "Mark all read"}
+              {state.bulkStatus === "pending"
+                ? "Marking…"
+                : state.bulkStatus === "error"
+                  ? "Retry mark all read"
+                  : "Mark all read"}
             </button>
           </div>
 
-          {notificationError && (
+          {(state.loadError || state.bulkError || state.rowError) && (
             <p role="alert" className="border-b border-red-100 bg-red-50 px-[18px] py-2 text-xs text-red-700">
-              {notificationError}
+              {state.loadError ?? state.bulkError ?? state.rowError}
             </p>
           )}
 
           <div className="max-h-[360px] overflow-y-auto">
-            {items.length === 0 ? (
+            {state.items.length === 0 ? (
               <p className="px-[18px] py-8 text-center text-sm text-stone-400">
                 No notifications yet.
               </p>
             ) : (
-              items.map((n) => {
+              state.items.map((n) => {
                 const Icon = ICON[n.type] ?? Bell;
                 const isUnread = !n.read_at;
                 const inner = (
@@ -357,7 +409,7 @@ export function NotificationBell({
                     href={href}
                     prefetch
                     onClick={() => {
-                      setOpen(false);
+                      dispatch({ type: "close" });
                       void markOneRead(n.id);
                     }}
                     className="block"
@@ -374,7 +426,7 @@ export function NotificationBell({
           <Link
             href="/messages?tab=notifications"
             prefetch
-            onClick={() => setOpen(false)}
+            onClick={() => dispatch({ type: "close" })}
             className="block border-t border-[#f3ece1] px-[18px] py-3 text-center text-[13px] font-bold text-brand-600 transition hover:bg-[#fbf6ee]"
           >
             View all notifications
