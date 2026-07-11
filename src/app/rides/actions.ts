@@ -7,7 +7,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { JCNC_LABEL } from "@/lib/constants";
 import { dateOnlyToIso } from "@/lib/date-time";
-import { deferBestEffort } from "@/lib/action-lifecycle";
+import {
+  deferBestEffort,
+  emptyRideCancellationReason,
+} from "@/lib/action-lifecycle";
 import {
   sendRideCancellationSms,
   sendSeatCancellationSms,
@@ -309,9 +312,9 @@ export async function setPassengerStatus(
   const [{ data: ride }, { data: passenger, error: passengerError }] = await Promise.all([
     supabase
       .from("rides")
-      .select("driver_id")
+      .select("driver_id,status")
       .eq("id", rideId)
-      .single<{ driver_id: string }>(),
+      .single<{ driver_id: string; status: string }>(),
     supabase
       .from("ride_passengers")
       .select("passenger_id,status")
@@ -321,6 +324,9 @@ export async function setPassengerStatus(
   ]);
   if (!ride || ride.driver_id !== user.id) {
     return { error: "Only the driver can update passenger requests." };
+  }
+  if (ride.status !== "active") {
+    return { error: "This ride is no longer active." };
   }
   if (passengerError) return { error: passengerError.message };
   if (!passenger || passenger.status !== "pending") {
@@ -367,17 +373,76 @@ export async function cancelRide(
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const cancellationReason = trimmed || "Ride cancelled before anyone joined.";
+  let cancellationReason = trimmed;
 
-  const { data: cancelled, error } = await supabase.rpc("cancel_ride", {
-    p_ride_id: rideId,
-    p_reason: cancellationReason,
-  });
-  if (error) {
-    console.error("cancel_ride failed", { code: error.code, rideId });
-    return { error: "We couldn't cancel this ride. Please try again." };
+  if (trimmed) {
+    const { data: cancelled, error } = await supabase.rpc("cancel_ride", {
+      p_ride_id: rideId,
+      p_reason: trimmed,
+    });
+    if (error) {
+      console.error("cancel_ride failed", { code: error.code, rideId });
+      return { error: "We couldn't cancel this ride. Please try again." };
+    }
+    if (!cancelled) return { error: "Only the driver can cancel an active ride." };
+  } else {
+    const { data: ride, error: rideError } = await supabase
+      .from("rides")
+      .select("driver_id,status,seats_total,seats_available")
+      .eq("id", rideId)
+      .maybeSingle<{
+        driver_id: string;
+        status: string;
+        seats_total: number;
+        seats_available: number;
+      }>();
+
+    if (rideError) {
+      console.error("cancel ride roster check failed", {
+        code: rideError.code,
+        rideId,
+      });
+      return { error: "We couldn't cancel this ride. Please try again." };
+    }
+    if (!ride || ride.driver_id !== user.id || ride.status !== "active") {
+      return { error: "Only the driver can cancel an active ride." };
+    }
+
+    const emptyReason = emptyRideCancellationReason(
+      ride.seats_total,
+      ride.seats_available,
+    );
+    if (!emptyReason) {
+      return { error: "Please tell your riders why the ride is cancelled." };
+    }
+
+    const { data: cancelled, error } = await supabase
+      .from("rides")
+      .update({
+        status: "cancelled",
+        cancellation_reason: emptyReason,
+      })
+      .eq("id", rideId)
+      .eq("driver_id", user.id)
+      .eq("status", "active")
+      .eq("seats_total", ride.seats_total)
+      .eq("seats_available", ride.seats_total)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+
+    if (error) {
+      console.error("empty ride cancellation failed", {
+        code: error.code,
+        rideId,
+      });
+      return { error: "We couldn't cancel this ride. Please try again." };
+    }
+    if (!cancelled) {
+      return { error: "Please tell your riders why the ride is cancelled." };
+    }
+
+    cancellationReason = emptyReason;
   }
-  if (!cancelled) return { error: "Only the driver can cancel an active ride." };
 
   deferBestEffort(
     after,

@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { redirect } from "next/navigation";
-import { actionErrorMessage, canReserveRide, deferBestEffort } from "./action-lifecycle";
+import {
+  actionErrorMessage,
+  canReserveRide,
+  deferBestEffort,
+  emptyRideCancellationReason,
+} from "./action-lifecycle";
 
 test("actionErrorMessage rethrows Next redirect control flow", () => {
   let redirectError: unknown;
@@ -65,10 +70,22 @@ test("deferBestEffort logs rejection without rejecting the callback", async () =
   assert.match(String(logged[0]), /SMS unavailable/);
 });
 
-test("canReserveRide allows only active unjoined rides with capacity", () => {
-  assert.equal(canReserveRide("active", false, 1), true);
-  assert.equal(canReserveRide("completed", false, 1), false);
-  assert.equal(canReserveRide("cancelled", false, 1), false);
-  assert.equal(canReserveRide("active", true, 1), false);
-  assert.equal(canReserveRide("active", false, 0), false);
+test("canReserveRide matches request_seat passenger status semantics", () => {
+  assert.equal(canReserveRide("active", null, 1), true);
+  assert.equal(canReserveRide("active", "declined", 1), true);
+  assert.equal(canReserveRide("active", "cancelled", 1), true);
+  assert.equal(canReserveRide("active", "pending", 1), false);
+  assert.equal(canReserveRide("active", "confirmed", 1), false);
+  assert.equal(canReserveRide("completed", "declined", 1), false);
+  assert.equal(canReserveRide("cancelled", "cancelled", 1), false);
+  assert.equal(canReserveRide("active", "declined", 0), false);
+});
+
+test("empty cancellation reason is compatible only with a fresh empty roster", () => {
+  assert.equal(
+    emptyRideCancellationReason(3, 3),
+    "Ride cancelled before anyone joined.",
+  );
+  assert.equal(emptyRideCancellationReason(3, 2), null);
+  assert.equal(emptyRideCancellationReason(3, 0), null);
 });

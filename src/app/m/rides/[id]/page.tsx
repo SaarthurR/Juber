@@ -226,7 +226,9 @@ export default async function MobileTripPage({
                           {p.passenger?.full_name ?? "Member"}
                         </span>
                       </Link>
-                      <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
+                      {ride.status === "active" && (
+                        <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
+                      )}
                     </li>
                   ))}
               </ul>
@@ -268,7 +270,7 @@ export default async function MobileTripPage({
           <div className="flex h-[54px] items-center justify-center rounded-[14px] bg-tint text-[15px] font-bold text-muted">
             {cancelled ? "This ride was cancelled" : "This ride is closed"}
           </div>
-        ) : myJoin ? (
+        ) : myJoin?.status === "pending" || myJoin?.status === "confirmed" ? (
           <div>
             <div className="flex h-[48px] items-center justify-center rounded-[14px] bg-tint text-[14px] font-bold capitalize text-brand-700">
               Seat {myJoin.status}
@@ -278,8 +280,11 @@ export default async function MobileTripPage({
               <CancelSeatButton rideId={ride.id} base="/m" />
             )}
           </div>
-        ) : canReserveRide(ride.status, Boolean(myJoin), ride.seats_available) ? (
-          <MReserveButton rideId={ride.id} />
+        ) : canReserveRide(ride.status, myJoin?.status, ride.seats_available) ? (
+          <MReserveButton
+            rideId={ride.id}
+            label={myJoin ? "Request a seat again" : undefined}
+          />
         ) : (
           <div className="flex h-[54px] items-center justify-center rounded-[14px] bg-tint text-[15px] font-bold text-muted-warm">
             This ride is full

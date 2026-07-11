@@ -16,7 +16,13 @@ import {
 } from "@/app/rides/actions";
 import { openConversation } from "@/app/messages/actions";
 
-export function ReserveSeatButton({ rideId }: { rideId: string }) {
+export function ReserveSeatButton({
+  rideId,
+  label = "Reserve a seat",
+}: {
+  rideId: string;
+  label?: string;
+}) {
   const [state, formAction] = useActionState(requestSeat.bind(null, rideId), null);
 
   return (
@@ -26,7 +32,7 @@ export function ReserveSeatButton({ rideId }: { rideId: string }) {
         pendingLabel="Reserving…"
         className="w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Reserve a seat
+        {label}
       </PendingActionButton>
       <InlineActionError
         id={`reserve-${rideId}-error`}

@@ -271,7 +271,7 @@ export default async function RideDetailPage({
             <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
               {cancelled ? "This ride was cancelled" : "This ride is closed"}
             </div>
-          ) : myJoin ? (
+          ) : myJoin?.status === "pending" || myJoin?.status === "confirmed" ? (
             <div>
               <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
                 Seat {myJoin.status}
@@ -281,8 +281,11 @@ export default async function RideDetailPage({
                 <CancelSeatButton rideId={ride.id} />
               )}
             </div>
-          ) : canReserveRide(ride.status, Boolean(myJoin), ride.seats_available) ? (
-            <ReserveSeatButton rideId={ride.id} />
+          ) : canReserveRide(ride.status, myJoin?.status, ride.seats_available) ? (
+            <ReserveSeatButton
+              rideId={ride.id}
+              label={myJoin ? "Request a seat again" : undefined}
+            />
           ) : (
             <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-400">
               This ride is full
@@ -382,7 +385,9 @@ function DriverPanel({
                   <p className="text-xs capitalize text-stone-400">{p.status}</p>
                 </div>
               </Link>
-              <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
+              {ride.status === "active" && (
+                <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
+              )}
             </li>
           ))}
         </ul>

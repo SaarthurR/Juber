@@ -1,5 +1,5 @@
 import { unstable_rethrow } from "next/navigation";
-import type { RideStatus } from "@/lib/types";
+import type { PassengerStatus, RideStatus } from "@/lib/types";
 
 export function actionErrorMessage(error: unknown, fallback: string) {
   unstable_rethrow(error);
@@ -22,8 +22,22 @@ export function deferBestEffort(
 
 export function canReserveRide(
   status: RideStatus,
-  hasExistingBooking: boolean,
+  passengerStatus: PassengerStatus | null | undefined,
   seatsAvailable: number,
 ) {
-  return status === "active" && !hasExistingBooking && seatsAvailable > 0;
+  const mayRequest =
+    passengerStatus == null ||
+    passengerStatus === "declined" ||
+    passengerStatus === "cancelled";
+
+  return status === "active" && mayRequest && seatsAvailable > 0;
+}
+
+export function emptyRideCancellationReason(
+  seatsTotal: number,
+  seatsAvailable: number,
+) {
+  return seatsAvailable === seatsTotal
+    ? "Ride cancelled before anyone joined."
+    : null;
 }
