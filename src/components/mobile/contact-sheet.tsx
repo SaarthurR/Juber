@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Phone, MessageCircle, X } from "lucide-react";
+import { Phone, MessageCircle } from "lucide-react";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { openConversation } from "@/app/messages/actions";
-import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
+import { PendingActionButton, PendingActionGroup, usePendingActionOpen } from "@/components/pending-action-button";
 
 type Method = "phone" | "whatsapp" | "message" | null;
 
@@ -39,7 +39,37 @@ export function ContactSheet({
   whatsapp: string | null;
   preferredContact: Method;
 }) {
+  return (
+    <PendingActionGroup>
+      <ContactSheetContent
+        driverId={driverId}
+        driverFullName={driverFullName}
+        rideId={rideId}
+        phone={phone}
+        whatsapp={whatsapp}
+        preferredContact={preferredContact}
+      />
+    </PendingActionGroup>
+  );
+}
+
+function ContactSheetContent({
+  driverId,
+  driverFullName,
+  rideId,
+  phone,
+  whatsapp,
+  preferredContact,
+}: {
+  driverId: string;
+  driverFullName: string | null;
+  rideId: string;
+  phone: string | null;
+  whatsapp: string | null;
+  preferredContact: Method;
+}) {
   const [open, setOpen] = useState(false);
+  const pendingActionOpen = usePendingActionOpen();
   const firstName = driverFullName?.split(" ")[0] ?? "the driver";
   const whatsappHref = whatsapp ? `https://wa.me/${whatsapp.replace(/[^\d]/g, "")}` : null;
 
@@ -54,7 +84,13 @@ export function ContactSheet({
         Contact
       </button>
 
-      <BottomSheet open={open} onClose={() => setOpen(false)} labelledBy="contact-title">
+      <BottomSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        labelledBy="contact-title"
+        dismissDisabled={pendingActionOpen}
+        closeLabel="Close contact sheet"
+      >
         <div className="flex items-center gap-3 pb-4">
           <MAvatar name={driverFullName} seed={driverId} size={44} />
           <div className="min-w-0 flex-1">
@@ -63,14 +99,6 @@ export function ContactSheet({
             </p>
             <p className="text-xs text-muted-warm">Reach out to confirm your seat</p>
           </div>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={() => setOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-tint text-brand-700"
-          >
-            <X size={16} strokeWidth={2.5} />
-          </button>
         </div>
 
         <div className="space-y-2.5 pb-4">

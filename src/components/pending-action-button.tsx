@@ -36,6 +36,11 @@ export function PendingActionGroup({ children }: { children: React.ReactNode }) 
   );
 }
 
+export function usePendingActionOpen() {
+  const group = useContext(PendingActionContext);
+  return group ? group.state.pendingKey !== null : false;
+}
+
 export function getPendingActionButtonView({
   actionKey,
   children,

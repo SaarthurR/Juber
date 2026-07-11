@@ -29,6 +29,10 @@ export default async function MobileProfilePage() {
         <GoogleSignInButton
           className="rounded-full bg-brand-600 px-6 py-3 text-[14px] font-bold text-white"
         />
+        <div className="flex items-center gap-4 text-[13px] font-bold text-[#6f5b48]">
+          <Link href="/terms">Terms</Link>
+          <Link href="/privacy">Privacy</Link>
+        </div>
       </div>
     );
   }
@@ -105,6 +109,20 @@ export default async function MobileProfilePage() {
         </div>
 
         <ProfileTabs posted={posted} joined={joined} now={new Date().getTime()} />
+
+        <section className="rounded-[18px] border border-border bg-white p-4">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-warm">
+            Legal
+          </p>
+          <div className="mt-3 flex gap-3 text-[13px] font-bold text-brand-700">
+            <Link href="/terms" className="rounded-full bg-tint px-4 py-2">
+              Terms
+            </Link>
+            <Link href="/privacy" className="rounded-full bg-tint px-4 py-2">
+              Privacy
+            </Link>
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Phone, MessageCircle } from "lucide-react";
 import { openConversation } from "@/app/messages/actions";
-import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
+import { PendingActionButton, PendingActionGroup, usePendingActionOpen } from "@/components/pending-action-button";
+import { DesktopDialog } from "@/components/ui/desktop-dialog";
 
 type ContactModalProps = {
   driverName: string;
@@ -50,17 +51,47 @@ export function ContactModal({
       </button>
 
       {open && (
-        <div
-          className="motion-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div className="absolute inset-0 bg-black/40" />
+        <PendingActionGroup>
+          <ContactDialog
+            driverName={driverName}
+            phone={phone}
+            whatsapp={whatsapp}
+            whatsappHref={whatsappHref}
+            preferredContact={preferredContact}
+            rideId={rideId}
+            driverId={driverId}
+            onClose={() => setOpen(false)}
+          />
+        </PendingActionGroup>
+      )}
+    </>
+  );
+}
 
-          <div
-            className="motion-dialog relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="mb-5 text-xl font-bold text-stone-900">Contact</h2>
+function ContactDialog({
+  driverName,
+  phone,
+  whatsapp,
+  whatsappHref,
+  preferredContact,
+  rideId,
+  driverId,
+  onClose,
+}: ContactModalProps & {
+  whatsappHref: string | null;
+  onClose: () => void;
+}) {
+  const pendingActionOpen = usePendingActionOpen();
+
+  return (
+    <DesktopDialog
+      open
+      onDismiss={onClose}
+      dismissDisabled={pendingActionOpen}
+      labelledBy="contact-modal-title"
+      closeLabel="Close contact dialog"
+    >
+            <h2 id="contact-modal-title" className="mb-5 pr-8 text-xl font-bold text-stone-900">Contact</h2>
 
             <div className="space-y-5">
               {phone && (
@@ -105,7 +136,6 @@ export function ContactModal({
                 </a>
               )}
 
-              <PendingActionGroup>
                 <form action={openConversation.bind(null, driverId)}>
                   <input type="hidden" name="ride_id" value={rideId} />
                   <PendingActionButton
@@ -127,11 +157,7 @@ export function ContactModal({
                     </div>
                   </PendingActionButton>
                 </form>
-              </PendingActionGroup>
             </div>
-          </div>
-        </div>
-      )}
-    </>
+    </DesktopDialog>
   );
 }

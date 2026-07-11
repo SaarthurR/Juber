@@ -2,10 +2,10 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useScrollLock } from "@/lib/use-scroll-lock";
 import { actionErrorMessage } from "@/lib/action-lifecycle";
 import { InlineActionError } from "@/components/inline-action-error";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
+import { DesktopDialog } from "@/components/ui/desktop-dialog";
 import {
   requestSeat,
   setPassengerStatus,
@@ -138,16 +138,14 @@ export function CancelRequestButton({
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setOpen(false)}
+        <DesktopDialog
+          open
+          onDismiss={() => setOpen(false)}
+          dismissDisabled={pending}
+          labelledBy="cancel-request-title"
+          closeLabel="Keep request"
         >
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold text-stone-900">Cancel this request?</h2>
+            <h2 id="cancel-request-title" className="pr-8 text-lg font-bold text-stone-900">Cancel this request?</h2>
             <p className="mt-1 text-sm text-stone-500">
               Drivers will no longer see it in ride requests. You can always post a new one.
             </p>
@@ -178,8 +176,7 @@ export function CancelRequestButton({
                 {pending ? "Cancelling..." : "Cancel request"}
               </button>
             </div>
-          </div>
-        </div>
+        </DesktopDialog>
       )}
     </>
   );
@@ -199,8 +196,6 @@ export function CancelRideButton({
   const [reason, setReason] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  useScrollLock(open);
-
   function setDialogOpen(value: boolean) {
     setOpen(value);
     if (!value) setError(null);
@@ -243,17 +238,14 @@ export function CancelRideButton({
       </button>
 
       {open && (
-        <div
-          className="visible fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setDialogOpen(false)}
+        <DesktopDialog
+          open
+          onDismiss={() => setDialogOpen(false)}
+          dismissDisabled={pending}
+          labelledBy="cancel-ride-title"
+          closeLabel="Keep ride"
         >
-          <div className="absolute inset-0 bg-black/40" />
-
-          <div
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold text-stone-900">Cancel this ride?</h2>
+            <h2 id="cancel-ride-title" className="pr-8 text-lg font-bold text-stone-900">Cancel this ride?</h2>
             <p className="mt-1 text-sm text-stone-500">
               {confirmedRiderCount > 0
                 ? "Your confirmed riders will be notified with the reason below."
@@ -308,8 +300,7 @@ export function CancelRideButton({
                 {pending ? "Cancelling…" : "Cancel ride"}
               </button>
             </div>
-          </div>
-        </div>
+        </DesktopDialog>
       )}
     </div>
   );
@@ -326,8 +317,6 @@ export function CloseRideButton({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  useScrollLock(open);
-
   function setDialogOpen(value: boolean) {
     setOpen(value);
     if (!value) setError(null);
@@ -368,16 +357,14 @@ export function CloseRideButton({
       </button>
 
       {open && (
-        <div
-          className="visible fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setDialogOpen(false)}
+        <DesktopDialog
+          open
+          onDismiss={() => setDialogOpen(false)}
+          dismissDisabled={pending}
+          labelledBy="close-ride-title"
+          closeLabel="Keep open"
         >
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold text-stone-900">Close this ride?</h2>
+            <h2 id="close-ride-title" className="pr-8 text-lg font-bold text-stone-900">Close this ride?</h2>
             <p className="mt-1 text-sm text-stone-500">
               This marks the ride completed and removes it from active listings. Chat history stays
               available for lost items and follow-up.
@@ -406,8 +393,7 @@ export function CloseRideButton({
                 {pending ? "Closing..." : "Close ride"}
               </button>
             </div>
-          </div>
-        </div>
+        </DesktopDialog>
       )}
     </>
   );
@@ -468,8 +454,6 @@ export function CancelSeatButton({
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  useScrollLock(open);
-
   function submit() {
     if (!message.trim()) {
       setError("Please write a reason so the driver knows why you are cancelling.");
@@ -507,16 +491,14 @@ export function CancelSeatButton({
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setOpen(false)}
+        <DesktopDialog
+          open
+          onDismiss={() => setOpen(false)}
+          dismissDisabled={pending}
+          labelledBy="cancel-seat-title"
+          closeLabel="Keep seat"
         >
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold text-stone-900">Cancel your seat?</h2>
+            <h2 id="cancel-seat-title" className="pr-8 text-lg font-bold text-stone-900">Cancel your seat?</h2>
             <p className="mt-1 text-sm text-stone-500">
               The driver will get a notification with your reason.
             </p>
@@ -562,8 +544,7 @@ export function CancelSeatButton({
                 {pending ? "Cancelling..." : "Cancel seat"}
               </button>
             </div>
-          </div>
-        </div>
+        </DesktopDialog>
       )}
     </>
   );

@@ -49,14 +49,14 @@ export default async function HomePage() {
           className="pointer-events-none absolute -bottom-16 -right-10 text-white/[0.08]"
         />
         <div className="relative">
-          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#e8c887]">
+          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#fbe8d2]">
             Ahimsa on the road
           </p>
           <h1 className="mt-3 max-w-2xl text-4xl font-extrabold leading-[1.08] sm:text-5xl lg:text-[52px]">
             Fewer cars.{" "}
-            <span className="text-[#e8c887]">Less harm.</span>
+            <span className="text-[#fbe8d2]">Less harm.</span>
           </h1>
-          <p className="mt-4 max-w-lg text-[16px] leading-relaxed text-white/85">
+          <p className="mt-4 max-w-lg text-[16px] leading-relaxed text-[#fbe8d2]">
             Share rides to JCNC with the sangha you already trust — especially
             during Paryushan and big events.
           </p>

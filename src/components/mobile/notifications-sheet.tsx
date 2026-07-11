@@ -292,6 +292,8 @@ function MNotificationBellController({
         open={state.open}
         onClose={() => dispatch({ type: "close" })}
         labelledBy="notif-title"
+        dismissDisabled={notificationWritePending(state)}
+        closeLabel="Close notifications"
       >
         <div className="flex items-center justify-between pb-3">
           <p id="notif-title" className="text-[15px] font-extrabold text-ink">

@@ -89,11 +89,18 @@ export default async function RootLayout({
                     <li><a href="mailto:hello@jcnc.org" className="hover:text-stone-900 transition">Email</a></li>
                   </ul>
                 </div>
+                <div>
+                  <p className="mb-2.5 font-medium text-stone-900">Legal</p>
+                  <ul className="space-y-1.5 text-stone-500">
+                    <li><Link href="/terms" className="hover:text-stone-900 transition">Terms</Link></li>
+                    <li><Link href="/privacy" className="hover:text-stone-900 transition">Privacy</Link></li>
+                  </ul>
+                </div>
               </div>
             </div>
 
             <div className="mt-8 flex flex-col gap-4 border-t border-[#f3ece1] pt-6 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2.5 text-[13px] font-semibold text-[#a8927a]">
+              <div className="flex flex-wrap items-center gap-2.5 text-[13px] font-semibold text-[#6f5b48]">
                 <span>An initiative for the</span>
                 <Image
                   src="/jcnc-logo.png"
@@ -112,7 +119,7 @@ export default async function RootLayout({
                   jcnc.org
                 </a>
               </div>
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-stone-600">
                 © {new Date().getFullYear()} {APP_NAME}
               </p>
             </div>

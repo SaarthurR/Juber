@@ -16,7 +16,7 @@
   --color-gold-light: #e8c887;
   --color-tint: #f6e9da;
   --color-sand: #f3e7d8;
-  --color-sand-text: #8a5a2b;
+  --color-sand-text: #6f5b48;
   --color-cream: #fbf7f0;
   --color-ink: #1c1917;
 
@@ -24,7 +24,7 @@
   --color-brand-bright: #c9712f;
   --color-brand-deep: #8a4420;
   --color-muted: #57534e;
-  --color-muted-warm: #a8927a;
+  --color-muted-warm: #7a6858;
   --color-border: #efe4d3;
   --color-border-soft: #f1e8da;
   --color-seg-track: #f1e4d2;
@@ -139,6 +139,11 @@ a, button, [role="button"], label, summary, input[type="submit"] {
 }
 
 .motion-dialog {
+  animation: none;
+  transform-origin: center bottom;
+}
+
+.motion-sheet {
   animation: none;
   transform-origin: center bottom;
 }
