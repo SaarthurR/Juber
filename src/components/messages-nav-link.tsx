@@ -28,10 +28,10 @@ export function MessagesNavLink({
 
   const refreshUnread = useCallback(async () => {
     try {
-      const notificationIds = await loadVisibleNotificationIds(createClient(), null, true);
-      setUnread(notificationIds.length);
+      const result = await loadVisibleNotificationIds(createClient(), null, true);
+      setUnread(result.error ? 0 : result.ids.length);
     } catch {
-      return;
+      setUnread(0);
     }
   }, []);
 

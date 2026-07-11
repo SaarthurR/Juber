@@ -65,7 +65,9 @@ export default async function MobileHomePage({
   const [{ data: ridesData }, { data: requestsData }, notif] = await Promise.all([
     ridesQuery,
     requestsQuery,
-    user ? loadNotifications(supabase, user.id) : Promise.resolve({ items: [], unread: 0 }),
+    user
+      ? loadNotifications(supabase, user.id)
+      : Promise.resolve({ items: [], unread: 0, error: null }),
   ]);
 
   const rides = (ridesData as RideWithDriver[]) ?? [];
@@ -92,7 +94,11 @@ export default async function MobileHomePage({
               >
                 <MessageSquare size={18} strokeWidth={2.2} />
               </Link>
-              <MNotificationBell notifications={notif.items} unreadCount={notif.unread} />
+              <MNotificationBell
+                notifications={notif.items}
+                unreadCount={notif.unread}
+                initialError={notif.error}
+              />
               <Link href="/m/profile" prefetch aria-label="Your profile" className="active:scale-95">
                 <MAvatar src={profile?.avatar_url} name={profile?.full_name} seed={user.id} size={40} />
               </Link>
@@ -142,10 +148,19 @@ async function loadNotifications(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
 ) {
-  const [unreadIds, notificationIds] = await Promise.all([
+  const [unreadResult, notificationResult] = await Promise.all([
     loadVisibleNotificationIds(supabase, null, true),
     loadVisibleNotificationIds(supabase, 8, false),
   ]);
+  if (unreadResult.error || notificationResult.error) {
+    return {
+      items: [],
+      unread: 0,
+      error: unreadResult.error ?? notificationResult.error,
+    };
+  }
+  const unreadIds = unreadResult.ids;
+  const notificationIds = notificationResult.ids;
   const result = notificationIds.length
     ? await supabase
         .from("notifications")
@@ -168,7 +183,9 @@ async function loadNotifications(
       .in("id", notificationIds)
       .order("created_at", { ascending: false })
       .limit(notificationIds.length);
-    if (fallback.error) throw new Error("Could not load notifications.");
+    if (fallback.error) {
+      return { items: [], unread: 0, error: "Could not load notifications." };
+    }
     data = fallback.data;
   }
 
@@ -176,5 +193,5 @@ async function loadNotifications(
     ...n,
     request: n.request ?? null,
   })));
-  return { items, unread: unreadIds.length };
+  return { items, unread: unreadIds.length, error: null };
 }

@@ -50,6 +50,7 @@ export default async function ThreadPage({
       other={thread.other}
       initialMessages={newestThreadMessages((messages as Message[]) ?? [])}
       archiveState={thread.archiveState}
+      hiddenAt={thread.hiddenAt}
     />
   );
 }

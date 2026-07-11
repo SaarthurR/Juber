@@ -10,9 +10,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Message } from "@/lib/types";
 import {
-  isAfterHidden,
-  isNewerMessage,
+  applyThreadMessageInsert,
   loadThreadSummaries,
+  nextArchiveRefreshDelay,
   sortThreadSummaries,
   type ThreadSummary,
 } from "@/lib/messages";
@@ -33,6 +33,7 @@ export function MessagesList({
   const [, startTransition] = useTransition();
   const fullRefreshVersion = useRef(0);
   const threadRefreshVersions = useRef(new Map<string, number>());
+  const processedMessageIds = useRef(new Set<string>());
   const initialKey = useMemo(
     () =>
       initialThreads
@@ -105,6 +106,23 @@ export function MessagesList({
 
   useEffect(() => {
     const supabase = createClient();
+    function rememberMessage(messageId: string) {
+      const next = new Set(processedMessageIds.current);
+      next.add(messageId);
+      if (next.size > 500) {
+        const oldest = next.values().next().value;
+        if (oldest) next.delete(oldest);
+      }
+      processedMessageIds.current = next;
+    }
+    function invalidateHiddenThread(conversationId: string) {
+      fullRefreshVersion.current += 1;
+      threadRefreshVersions.current.set(
+        conversationId,
+        (threadRefreshVersions.current.get(conversationId) ?? 0) + 1,
+      );
+      setThreads((prev) => prev.filter((thread) => thread.id !== conversationId));
+    }
     const channel = supabase
       .channel(`inbox:${userId}`)
       .on(
@@ -112,27 +130,24 @@ export function MessagesList({
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
           const msg = payload.new as Message;
+          if (processedMessageIds.current.has(msg.id)) return;
           setThreads((prev) => {
             const index = prev.findIndex((thread) => thread.id === msg.conversation_id);
             if (index === -1) {
+              rememberMessage(msg.id);
               void refreshThread(msg.conversation_id);
               return prev;
             }
 
             const next = [...prev];
-            const existing = next[index];
-            if (existing.last?.id === msg.id) return prev;
-            if (existing.hiddenAt !== null && !isAfterHidden(msg, existing.hiddenAt)) {
-              return prev;
-            }
-            next[index] = {
-              ...existing,
-              last: isNewerMessage(msg, existing.last) ? msg : existing.last,
-              unread:
-                msg.sender_id !== userId && !msg.read_at
-                  ? existing.unread + 1
-                  : existing.unread,
-            };
+            const result = applyThreadMessageInsert(
+              next[index],
+              msg,
+              userId,
+              processedMessageIds.current,
+            );
+            processedMessageIds.current = new Set(result.processed);
+            next[index] = result.thread;
             return sortThreadSummaries(next);
           });
         },
@@ -142,20 +157,7 @@ export function MessagesList({
         { event: "UPDATE", schema: "public", table: "messages" },
         (payload) => {
           const msg = payload.new as Message;
-          setThreads((prev) =>
-            prev.map((thread) =>
-              thread.id === msg.conversation_id
-                ? {
-                    ...thread,
-                    last: thread.last?.id === msg.id ? msg : thread.last,
-                    unread:
-                      msg.sender_id !== userId && msg.read_at
-                        ? Math.max(0, thread.unread - 1)
-                        : thread.unread,
-                  }
-                : thread,
-            ),
-          );
+          void refreshThread(msg.conversation_id);
         },
       )
       .on(
@@ -176,7 +178,8 @@ export function MessagesList({
         },
         (payload) => {
           const row = payload.new as { conversation_id: string };
-          setThreads((prev) => prev.filter((thread) => thread.id !== row.conversation_id));
+          invalidateHiddenThread(row.conversation_id);
+          void refreshThread(row.conversation_id);
         },
       )
       .on(
@@ -189,28 +192,33 @@ export function MessagesList({
         },
         (payload) => {
           const row = payload.new as { conversation_id: string };
-          setThreads((prev) => prev.filter((thread) => thread.id !== row.conversation_id));
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "conversation_hides",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const row = payload.old as { conversation_id: string };
+          invalidateHiddenThread(row.conversation_id);
           void refreshThread(row.conversation_id);
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void refreshThreads();
+      });
+
+    function onVisible() {
+      if (document.visibilityState === "visible") void refreshThreads();
+    }
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
+      document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
   }, [userId, refreshThread, refreshThreads]);
+
+  useEffect(() => {
+    const delay = nextArchiveRefreshDelay(threads, new Date().toISOString());
+    if (delay === null) return;
+    const timeout = window.setTimeout(() => {
+      void refreshThreads();
+    }, Math.min(delay + 50, 2_147_483_647));
+    return () => window.clearTimeout(timeout);
+  }, [threads, refreshThreads]);
 
   function removeChat(conversationId: string, name: string) {
     if (!window.confirm(`Delete your chat with ${name}?`)) return;

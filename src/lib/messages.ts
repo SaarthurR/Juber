@@ -53,6 +53,11 @@ export type ThreadSummary = {
   archiveState: "active" | "archived";
 };
 
+export type VisibleNotificationIdsResult = {
+  ids: string[];
+  error: string | null;
+};
+
 type ConversationRow = {
   id: string;
   ride_id: string | null;
@@ -303,17 +308,95 @@ export async function loadVisibleNotificationIds(
   supabase: SupabaseClient,
   limit: number | null,
   unreadOnly: boolean,
-): Promise<string[]> {
-  const { data, error } = await supabase.rpc("visible_notification_ids", {
-    p_limit: limit,
-    p_unread_only: unreadOnly,
-  });
-  if (error) throw new Error("Could not load notification visibility.");
-  return ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
+): Promise<VisibleNotificationIdsResult> {
+  try {
+    const { data, error } = await supabase.rpc("visible_notification_ids", {
+      p_limit: limit,
+      p_unread_only: unreadOnly,
+    });
+    if (error) {
+      return { ids: [], error: "Could not load notification visibility." };
+    }
+    return {
+      ids: ((data ?? []) as Array<{ id: string }>).map((row) => row.id),
+      error: null,
+    };
+  } catch {
+    return { ids: [], error: "Could not load notification visibility." };
+  }
 }
 
 export function newestThreadMessages(messages: Message[], limit = 50): Message[] {
   return [...messages].sort(compareMessagesNewestFirst).slice(0, limit).reverse();
+}
+
+export function applyThreadMessageInsert(
+  thread: ThreadSummary,
+  message: Message,
+  userId: string,
+  processed: ReadonlySet<string>,
+): { thread: ThreadSummary; processed: ReadonlySet<string> } {
+  if (processed.has(message.id)) return { thread, processed };
+  const nextProcessed = new Set(processed);
+  nextProcessed.add(message.id);
+  if (thread.hiddenAt && !isAfterHidden(message, thread.hiddenAt)) {
+    return { thread, processed: nextProcessed };
+  }
+  return {
+    thread: {
+      ...thread,
+      last: isNewerMessage(message, thread.last) ? message : thread.last,
+      unread:
+        message.sender_id !== userId && !message.read_at
+          ? thread.unread + 1
+          : thread.unread,
+    },
+    processed: nextProcessed,
+  };
+}
+
+export function mergeMessageWindow(
+  current: Message[],
+  incoming: Message[],
+  pendingId: string | null,
+): { messages: Message[]; pendingConfirmed: boolean } {
+  const byId = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) byId.set(message.id, message);
+  const pendingConfirmed =
+    pendingId !== null && incoming.some((message) => message.id === pendingId);
+  const pending =
+    pendingId && !pendingConfirmed ? byId.get(pendingId) ?? null : null;
+  if (pendingId && !pendingConfirmed) byId.delete(pendingId);
+  const messages = newestThreadMessages([...byId.values()]);
+  return {
+    messages: pending ? [...messages, pending] : messages,
+    pendingConfirmed,
+  };
+}
+
+export function nextArchiveRefreshDelay(
+  threads: ThreadSummary[],
+  now: string,
+): number | null {
+  const nowEpoch = timestampEpoch(now);
+  const departures = threads.flatMap((thread) => {
+    if (thread.archiveState !== "active" || thread.context.kind === "missing") return [];
+    return [timestampEpoch(thread.context.departAt)];
+  });
+  if (departures.length === 0) return null;
+  return Math.max(0, Math.min(...departures) - nowEpoch);
+}
+
+export function messageMatchesRetry(
+  existing: Message,
+  expected: Pick<Message, "id" | "conversation_id" | "sender_id" | "body">,
+): boolean {
+  return (
+    existing.id === expected.id &&
+    existing.conversation_id === expected.conversation_id &&
+    existing.sender_id === expected.sender_id &&
+    existing.body === expected.body
+  );
 }
 
 export function conversationHideFor(

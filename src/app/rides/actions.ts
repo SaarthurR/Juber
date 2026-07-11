@@ -13,6 +13,13 @@ type CancellationContact = {
   phone: string | null;
 };
 
+function revalidateMessageRoutes() {
+  revalidatePath("/messages");
+  revalidatePath("/m/messages");
+  revalidatePath("/messages/[id]", "page");
+  revalidatePath("/m/messages/[id]", "page");
+}
+
 function cancellationName(contact: CancellationContact | undefined, fallback: string) {
   return contact?.full_name?.trim() || fallback;
 }
@@ -232,6 +239,7 @@ export async function acceptRideRequest(requestId: string) {
 
   revalidatePath("/rides");
   revalidatePath(`/requests/${requestId}`);
+  revalidateMessageRoutes();
   redirect(`/messages/${conversationId}`);
 }
 
@@ -257,9 +265,25 @@ export async function requestSeat(rideId: string) {
     .select()
     .single();
 
-  // Ignore duplicate-join errors (unique constraint 23505); the message text is
-  // locale/version-dependent, so match on the stable Postgres error code.
-  if (error && error.code !== "23505") throw new Error(error.message);
+  if (error?.code === "23505") {
+    const { data: existing, error: existingError } = await supabase
+      .from("ride_passengers")
+      .select("status")
+      .eq("ride_id", rideId)
+      .eq("passenger_id", user.id)
+      .maybeSingle<{ status: "pending" | "confirmed" | "declined" | "cancelled" }>();
+    if (existingError) throw new Error(existingError.message);
+    if (existing?.status === "pending" || existing?.status === "confirmed") {
+      revalidatePath(`/rides/${rideId}`);
+      return;
+    }
+    if (existing?.status === "cancelled" || existing?.status === "declined") {
+      throw new Error(
+        `Your previous seat request was ${existing.status}. Contact the driver to rejoin.`,
+      );
+    }
+  }
+  if (error) throw new Error(error.message);
   revalidatePath(`/rides/${rideId}`);
 }
 
@@ -272,25 +296,48 @@ export async function setPassengerStatus(
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const { data: ride } = await supabase
-    .from("rides")
-    .select("driver_id,seats_available")
-    .eq("id", rideId)
-    .single<{ driver_id: string; seats_available: number }>();
+  const [{ data: ride }, { data: passenger, error: passengerError }] = await Promise.all([
+    supabase
+      .from("rides")
+      .select("driver_id")
+      .eq("id", rideId)
+      .single<{ driver_id: string }>(),
+    supabase
+      .from("ride_passengers")
+      .select("passenger_id,status")
+      .eq("id", passengerId)
+      .eq("ride_id", rideId)
+      .maybeSingle<{ passenger_id: string; status: string }>(),
+  ]);
   if (!ride || ride.driver_id !== user.id) {
     throw new Error("Only the driver can update passenger requests.");
   }
-  if (status === "confirmed" && ride.seats_available <= 0) {
-    throw new Error("This ride has no seats left.");
+  if (passengerError) throw new Error(passengerError.message);
+  if (!passenger || passenger.status !== "pending") {
+    throw new Error("This seat request is no longer pending.");
   }
 
-  const { error } = await supabase
-    .from("ride_passengers")
-    .update({ status })
-    .eq("id", passengerId)
-    .eq("ride_id", rideId);
-  if (error) throw new Error(error.message);
+  if (status === "confirmed") {
+    const { data: confirmed, error } = await supabase.rpc("confirm_passenger", {
+      p_passenger_id: passenger.passenger_id,
+      p_ride_id: rideId,
+    });
+    if (error) throw new Error(error.message);
+    if (!confirmed) throw new Error("Could not confirm this passenger.");
+  } else {
+    const { data: declined, error } = await supabase
+      .from("ride_passengers")
+      .update({ status: "declined" })
+      .eq("id", passengerId)
+      .eq("ride_id", rideId)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!declined) throw new Error("This seat request is no longer pending.");
+  }
   revalidatePath(`/rides/${rideId}`);
+  revalidateMessageRoutes();
 }
 
 export async function cancelRide(rideId: string, reason: string) {
@@ -352,7 +399,7 @@ export async function cancelRide(rideId: string, reason: string) {
   }
 
   revalidatePath("/rides");
-  revalidatePath("/messages");
+  revalidateMessageRoutes();
   return { success: true };
 }
 
@@ -368,7 +415,7 @@ export async function closeRide(rideId: string) {
   if (!closed) throw new Error("Only the driver can close an active ride.");
 
   revalidatePath("/rides");
-  revalidatePath("/messages");
+  revalidateMessageRoutes();
   revalidatePath(`/rides/${rideId}`);
   redirect("/rides");
 }
@@ -421,6 +468,6 @@ export async function cancelSeat(rideId: string, message: string, redirectTo?: s
 
   revalidatePath("/rides");
   revalidatePath(`/rides/${rideId}`);
-  revalidatePath("/messages");
+  revalidateMessageRoutes();
   redirect(redirectTo ?? `/rides/${rideId}`);
 }

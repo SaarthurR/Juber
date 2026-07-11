@@ -17,12 +17,16 @@ export async function Navbar() {
   let unread = 0;
   let notificationUnread = 0;
   let notifications: NotificationWithContext[] = [];
+  let notificationError: string | null = null;
   if (user) {
     const supabase = await createClient();
-    const [unreadIds, notificationIds] = await Promise.all([
+    const [unreadResult, notificationResult] = await Promise.all([
       loadVisibleNotificationIds(supabase, null, true),
       loadVisibleNotificationIds(supabase, 6, false),
     ]);
+    const unreadIds = unreadResult.ids;
+    const notificationIds = notificationResult.ids;
+    notificationError = unreadResult.error ?? notificationResult.error;
     const notificationsResult = notificationIds.length
       ? await supabase
           .from("notifications")
@@ -46,8 +50,12 @@ export async function Navbar() {
         .in("id", notificationIds)
         .order("created_at", { ascending: false })
         .limit(notificationIds.length);
-      if (fallback.error) throw new Error("Could not load notifications.");
-      data = fallback.data;
+      if (fallback.error) {
+        notificationError = "Could not load notifications.";
+        data = [];
+      } else {
+        data = fallback.data;
+      }
     }
     notifications = (((data as NotificationWithContext[] | null) ?? []).map((n) => ({
       ...n,
@@ -78,6 +86,7 @@ export async function Navbar() {
                   initial={notifications}
                   initialUnread={notificationUnread}
                   userId={user.id}
+                  initialError={notificationError}
                 />
               </span>
               {profile?.is_admin && <ActiveNavLink href="/admin">Admin</ActiveNavLink>}

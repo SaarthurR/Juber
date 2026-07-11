@@ -1,8 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyThreadMessageInsert,
   buildThreadSummaries,
+  loadVisibleNotificationIds,
+  mergeMessageWindow,
+  messageMatchesRetry,
   newestThreadMessages,
+  nextArchiveRefreshDelay,
   type ConversationHide,
   type ThreadContext,
 } from "./messages";
@@ -288,4 +293,113 @@ test("canonical context key is independent of participant order", () => {
 
   assert.equal(fromA?.contextKey, "ride:ride-1:user-a:user-b");
   assert.equal(fromA?.contextKey, fromB?.contextKey);
+});
+
+test("processed realtime inserts increment unread exactly once", () => {
+  const [thread] = summaries({ messages: [], unread: 0 });
+  const incoming = message("inbound-1", "chat-1", "2026-07-11T10:01:00.000Z");
+
+  const first = applyThreadMessageInsert(thread, incoming, currentUserId, new Set());
+  const duplicate = applyThreadMessageInsert(
+    first.thread,
+    incoming,
+    currentUserId,
+    first.processed,
+  );
+
+  assert.equal(first.thread.unread, 1);
+  assert.equal(duplicate.thread.unread, 1);
+  assert.equal(duplicate.processed.has(incoming.id), true);
+});
+
+test("realtime inserts at or before hide cutoff do not change summary", () => {
+  const [thread] = summaries({
+    messages: [message("visible", "chat-1", "2026-07-11T10:01:00.000Z")],
+    unread: 1,
+    hides: [{
+      conversation_id: "chat-1",
+      user_id: currentUserId,
+      hidden_at: "2026-07-11T10:00:00.000Z",
+    }],
+  });
+  const hidden = message("hidden", "chat-1", "2026-07-11T10:00:00.000Z");
+
+  const result = applyThreadMessageInsert(thread, hidden, currentUserId, new Set());
+
+  assert.equal(result.thread.last?.id, "visible");
+  assert.equal(result.thread.unread, 1);
+});
+
+test("bounded catch-up merges missed messages and confirms matching pending id", () => {
+  const pending = message("pending-id", "chat-1", "2026-07-11T10:02:00.000Z", {
+    sender_id: currentUserId,
+  });
+  const confirmed = { ...pending, body: "confirmed" };
+  const missed = message("missed", "chat-1", "2026-07-11T10:01:00.000Z");
+
+  const result = mergeMessageWindow(
+    [message("initial", "chat-1", "2026-07-11T10:00:00.000Z"), pending],
+    [missed, confirmed],
+    pending.id,
+  );
+
+  assert.deepEqual(result.messages.map((item) => item.id), ["initial", "missed", "pending-id"]);
+  assert.equal(result.messages.at(-1)?.body, "confirmed");
+  assert.equal(result.pendingConfirmed, true);
+});
+
+test("next archive refresh targets the nearest active departure", () => {
+  const later = summaries({
+    conversationId: "chat-later",
+    messages: [],
+    context: {
+      kind: "ride",
+      id: "ride-later",
+      status: "active",
+      departAt: "2026-07-11T12:00:00.000Z",
+      passengerStatus: "confirmed",
+    },
+  })[0];
+  const sooner = summaries({
+    conversationId: "chat-sooner",
+    messages: [],
+    context: {
+      kind: "request",
+      id: "request-sooner",
+      status: "fulfilled",
+      departAt: "2026-07-11T11:00:00.000Z",
+    },
+  })[0];
+
+  assert.equal(
+    nextArchiveRefreshDelay([later, sooner], "2026-07-11T10:00:00.000Z"),
+    3_600_000,
+  );
+});
+
+test("duplicate send readback must match id, conversation, sender, and body", () => {
+  const existing = message("message-id", "chat-1", "2026-07-11T10:00:00.000Z", {
+    sender_id: currentUserId,
+    body: "hello",
+  });
+
+  assert.equal(messageMatchesRetry(existing, existing), true);
+  assert.equal(messageMatchesRetry(existing, { ...existing, body: "tampered" }), false);
+  assert.equal(
+    messageMatchesRetry(existing, { ...existing, conversation_id: "chat-2" }),
+    false,
+  );
+});
+
+test("notification visibility errors fail closed without throwing", async () => {
+  const result = await loadVisibleNotificationIds(
+    {
+      rpc: async () => ({ data: null, error: { message: "offline" } }),
+    } as unknown as Parameters<typeof loadVisibleNotificationIds>[0],
+    6,
+    false,
+  );
+
+  assert.deepEqual(result.ids, []);
+  assert.equal(result.error, "Could not load notification visibility.");
 });

@@ -49,12 +49,14 @@ function titleFor(n: NotificationWithContext): string {
 export function MNotificationBell({
   notifications,
   unreadCount,
+  initialError = null,
 }: {
   notifications: NotificationWithContext[];
   unreadCount: number;
+  initialError?: string | null;
 }) {
   const [open, setOpen] = useState(false);
-  const [markError, setMarkError] = useState<string | null>(null);
+  const [markError, setMarkError] = useState<string | null>(initialError);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const hasUnread = unreadCount > 0;

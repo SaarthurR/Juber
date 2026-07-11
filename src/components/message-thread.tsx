@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { markConversationRead, sendMessage } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { newestThreadMessages } from "@/lib/messages";
+import { mergeMessageWindow } from "@/lib/messages";
 import type { Message, Profile } from "@/lib/types";
 
 type ProfileBase = "/profile" | "/m/profile";
@@ -27,6 +27,7 @@ export function MessageThread({
   backHref = "/messages",
   profileBase = "/profile",
   archiveState,
+  hiddenAt,
 }: {
   conversationId: string;
   currentUserId: string;
@@ -36,11 +37,13 @@ export function MessageThread({
   backHref?: string;
   profileBase?: ProfileBase;
   archiveState: "active" | "archived";
+  hiddenAt: string | null;
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [draft, setDraft] = useState("");
   const [sendState, setSendState] = useState<SendState | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef(messages);
   const sendStateRef = useRef(sendState);
@@ -57,9 +60,35 @@ export function MessageThread({
     };
   }, []);
 
-  // Subscribe to new messages in this conversation via Supabase Realtime.
   useEffect(() => {
     const supabase = createClient();
+    function mergeIncoming(incoming: Message[]) {
+      const pendingId = sendStateRef.current?.pendingId ?? null;
+      const result = mergeMessageWindow(messagesRef.current, incoming, pendingId);
+      messagesRef.current = result.messages;
+      setMessages(result.messages);
+      if (result.pendingConfirmed && pendingId) {
+        sendStateRef.current = null;
+        setSendState(null);
+        setDraft("");
+      }
+    }
+    async function catchUp() {
+      let query = supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (hiddenAt) query = query.gt("created_at", hiddenAt);
+      const { data, error } = await query;
+      if (error) {
+        setSyncError("Could not refresh recent messages.");
+        return;
+      }
+      mergeIncoming((data as Message[] | null) ?? []);
+      setSyncError(null);
+    }
     const channel = supabase
       .channel(`messages:${conversationId}`)
       .on(
@@ -72,13 +101,7 @@ export function MessageThread({
         },
         (payload) => {
           const msg = payload.new as Message;
-          setMessages((prev) => {
-            return addConfirmedMessage(
-              prev,
-              msg,
-              sendStateRef.current?.pendingId ?? null,
-            );
-          });
+          mergeIncoming([msg]);
         },
       )
       .on(
@@ -91,15 +114,23 @@ export function MessageThread({
         },
         (payload) => {
           const msg = payload.new as Message;
-          setMessages((prev) => prev.map((m) => (m.id === msg.id ? msg : m)));
+          mergeIncoming([msg]);
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") void catchUp();
+      });
+
+    function onVisible() {
+      if (document.visibilityState === "visible") void catchUp();
+    }
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
+      document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
-  }, [conversationId]);
+  }, [conversationId, hiddenAt]);
 
   // Mark inbound messages read. Realtime pushes mutate `messages` frequently, so
   // guard with a ref to avoid overlapping calls, and don't let a failed update
@@ -166,7 +197,11 @@ export function MessageThread({
       read_at: null,
     };
 
-    setMessages((prev) => [...prev, pendingMessage]);
+    setMessages((prev) => {
+      const next = [...prev, pendingMessage];
+      messagesRef.current = next;
+      return next;
+    });
     await performSend(body, pendingId);
   }
 
@@ -181,6 +216,7 @@ export function MessageThread({
       formData.set("client_message_id", pendingId);
       const result = await sendMessage(conversationId, formData);
       if (result.error || !result.message) {
+        if (sendStateRef.current?.pendingId !== pendingId) return;
         const failed: SendState = {
           pendingId,
           body,
@@ -192,11 +228,18 @@ export function MessageThread({
         return;
       }
 
-      setMessages((prev) => reconcileMessage(prev, pendingId, result.message));
+      const merged = mergeMessageWindow(
+        messagesRef.current,
+        [result.message],
+        pendingId,
+      );
+      messagesRef.current = merged.messages;
+      setMessages(merged.messages);
       sendStateRef.current = null;
       setSendState(null);
       setDraft("");
     } catch {
+      if (sendStateRef.current?.pendingId !== pendingId) return;
       const failed: SendState = {
         pendingId,
         body,
@@ -238,6 +281,11 @@ export function MessageThread({
       {readError && (
         <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
           {readError}
+        </p>
+      )}
+      {syncError && (
+        <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {syncError}
         </p>
       )}
 
@@ -319,29 +367,4 @@ export function MessageThread({
       </form>
     </div>
   );
-}
-
-function addConfirmedMessage(
-  messages: Message[],
-  message: Message,
-  pendingId: string | null,
-): Message[] {
-  const pending = pendingId
-    ? messages.filter((item) => item.id === pendingId && item.id !== message.id)
-    : [];
-  const confirmed = messages.filter(
-    (item) => item.id !== pendingId && item.id !== message.id,
-  );
-  return [...newestThreadMessages([...confirmed, message]), ...pending];
-}
-
-function reconcileMessage(
-  messages: Message[],
-  pendingId: string,
-  message: Message,
-): Message[] {
-  const confirmed = messages.filter(
-    (item) => item.id !== pendingId && item.id !== message.id,
-  );
-  return newestThreadMessages([...confirmed, message]);
 }

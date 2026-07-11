@@ -90,28 +90,40 @@ export function NotificationBell({
   initial,
   initialUnread,
   userId,
+  initialError = null,
 }: {
   initial: NotificationWithContext[];
   initialUnread: number;
   userId: string;
+  initialError?: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(initial);
   const [unread, setUnread] = useState(initialUnread);
-  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [notificationError, setNotificationError] = useState<string | null>(initialError);
   const [markingAll, setMarkingAll] = useState(false);
-  const initialKey = `${initialUnread}:${initial.map((n) => n.id).join(",")}`;
+  const initialKey = `${initialUnread}:${initialError ?? ""}:${initial.map((n) => n.id).join(",")}`;
   const [syncedTo, setSyncedTo] = useState(initialKey);
   const ref = useRef<HTMLDivElement>(null);
 
   const refreshNotifications = useCallback(async () => {
     const supabase = createClient();
     try {
-      const [unreadIds, notificationIds] = await Promise.all([
+      const [unreadResult, notificationResult] = await Promise.all([
         loadVisibleNotificationIds(supabase, null, true),
         loadVisibleNotificationIds(supabase, 6, false),
       ]);
+      if (unreadResult.error || notificationResult.error) {
+        setUnread(0);
+        setItems([]);
+        setNotificationError(
+          unreadResult.error ?? notificationResult.error ?? "Could not refresh notifications.",
+        );
+        return;
+      }
+      const unreadIds = unreadResult.ids;
+      const notificationIds = notificationResult.ids;
       const notificationsResult = notificationIds.length
         ? await supabase
             .from("notifications")
@@ -152,6 +164,7 @@ export function NotificationBell({
     setSyncedTo(initialKey);
     setUnread(initialUnread);
     setItems(initial);
+    setNotificationError(initialError);
   }
 
   // Live arrivals bump the dot + refresh the server data.

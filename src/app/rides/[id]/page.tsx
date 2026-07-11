@@ -272,7 +272,8 @@ export default async function RideDetailPage({
               <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
                 Seat {myJoin.status}
               </div>
-              {ride.status === "active" && myJoin.status !== "declined" && (
+              {ride.status === "active" &&
+                (myJoin.status === "pending" || myJoin.status === "confirmed") && (
                 <CancelSeatButton rideId={ride.id} />
               )}
             </div>

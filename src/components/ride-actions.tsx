@@ -315,7 +315,8 @@ export function CloseRideButton({
           >
             <h2 className="text-lg font-bold text-stone-900">Close this ride?</h2>
             <p className="mt-1 text-sm text-stone-500">
-              This marks the ride completed, removes it from active listings, and clears its chat history.
+              This marks the ride completed and removes it from active listings. Chat history stays
+              available for lost items and follow-up.
             </p>
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
             <div className="mt-5 flex justify-end gap-2">

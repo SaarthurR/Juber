@@ -54,6 +54,7 @@ export default async function MobileThreadPage({
       backHref="/m/messages"
       profileBase="/m/profile"
       archiveState={thread.archiveState}
+      hiddenAt={thread.hiddenAt}
     />
   );
 }

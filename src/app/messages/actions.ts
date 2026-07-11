@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { MESSAGE_BASE_TARGETS, pickAllowed } from "@/lib/route-targets";
+import { messageMatchesRetry } from "@/lib/messages";
 import type { Message } from "@/lib/types";
 
 function revalidateMessageRoutes() {
@@ -83,6 +84,26 @@ export async function sendMessage(conversationId: string, formData: FormData) {
     })
     .select("*")
     .single<Message>();
+  if (error?.code === "23505") {
+    const { data: existing, error: readbackError } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("id", clientMessageId)
+      .maybeSingle<Message>();
+    if (
+      !readbackError &&
+      existing &&
+      messageMatchesRetry(existing, {
+        id: clientMessageId,
+        conversation_id: conversationId,
+        sender_id: user.id,
+        body,
+      })
+    ) {
+      revalidateMessageRoutes();
+      return { message: existing, error: null };
+    }
+  }
   if (error || !data) {
     console.error("send message failed", { code: error?.code, conversationId });
     return { message: null, error: "Could not send this message. Please try again." };
@@ -98,22 +119,36 @@ export async function markConversationRead(conversationId: string) {
   if (!user) return;
 
   const readAt = new Date().toISOString();
-  const { error } = await supabase
+  const { data: hide, error: hideError } = await supabase
+    .from("conversation_hides")
+    .select("hidden_at")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", user.id)
+    .maybeSingle<{ hidden_at: string }>();
+  if (hideError) throw new Error(hideError.message);
+
+  let messageUpdate = supabase
     .from("messages")
     .update({ read_at: readAt })
     .eq("conversation_id", conversationId)
     .neq("sender_id", user.id)
     .is("read_at", null);
+  if (hide?.hidden_at) messageUpdate = messageUpdate.gt("created_at", hide.hidden_at);
+  const { error } = await messageUpdate;
 
   if (error) throw new Error(error.message);
 
-  const { error: notificationError } = await supabase
+  let notificationUpdate = supabase
     .from("notifications")
     .update({ read_at: readAt })
     .eq("recipient_id", user.id)
     .eq("type", "new_message")
     .eq("conversation_id", conversationId)
     .is("read_at", null);
+  if (hide?.hidden_at) {
+    notificationUpdate = notificationUpdate.gt("created_at", hide.hidden_at);
+  }
+  const { error: notificationError } = await notificationUpdate;
   if (notificationError) throw new Error(notificationError.message);
 
   revalidateMessageRoutes();

@@ -22,8 +22,8 @@ export default async function MessagesPage({
   if (!user) redirect("/");
   const supabase = await createClient();
 
-  const unreadNotificationIds = await loadVisibleNotificationIds(supabase, null, true);
-  const unreadCount = unreadNotificationIds.length;
+  const unreadResult = await loadVisibleNotificationIds(supabase, null, true);
+  const unreadCount = unreadResult.error ? 0 : unreadResult.ids.length;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
@@ -39,6 +39,11 @@ export default async function MessagesPage({
           badge={unreadCount ?? 0}
         />
       </div>
+      {unreadResult.error && (
+        <p role="alert" className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+          Notifications are temporarily unavailable.
+        </p>
+      )}
 
       {showNotifications ? (
         <NotificationsTab userId={user.id} hasUnread={(unreadCount ?? 0) > 0} />
@@ -64,7 +69,15 @@ async function NotificationsTab({
   hasUnread: boolean;
 }) {
   const supabase = await createClient();
-  const notificationIds = await loadVisibleNotificationIds(supabase, 50, false);
+  const visibility = await loadVisibleNotificationIds(supabase, 50, false);
+  const notificationIds = visibility.ids;
+  if (visibility.error) {
+    return (
+      <p role="alert" className="rounded-xl bg-red-50 px-3 py-3 text-sm text-red-700">
+        Notifications are temporarily unavailable.
+      </p>
+    );
+  }
 
   const notificationsResult = notificationIds.length
     ? await supabase
@@ -88,7 +101,13 @@ async function NotificationsTab({
       .in("id", notificationIds)
       .order("created_at", { ascending: false })
       .limit(notificationIds.length);
-    if (fallback.error) throw new Error("Could not load notifications.");
+    if (fallback.error) {
+      return (
+        <p role="alert" className="rounded-xl bg-red-50 px-3 py-3 text-sm text-red-700">
+          Notifications are temporarily unavailable.
+        </p>
+      );
+    }
     data = fallback.data;
   }
 
