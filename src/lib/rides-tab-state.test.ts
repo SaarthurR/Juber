@@ -2,11 +2,57 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   activateRidesTabFromKey,
+  commitRidesTabSelection,
   createRidesTabHref,
   getRidesTabPresentation,
   getRidesTabFromSearch,
   ridesTabReducer,
+  syncRidesTabFromHistory,
+  type RidesTab,
 } from "./rides-tab-state";
+
+function createHistoryController(
+  initialTab: RidesTab,
+  initialSearch = "?from=Fremont",
+) {
+  let currentTab = initialTab;
+  let search = initialSearch;
+  const commits: RidesTab[] = [];
+  const history: Array<{
+    state: { ridesTab: RidesTab };
+    href: string;
+  }> = [];
+
+  return {
+    get currentTab() {
+      return currentTab;
+    },
+    commits,
+    history,
+    select(nextTab: RidesTab) {
+      return commitRidesTabSelection({
+        currentTab,
+        nextTab,
+        pathname: "/rides",
+        search,
+        commit: (tab) => {
+          currentTab = tab;
+          commits.push(tab);
+        },
+        pushState: (state, href) => {
+          history.push({ state, href });
+          search = href.includes("?") ? href.slice(href.indexOf("?")) : "";
+        },
+      });
+    },
+    back(nextSearch: string) {
+      return syncRidesTabFromHistory(nextSearch, (tab) => {
+        currentTab = tab;
+        commits.push(tab);
+      });
+    },
+  };
+}
 
 test("rides tab reducer changes visible tab immediately on click", () => {
   const state = ridesTabReducer(
@@ -120,4 +166,82 @@ test("unrelated keys leave tab selection and focus alone", () => {
 
   assert.equal(handled, false);
   assert.equal(called, false);
+});
+
+test("clicking the active tab preserves state without adding history", () => {
+  const controller = createHistoryController("carpools");
+
+  assert.equal(controller.select("carpools"), false);
+  assert.equal(controller.currentTab, "carpools");
+  assert.deepEqual(controller.commits, []);
+  assert.deepEqual(controller.history, []);
+});
+
+test("Home and End on their active targets preserve focus without adding history", () => {
+  const carpools = createHistoryController("carpools");
+  const requests = createHistoryController("requests", "?from=Fremont&tab=requests");
+  const focusCalls: RidesTab[] = [];
+
+  activateRidesTabFromKey("carpools", "Home", {
+    activate: carpools.select,
+    focus: (tab) => focusCalls.push(tab),
+  });
+  activateRidesTabFromKey("requests", "End", {
+    activate: requests.select,
+    focus: (tab) => focusCalls.push(tab),
+  });
+
+  assert.deepEqual(focusCalls, ["carpools", "requests"]);
+  assert.deepEqual(carpools.history, []);
+  assert.deepEqual(requests.history, []);
+});
+
+test("an actual tab change commits once with filters preserved", () => {
+  const controller = createHistoryController("carpools", "?from=Fremont&trip=round");
+
+  assert.equal(controller.select("requests"), true);
+  assert.equal(controller.currentTab, "requests");
+  assert.deepEqual(controller.commits, ["requests"]);
+  assert.deepEqual(controller.history, [
+    {
+      state: { ridesTab: "requests" },
+      href: "/rides?from=Fremont&trip=round&tab=requests",
+    },
+  ]);
+});
+
+test("wrap arrows focus and commit only their actual tab changes", () => {
+  const controller = createHistoryController("carpools");
+  const focusCalls: RidesTab[] = [];
+
+  activateRidesTabFromKey("carpools", "ArrowLeft", {
+    activate: controller.select,
+    focus: (tab) => focusCalls.push(tab),
+  });
+  activateRidesTabFromKey("requests", "ArrowRight", {
+    activate: controller.select,
+    focus: (tab) => focusCalls.push(tab),
+  });
+
+  assert.deepEqual(focusCalls, ["requests", "carpools"]);
+  assert.deepEqual(controller.history, [
+    {
+      state: { ridesTab: "requests" },
+      href: "/rides?from=Fremont&tab=requests",
+    },
+    {
+      state: { ridesTab: "carpools" },
+      href: "/rides?from=Fremont",
+    },
+  ]);
+});
+
+test("Back synchronizes the visible tab without writing replacement history", () => {
+  const controller = createHistoryController("carpools");
+  controller.select("requests");
+
+  assert.equal(controller.back("?from=Fremont"), "carpools");
+  assert.equal(controller.currentTab, "carpools");
+  assert.deepEqual(controller.commits, ["requests", "carpools"]);
+  assert.equal(controller.history.length, 1);
 });

@@ -9,9 +9,10 @@ import { RideCard, RequestCard } from "@/components/ride-card";
 import { RideFilters } from "@/components/ride-filters";
 import { RidesTabList, RidesTabPanels } from "@/components/rides-tabs";
 import {
-  createRidesTabHref,
+  commitRidesTabSelection,
   getRidesTabFromSearch,
   ridesTabReducer,
+  syncRidesTabFromHistory,
   type RidesTab,
 } from "@/lib/rides-tab-state";
 import type { RideRequestWithRider, RideWithDriver } from "@/lib/types";
@@ -38,12 +39,16 @@ export function RidesView({
   );
 
   useEffect(() => {
-    dispatchTab({ type: "sync", search: paramsString });
+    syncRidesTabFromHistory(paramsString, (tab) => {
+      dispatchTab({ type: "select", tab });
+    });
   }, [paramsString]);
 
   useEffect(() => {
     function syncFromHistory() {
-      dispatchTab({ type: "sync", search: window.location.search });
+      syncRidesTabFromHistory(window.location.search, (tab) => {
+        dispatchTab({ type: "select", tab });
+      });
     }
 
     window.addEventListener("popstate", syncFromHistory);
@@ -51,9 +56,14 @@ export function RidesView({
   }, []);
 
   function setTab(tab: RidesTab) {
-    dispatchTab({ type: "select", tab });
-    const href = createRidesTabHref(pathname || "/rides", window.location.search, tab);
-    window.history.pushState({ ridesTab: tab }, "", href);
+    commitRidesTabSelection({
+      currentTab: tabState.visibleTab,
+      nextTab: tab,
+      pathname: pathname || "/rides",
+      search: window.location.search,
+      commit: (nextTab) => dispatchTab({ type: "select", tab: nextTab }),
+      pushState: (state, href) => window.history.pushState(state, "", href),
+    });
   }
 
   const carpoolsPanel = rides.length ? (

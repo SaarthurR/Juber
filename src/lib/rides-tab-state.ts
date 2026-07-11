@@ -34,6 +34,40 @@ export function createRidesTabHref(pathname: string, search: string, tab: RidesT
   return query ? `${pathname}?${query}` : pathname;
 }
 
+export function commitRidesTabSelection({
+  currentTab,
+  nextTab,
+  pathname,
+  search,
+  commit,
+  pushState,
+}: {
+  currentTab: RidesTab;
+  nextTab: RidesTab;
+  pathname: string;
+  search: string;
+  commit: (tab: RidesTab) => void;
+  pushState: (state: { ridesTab: RidesTab }, href: string) => void;
+}) {
+  if (nextTab === currentTab) return false;
+
+  commit(nextTab);
+  pushState(
+    { ridesTab: nextTab },
+    createRidesTabHref(pathname, search, nextTab),
+  );
+  return true;
+}
+
+export function syncRidesTabFromHistory(
+  search: string,
+  commit: (tab: RidesTab) => void,
+) {
+  const tab = getRidesTabFromSearch(search);
+  commit(tab);
+  return tab;
+}
+
 export function ridesTabReducer(
   state: RidesTabState,
   action: RidesTabAction,
