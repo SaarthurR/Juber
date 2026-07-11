@@ -848,6 +848,64 @@ insert into public.messages (conversation_id, sender_id, body)
 values (:'cancel_conversation', :'rider', 'cancelled ride lost-item follow-up');
 reset role;
 
+insert into task4_failures
+select 'rides missing from realtime publication', 'supabase_realtime does not contain rides'
+where not exists (
+  select 1
+  from pg_publication_tables
+  where pubname = 'supabase_realtime'
+    and schemaname = 'public'
+    and tablename = 'rides'
+)
+on conflict do nothing;
+insert into task4_failures
+select 'ride_requests missing from realtime publication', 'supabase_realtime does not contain ride_requests'
+where not exists (
+  select 1
+  from pg_publication_tables
+  where pubname = 'supabase_realtime'
+    and schemaname = 'public'
+    and tablename = 'ride_requests'
+)
+on conflict do nothing;
+insert into task4_failures
+select 'conversation_hides was republished', 'private hide table is in supabase_realtime'
+where exists (
+  select 1
+  from pg_publication_tables
+  where pubname = 'supabase_realtime'
+    and schemaname = 'public'
+    and tablename = 'conversation_hides'
+)
+on conflict do nothing;
+
+set role anon;
+select count(*) as anon_ride_count from public.rides \gset
+select count(*) as anon_request_count from public.ride_requests \gset
+reset role;
+select public.task4_assert(
+  'anon cannot select lifecycle ride rows',
+  :'anon_ride_count'::bigint = 0
+);
+select public.task4_assert(
+  'anon cannot select lifecycle request rows',
+  :'anon_request_count'::bigint = 0
+);
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'rider', false);
+select count(*) as authenticated_ride_count from public.rides \gset
+select count(*) as authenticated_request_count from public.ride_requests \gset
+reset role;
+select public.task4_assert(
+  'authenticated subscribers can select ride lifecycle rows',
+  :'authenticated_ride_count'::bigint > 0
+);
+select public.task4_assert(
+  'authenticated subscribers can select request lifecycle rows',
+  :'authenticated_request_count'::bigint > 0
+);
+
 select public.task4_assert(
   'all rejected security transitions were denied',
   not exists (select 1 from task4_failures)
