@@ -17,6 +17,12 @@ import {
   rideDetailDestination,
 } from "./route-targets";
 
+function appPagePath(route: string) {
+  const direct = fileURLToPath(new URL(`../app${route}/page.tsx`, import.meta.url));
+  if (existsSync(direct)) return direct;
+  return fileURLToPath(new URL(`../app/(desktop)${route}/page.tsx`, import.meta.url));
+}
+
 const mappingId = "123e4567-e89b-42d3-a456-426614174000";
 const mappingEventId = "123e4567-e89b-42d3-a456-426614174001";
 const desktopOptOutMappings = [
@@ -98,7 +104,7 @@ test("every allow-listed base has an app page", () => {
   ];
 
   for (const target of targets) {
-    const page = fileURLToPath(new URL(`../app${target}/page.tsx`, import.meta.url));
+    const page = appPagePath(target);
     assert.equal(existsSync(page), true, `${target} must resolve to an app page`);
   }
 });
@@ -119,7 +125,7 @@ test("mobile filesystem routes exist without stale /m/rides list root", () => {
   ];
 
   for (const target of existingRoutes) {
-    const page = fileURLToPath(new URL(`../app${target}/page.tsx`, import.meta.url));
+    const page = appPagePath(target);
     assert.equal(existsSync(page), true, `${target} must resolve to an app page`);
   }
 
@@ -355,7 +361,7 @@ test("desktop opt-out forces desktop onboarding and fallback", () => {
 test("desktop opt-out maps every mobile route category to an existing desktop page", () => {
   for (const { mobile, desktop, page } of desktopOptOutMappings) {
     assert.equal(desktopAuthDestination(mobile), desktop);
-    const pageFile = fileURLToPath(new URL(`../app${page}/page.tsx`, import.meta.url));
+    const pageFile = appPagePath(page);
     assert.equal(existsSync(pageFile), true, `${desktop} must resolve to ${page}`);
   }
 });
@@ -496,7 +502,7 @@ test("safe revalidation helper returns only canonical pathnames", () => {
 
 test("profile forms re-sanitize one next value and render a hidden handoff", () => {
   const desktopPage = readFileSync(
-    fileURLToPath(new URL("../app/profile/page.tsx", import.meta.url)),
+    fileURLToPath(new URL("../app/(desktop)/profile/page.tsx", import.meta.url)),
     "utf8",
   );
   const mobilePage = readFileSync(

@@ -3,8 +3,8 @@ import { LandingAuthGate } from "@/components/landing-auth-gate";
 import { getCurrentUser } from "@/lib/auth";
 
 // The mobile redesign lives under /m: a single phone-width column (centered on
-// larger screens) with the persistent bottom tab bar. The desktop navbar/footer
-// are hidden for these routes by SiteChrome in the root layout.
+// larger screens) with the persistent bottom tab bar. It stays outside the
+// desktop route group, so desktop chrome work is structurally absent.
 export default async function MobileLayout({ children }: { children: React.ReactNode }) {
   const { user } = await getCurrentUser();
   const content = (

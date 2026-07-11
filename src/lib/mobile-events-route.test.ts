@@ -20,7 +20,7 @@ test("proxy maps mobile event detail without looping or overriding desktop opt-o
 });
 
 test("landing browse links are marked anonymous-safe", () => {
-  const home = readFileSync(fileURLToPath(new URL("app/page.tsx", root)), "utf8");
+  const home = readFileSync(fileURLToPath(new URL("app/(desktop)/page.tsx", root)), "utf8");
 
   assert.match(home, /href="\/rides"[\s\S]*data-auth-allowed="true"/);
   assert.match(home, /SectionHeader title="Upcoming events" href="\/events" allowAnonymousBrowse/);

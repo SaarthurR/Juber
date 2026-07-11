@@ -3,18 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
+import { useNotifications } from "@/components/notifications-provider";
 
 /**
  * Messages nav item with a combined unread badge for notifications and chats.
  */
-export function MessagesNavLink({
-  initialUnread,
-}: {
-  initialUnread: number;
-}) {
+export function MessagesNavLink() {
   const pathname = usePathname();
+  const { state } = useNotifications();
   const active = pathname.startsWith("/messages");
-  const visibleUnread = initialUnread;
+  const visibleUnread = state.unread;
 
   return (
     <Link

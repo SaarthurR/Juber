@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const eventsPage = fileURLToPath(new URL("../app/events/page.tsx", import.meta.url));
-const detailPage = fileURLToPath(new URL("../app/events/[slug]/page.tsx", import.meta.url));
+const eventsPage = fileURLToPath(new URL("../app/(desktop)/events/page.tsx", import.meta.url));
+const detailPage = fileURLToPath(new URL("../app/(desktop)/events/[slug]/page.tsx", import.meta.url));
 
 test("events page removes fake demand and has first-mover copy", () => {
   const source = readFileSync(eventsPage, "utf8");

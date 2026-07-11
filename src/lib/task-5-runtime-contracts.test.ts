@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const desktopRidePage = readFileSync(
-  new URL("../app/rides/[id]/page.tsx", import.meta.url),
+  new URL("../app/(desktop)/rides/[id]/page.tsx", import.meta.url),
   "utf8",
 );
 const mobileRidePage = readFileSync(

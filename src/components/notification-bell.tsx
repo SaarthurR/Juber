@@ -1,35 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { createClient } from "@/lib/supabase/client";
-import { markNotificationsRead } from "@/app/messages/actions";
 import {
-  failClosedNotificationState,
-  loadVisibleNotificationIds,
-} from "@/lib/messages";
-import {
-  createNotificationControllerState,
-  isCurrentNotificationRefresh,
   notificationBulkControlStatus,
-  notificationControllerKey,
-  notificationControllerReducer,
-  notificationTitle,
-  notificationWriteErrorMessage,
   notificationWritePending,
-  subscribeToNotificationChanges,
-  type NotificationSnapshot,
 } from "@/lib/notifications-controller";
+import { useNotifications } from "@/components/notifications-provider";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
-
-const NOTIFICATION_SELECT =
-  "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)";
-
-const FALLBACK_NOTIFICATION_SELECT =
-  "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)";
 
 const ICON: Record<NotificationType, React.ComponentType<{ size?: number; className?: string }>> = {
   seat_requested: Car,
@@ -101,168 +81,15 @@ function copyFor(n: NotificationWithContext) {
   }
 }
 
-export function NotificationBell({
-  initial,
-  initialUnread,
-  userId,
-  initialError = null,
-}: {
-  initial: NotificationWithContext[];
-  initialUnread: number;
-  userId: string;
-  initialError?: string | null;
-}) {
-  const initialSnapshot = {
-    items: initial,
-    unread: initialUnread,
-    error: initialError,
-  };
-
-  return (
-    <NotificationBellController
-      key={notificationControllerKey(initialSnapshot)}
-      userId={userId}
-      initialSnapshot={initialSnapshot}
-    />
-  );
-}
-
-function NotificationBellController({
-  userId,
-  initialSnapshot,
-}: {
-  userId: string;
-  initialSnapshot: NotificationSnapshot;
-}) {
-  const router = useRouter();
-  const [state, dispatch] = useReducer(
-    notificationControllerReducer,
-    initialSnapshot,
-    createNotificationControllerState,
-  );
+export function NotificationBell() {
+  const {
+    state,
+    dispatch,
+    refreshNotifications,
+    markAllRead,
+    markOneRead,
+  } = useNotifications();
   const ref = useRef<HTMLDivElement>(null);
-  const refreshGeneration = useRef(0);
-  const operationSequence = useRef(0);
-  const active = useRef(true);
-
-  const refreshNotifications = useCallback(async () => {
-    const generation = ++refreshGeneration.current;
-    const supabase = createClient();
-    function failClosed(message: string) {
-      const failed = failClosedNotificationState<NotificationWithContext>(message);
-      if (
-        isCurrentNotificationRefresh(
-          generation,
-          refreshGeneration.current,
-          active.current,
-        )
-      ) {
-        dispatch({ type: "reconcile-failed", error: failed.error });
-      }
-    }
-    try {
-      const [unreadResult, notificationResult] = await Promise.all([
-        loadVisibleNotificationIds(supabase, null, true),
-        loadVisibleNotificationIds(supabase, 6, false),
-      ]);
-      if (
-        !isCurrentNotificationRefresh(
-          generation,
-          refreshGeneration.current,
-          active.current,
-        )
-      ) {
-        return;
-      }
-      if (unreadResult.error || notificationResult.error) {
-        failClosed(
-          unreadResult.error ?? notificationResult.error ?? "Could not refresh notifications.",
-        );
-        return;
-      }
-      const unreadIds = unreadResult.ids;
-      const notificationIds = notificationResult.ids;
-      const notificationsResult = notificationIds.length
-        ? await supabase
-            .from("notifications")
-            .select(NOTIFICATION_SELECT)
-            .eq("recipient_id", userId)
-            .in("id", notificationIds)
-            .order("created_at", { ascending: false })
-        : { data: [] as NotificationWithContext[], error: null };
-      if (
-        !isCurrentNotificationRefresh(
-          generation,
-          refreshGeneration.current,
-          active.current,
-        )
-      ) {
-        return;
-      }
-
-      let data = notificationsResult.data;
-      if (notificationsResult.error) {
-        const fallback = await supabase
-          .from("notifications")
-          .select(FALLBACK_NOTIFICATION_SELECT)
-          .eq("recipient_id", userId)
-          .in("id", notificationIds)
-          .order("created_at", { ascending: false });
-        if (fallback.error) throw new Error("Could not load notifications.");
-        data = fallback.data;
-      }
-      if (
-        !isCurrentNotificationRefresh(
-          generation,
-          refreshGeneration.current,
-          active.current,
-        )
-      ) {
-        return;
-      }
-      dispatch({
-        type: "reconcile",
-        snapshot: {
-          unread: unreadIds.length,
-          unreadIds,
-          items: ((data ?? []) as NotificationWithContext[]).map((n) => ({
-            ...n,
-            request: n.request ?? null,
-          })),
-          error: null,
-        },
-      });
-    } catch {
-      failClosed("Could not refresh notifications.");
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-      refreshGeneration.current += 1;
-    };
-  }, []);
-
-  // Live arrivals bump the dot + refresh the server data.
-  useEffect(() => {
-    const supabase = createClient();
-    return subscribeToNotificationChanges(supabase, "bell", userId, () => {
-      void refreshNotifications();
-      router.refresh();
-    });
-  }, [userId, router, refreshNotifications]);
-
-  useEffect(() => {
-    function onVisible() {
-      if (document.visibilityState === "visible") void refreshNotifications();
-    }
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [refreshNotifications]);
 
   // Click-out + Esc close the popover.
   useEffect(() => {
@@ -281,67 +108,7 @@ function NotificationBellController({
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [state.open]);
-
-  async function markAllRead() {
-    if (state.unread === 0 || notificationWritePending(state)) return;
-    const operationId = ++operationSequence.current;
-    dispatch({ type: "mark-all-start", operationId });
-    try {
-      await markNotificationsRead();
-      if (!active.current) return;
-      dispatch({
-        type: "mark-all-success",
-        operationId,
-        readAt: new Date().toISOString(),
-      });
-      router.refresh();
-    } catch {
-      if (!active.current) return;
-      dispatch({
-        type: "mark-all-failed",
-        operationId,
-        error: notificationWriteErrorMessage("bulk"),
-      });
-    }
-  }
-
-  async function markOneRead(id: string, destination: string) {
-    if (notificationWritePending(state)) return;
-    const target = state.items.find((n) => n.id === id);
-    if (!target || target.read_at) return;
-
-    const operationId = ++operationSequence.current;
-    dispatch({
-      type: "mark-one-start",
-      id,
-      operationId,
-      context: {
-        id,
-        title: notificationTitle(target),
-        destination,
-      },
-    });
-    const readAt = new Date().toISOString();
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read_at: readAt })
-      .eq("id", id)
-      .eq("recipient_id", userId);
-    if (!active.current) return;
-    if (error) {
-      dispatch({
-        type: "mark-one-failed",
-        id,
-        operationId,
-        error: notificationWriteErrorMessage("row"),
-      });
-      return;
-    }
-    dispatch({ type: "mark-one-success", id, operationId, readAt });
-    router.refresh();
-  }
+  }, [dispatch, state.open]);
 
   return (
     <div className="relative" ref={ref}>

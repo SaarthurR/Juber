@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { getCurrentUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import type { AuthUser } from "@/lib/auth";
 import { APP_NAME } from "@/lib/constants";
 import { Avatar } from "@/components/ui/avatar";
 import { TempleLogo } from "@/components/temple-logo";
@@ -8,61 +7,15 @@ import { GoogleSignInButton } from "@/components/auth-button";
 import { NotificationBell } from "@/components/notification-bell";
 import { MessagesNavLink } from "@/components/messages-nav-link";
 import { ActiveNavLink, ActiveProfileLink } from "@/components/active-nav-link";
-import { loadVisibleNotificationIds } from "@/lib/messages";
-import type { NotificationWithContext } from "@/lib/types";
+import type { Profile } from "@/lib/types";
 
-export async function Navbar() {
-  const { user, profile } = await getCurrentUser();
-
-  let unread = 0;
-  let notificationUnread = 0;
-  let notifications: NotificationWithContext[] = [];
-  let notificationError: string | null = null;
-  if (user) {
-    const supabase = await createClient();
-    const [unreadResult, notificationResult] = await Promise.all([
-      loadVisibleNotificationIds(supabase, null, true),
-      loadVisibleNotificationIds(supabase, 6, false),
-    ]);
-    const unreadIds = unreadResult.ids;
-    const notificationIds = notificationResult.ids;
-    notificationError = unreadResult.error ?? notificationResult.error;
-    const notificationsResult = notificationIds.length
-      ? await supabase
-          .from("notifications")
-          .select(
-            "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)",
-          )
-          .eq("recipient_id", user.id)
-          .in("id", notificationIds)
-          .order("created_at", { ascending: false })
-      : { data: [] as NotificationWithContext[], error: null };
-    notificationUnread = unreadIds.length;
-    unread = notificationUnread;
-    let data = notificationsResult.data;
-    if (notificationsResult.error) {
-      const fallback = await supabase
-        .from("notifications")
-        .select(
-          "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)",
-        )
-        .eq("recipient_id", user.id)
-        .in("id", notificationIds)
-        .order("created_at", { ascending: false })
-        .limit(notificationIds.length);
-      if (fallback.error) {
-        notificationError = "Could not load notifications.";
-        data = [];
-      } else {
-        data = fallback.data;
-      }
-    }
-    notifications = (((data as NotificationWithContext[] | null) ?? []).map((n) => ({
-      ...n,
-      request: n.request ?? null,
-    })));
-  }
-
+export function Navbar({
+  user,
+  profile,
+}: {
+  user: AuthUser | null;
+  profile: Profile | null;
+}) {
   return (
     <header className="sticky top-0 z-40 border-b border-[#efe4d3] bg-white/95 backdrop-blur-sm">
       <nav className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
@@ -80,14 +33,9 @@ export async function Navbar() {
 
           {user ? (
             <>
-              <MessagesNavLink initialUnread={unread} />
+              <MessagesNavLink />
               <span className="ml-0.5">
-                <NotificationBell
-                  initial={notifications}
-                  initialUnread={notificationUnread}
-                  userId={user.id}
-                  initialError={notificationError}
-                />
+                <NotificationBell />
               </span>
               {profile?.is_admin && <ActiveNavLink href="/admin">Admin</ActiveNavLink>}
               <ActiveProfileLink>

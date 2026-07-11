@@ -7,7 +7,6 @@ import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import * as BottomNavModule from "@/components/mobile/bottom-nav";
 import * as ContactSheetModule from "@/components/mobile/contact-sheet";
 import * as LandingAuthGateModule from "@/components/landing-auth-gate";
-import * as SiteChromeModule from "@/components/site-chrome";
 import { RideCard, RequestCard } from "@/components/ride-card";
 import { Segmented } from "@/components/mobile/segmented";
 import { PendingActionGroup } from "@/components/pending-action-button";
@@ -47,10 +46,6 @@ const contactSheetExports = ContactSheetModule as unknown as {
     preferredContact: "phone" | "whatsapp" | "message" | null;
     defaultOpen?: boolean;
   }>;
-};
-
-const siteChromeExports = SiteChromeModule as unknown as {
-  FooterTagline?: React.ComponentType;
 };
 
 const PendingGroupWithInitialState = PendingActionGroup as React.ComponentType<{
@@ -327,14 +322,10 @@ test("verified foreground/background color pairs meet AA contrast", () => {
   }
 });
 
-test("footer tagline renders the measured warm token on cream", () => {
-  const FooterTagline = siteChromeExports.FooterTagline;
-  assert.equal(typeof FooterTagline, "function");
-  if (!FooterTagline) return;
+test("desktop footer tagline keeps the measured warm token on cream", () => {
+  const layout = readFileSync("src/app/(desktop)/layout.tsx", "utf8");
 
-  const html = renderToStaticMarkup(React.createElement(FooterTagline));
-
-  assert.match(html, /text-sand-text/);
+  assert.match(layout, /max-w-\[220px\] text-sm leading-relaxed text-sand-text/);
   assert.ok(contrastRatio("#6f5b48", "#fbf7f0") >= 5.5);
 });
 
@@ -371,7 +362,7 @@ test("ride and request cards render no Lighthouse-failed text colors", () => {
 });
 
 test("desktop footer uses margin-safe link colors and public legal routes", () => {
-  const layout = readFileSync("src/app/layout.tsx", "utf8");
+  const layout = readFileSync("src/app/(desktop)/layout.tsx", "utf8");
   const footer = layout.slice(layout.indexOf("<footer"), layout.indexOf("</footer>"));
 
   assert.match(footer, /href="\/terms"/);

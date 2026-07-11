@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { SignOutForm, SignOutFormView } from "./sign-out-form";
 
 const desktopProfile = readFileSync(
-  new URL("../app/profile/page.tsx", import.meta.url),
+  new URL("../app/(desktop)/profile/page.tsx", import.meta.url),
   "utf8",
 );
 const mobileProfile = readFileSync(

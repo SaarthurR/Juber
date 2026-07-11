@@ -10,9 +10,9 @@ import {
   pendingActionReducer,
 } from "./pending-action-button";
 
-const adminPage = readFileSync(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
-const profilePage = readFileSync(new URL("../app/profile/[id]/page.tsx", import.meta.url), "utf8");
-const editProfilePage = readFileSync(new URL("../app/profile/page.tsx", import.meta.url), "utf8");
+const adminPage = readFileSync(new URL("../app/(desktop)/admin/page.tsx", import.meta.url), "utf8");
+const profilePage = readFileSync(new URL("../app/(desktop)/profile/[id]/page.tsx", import.meta.url), "utf8");
+const editProfilePage = readFileSync(new URL("../app/(desktop)/profile/page.tsx", import.meta.url), "utf8");
 const contactModal = readFileSync(new URL("./contact-modal.tsx", import.meta.url), "utf8");
 const contactSheet = readFileSync(new URL("./mobile/contact-sheet.tsx", import.meta.url), "utf8");
 
