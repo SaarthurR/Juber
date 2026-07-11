@@ -5,17 +5,32 @@ import { getContact } from "@/lib/contact";
 import { updateProfile } from "@/app/profile/actions";
 import { FormField, SubmitButton } from "@/components/form-bits";
 import { AvatarUploader } from "@/components/avatar-uploader";
+import { authCallbackDestination } from "@/lib/route-targets";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ onboarding?: string; contact_required?: string }>;
+  searchParams: Promise<{
+    onboarding?: string;
+    contact_required?: string;
+    next?: string | string[];
+  }>;
 }) {
   const sp = await searchParams;
   const { user, profile } = await getCurrentUser();
   if (!user) redirect("/");
+  const fallback = `/profile/${user.id}`;
+  const nextValues = Array.isArray(sp.next)
+    ? sp.next
+    : sp.next === undefined
+      ? []
+      : [sp.next];
+  const safeNext = authCallbackDestination(
+    nextValues.length === 1 ? nextValues[0] : null,
+    fallback,
+  );
 
   const supabase = await createClient();
   const contact = await getContact(supabase, user.id);
@@ -27,6 +42,7 @@ export default async function EditProfilePage({
   return (
     <div className="mx-auto flex max-w-4xl flex-wrap-reverse gap-12 px-4 py-10 sm:px-6">
       <form action={updateProfile} className="min-w-[300px] max-w-[560px] flex-[2] space-y-8">
+        {nextValues.length === 1 && <input type="hidden" name="next" value={safeNext} />}
         <div>
           <h1 className="text-[30px] font-extrabold tracking-tight text-ink">Edit profile</h1>
           <div className="mt-5 h-px bg-[#efece6]" />

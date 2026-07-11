@@ -52,6 +52,19 @@ export function authCallbackDestination(value: unknown, fallback = "/rides") {
     ?? "/rides";
 }
 
+export function authOnboardingDestination(isMobile: boolean, nextValue: unknown) {
+  const fallback = isMobile ? "/m" : "/rides";
+  const candidate = Array.isArray(nextValue)
+    ? nextValue.length === 1
+      ? nextValue[0]
+      : null
+    : nextValue;
+  const next = authCallbackDestination(candidate, fallback);
+  const search = new URLSearchParams({ onboarding: "1", next });
+  const profilePath = isMobile ? "/m/profile/edit" : "/profile";
+  return `${profilePath}?${search.toString()}`;
+}
+
 function normalizeAuthCallbackDestination(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
     return null;

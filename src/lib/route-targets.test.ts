@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import * as routeTargets from "./route-targets";
 import {
   AUTH_CALLBACK_TARGETS,
   MESSAGE_BASE_TARGETS,
@@ -13,6 +14,12 @@ import {
   requestRevalidationTargets,
   rideDetailDestination,
 } from "./route-targets";
+
+const authOnboardingDestination = (
+  routeTargets as typeof routeTargets & {
+    authOnboardingDestination?: (mobile: boolean, next: unknown) => string;
+  }
+).authOnboardingDestination;
 
 test("pickAllowed returns fallback for disallowed values", () => {
   const allowed = ["/events"] as const;
@@ -218,6 +225,129 @@ test("sign-in without an explicit next includes the current safe query", () => {
     authButton,
     /window\.location\.pathname.*window\.location\.search/,
   );
+});
+
+test("first-time OAuth preserves event context through desktop and mobile onboarding", () => {
+  if (!authOnboardingDestination) return;
+  const eventId = "123e4567-e89b-42d3-a456-426614174000";
+
+  assert.equal(
+    authOnboardingDestination(false, `/rides/new?event_id=${eventId}`),
+    `/profile?onboarding=1&next=%2Frides%2Fnew%3Fevent_id%3D${eventId}`,
+  );
+  assert.equal(
+    authOnboardingDestination(false, `/requests/new?event_id=${eventId}`),
+    `/profile?onboarding=1&next=%2Frequests%2Fnew%3Fevent_id%3D${eventId}`,
+  );
+  assert.equal(
+    authOnboardingDestination(true, `/m/rides/new?event_id=${eventId}`),
+    `/m/profile/edit?onboarding=1&next=%2Fm%2Frides%2Fnew%3Fevent_id%3D${eventId}`,
+  );
+  assert.equal(
+    authOnboardingDestination(true, `/m/requests/new?event_id=${eventId}`),
+    `/m/profile/edit?onboarding=1&next=%2Fm%2Frequests%2Fnew%3Fevent_id%3D${eventId}`,
+  );
+});
+
+test("first-time OAuth preserves the desktop rides tab through onboarding", () => {
+  if (!authOnboardingDestination) return;
+  assert.equal(
+    authOnboardingDestination(false, "/rides?tab=requests"),
+    "/profile?onboarding=1&next=%2Frides%3Ftab%3Drequests",
+  );
+});
+
+test("onboarding uses shell-safe fallbacks for missing, invalid, duplicate, and encoded next", () => {
+  if (!authOnboardingDestination) return;
+  const eventId = "123e4567-e89b-42d3-a456-426614174000";
+
+  assert.equal(
+    authOnboardingDestination(false, undefined),
+    "/profile?onboarding=1&next=%2Frides",
+  );
+  assert.equal(
+    authOnboardingDestination(true, "https://evil.test/m"),
+    "/m/profile/edit?onboarding=1&next=%2Fm",
+  );
+  assert.equal(
+    authOnboardingDestination(false, [
+      `/rides/new?event_id=${eventId}`,
+      "/admin",
+    ]),
+    "/profile?onboarding=1&next=%2Frides",
+  );
+  assert.equal(
+    authOnboardingDestination(true, "/m/rides/new%5c..%5cadmin"),
+    "/m/profile/edit?onboarding=1&next=%2Fm",
+  );
+});
+
+test("route targets expose a sanitized onboarding destination builder", () => {
+  assert.equal(typeof authOnboardingDestination, "function");
+});
+
+test("callback and contact gate pass only sanitized next into the correct profile shell", () => {
+  const callback = readFileSync(
+    fileURLToPath(new URL("../app/auth/callback/route.ts", import.meta.url)),
+    "utf8",
+  );
+  const gate = readFileSync(
+    fileURLToPath(new URL("../components/contact-required-gate.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  assert.match(callback, /searchParams\.getAll\("next"\)/);
+  assert.match(callback, /authCallbackDestination/);
+  assert.match(callback, /authOnboardingDestination/);
+  assert.match(gate, /window\.location\.pathname.*window\.location\.search/);
+  assert.match(gate, /authCallbackDestination/);
+  assert.match(gate, /new URLSearchParams/);
+  assert.match(gate, /"\/m\/profile\/edit"/);
+  assert.match(gate, /"\/profile"/);
+});
+
+test("profile forms re-sanitize one next value and render a hidden handoff", () => {
+  const desktopPage = readFileSync(
+    fileURLToPath(new URL("../app/profile/page.tsx", import.meta.url)),
+    "utf8",
+  );
+  const mobilePage = readFileSync(
+    fileURLToPath(new URL("../app/m/profile/edit/page.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  for (const page of [desktopPage, mobilePage]) {
+    assert.match(page, /next\?: string \| string\[\]/);
+    assert.match(page, /authCallbackDestination/);
+    assert.match(page, /nextValues\.length === 1/);
+    assert.match(page, /<input type="hidden" name="next" value=\{safeNext\} \/>/);
+  }
+  assert.match(desktopPage, /`\/profile\/\$\{user\.id\}`/);
+  assert.match(mobilePage, /"\/m\/profile"/);
+});
+
+test("profile actions preserve canonical next and keep normal edit fallbacks", () => {
+  const desktopAction = readFileSync(
+    fileURLToPath(new URL("../app/profile/actions.ts", import.meta.url)),
+    "utf8",
+  );
+  const mobileAction = readFileSync(
+    fileURLToPath(new URL("../app/m/actions.ts", import.meta.url)),
+    "utf8",
+  );
+
+  for (const action of [desktopAction, mobileAction]) {
+    assert.match(action, /formData\.getAll\("next"\)/);
+    assert.match(action, /nextValues\.length === 1/);
+    assert.match(action, /authCallbackDestination/);
+    assert.match(action, /revalidatePath\(destination\)/);
+    assert.match(action, /redirect\(destination\)/);
+    assert.match(action, /URLSearchParams/);
+  }
+  assert.match(desktopAction, /const fallback = `\/profile\/\$\{user\.id\}`/);
+  assert.match(mobileAction, /const fallback = "\/m\/profile"/);
+  assert.match(desktopAction, /redirect\("\/profile\?contact_required=1"\)/);
+  assert.match(mobileAction, /redirect\("\/m\/profile\/edit\?contact_required=1"\)/);
 });
 
 test("mobile notifications map to concrete detail pages only", () => {

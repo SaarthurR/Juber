@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
+import { authCallbackDestination } from "@/lib/route-targets";
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -14,10 +15,23 @@ export async function updateProfile(formData: FormData) {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
+  const fallback = `/profile/${user.id}`;
+  const nextValues = formData.getAll("next");
+  const destination = authCallbackDestination(
+    nextValues.length === 1 ? nextValues[0] : null,
+    fallback,
+  );
 
   const phone = str(formData.get("phone"));
   const whatsapp = str(formData.get("whatsapp"));
-  if (!phone && !whatsapp) redirect("/profile?contact_required=1");
+  if (!phone && !whatsapp) {
+    if (nextValues.length !== 1) redirect("/profile?contact_required=1");
+    const search = new URLSearchParams({
+      contact_required: "1",
+      next: destination,
+    });
+    redirect(`/profile?${search.toString()}`);
+  }
   const requestedContact = str(formData.get("preferred_contact"));
   const preferredContact =
     requestedContact === "phone" && !phone
@@ -48,5 +62,6 @@ export async function updateProfile(formData: FormData) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/profile");
-  redirect(`/profile/${user.id}`);
+  revalidatePath(destination);
+  redirect(destination);
 }

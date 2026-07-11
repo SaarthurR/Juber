@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { JCNC_LABEL } from "@/lib/constants";
 import { dateOnlyToIso } from "@/lib/date-time";
+import { authCallbackDestination } from "@/lib/route-targets";
 import type { RequestFormState } from "@/app/rides/actions";
 
 function str(v: FormDataEntryValue | null) {
@@ -78,15 +79,28 @@ export async function postRequestMobile(
   redirect("/m/requests");
 }
 
-/** Save profile edits from the mobile form, then return to the mobile profile tab. */
+/** Save mobile profile edits, then return to a sanitized onboarding destination. */
 export async function updateProfileMobile(formData: FormData) {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/m");
+  const fallback = "/m/profile";
+  const nextValues = formData.getAll("next");
+  const destination = authCallbackDestination(
+    nextValues.length === 1 ? nextValues[0] : null,
+    fallback,
+  );
 
   const phone = str(formData.get("phone"));
   const whatsapp = str(formData.get("whatsapp"));
-  if (!phone && !whatsapp) redirect("/m/profile/edit?contact_required=1");
+  if (!phone && !whatsapp) {
+    if (nextValues.length !== 1) redirect("/m/profile/edit?contact_required=1");
+    const search = new URLSearchParams({
+      contact_required: "1",
+      next: destination,
+    });
+    redirect(`/m/profile/edit?${search.toString()}`);
+  }
   const requestedContact = str(formData.get("preferred_contact"));
   const preferredContact =
     requestedContact === "phone" && !phone
@@ -119,5 +133,6 @@ export async function updateProfileMobile(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath("/profile");
   revalidatePath("/m/profile");
-  redirect("/m/profile");
+  revalidatePath(destination);
+  redirect(destination);
 }

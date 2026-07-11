@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { authCallbackDestination } from "@/lib/route-targets";
+import {
+  authCallbackDestination,
+  authOnboardingDestination,
+} from "@/lib/route-targets";
 
 // Handles the OAuth redirect from Supabase, exchanging the code for a session.
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = authCallbackDestination(searchParams.get("next"), "/rides");
+  const isMobile = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(
+    request.headers.get("user-agent") ?? "",
+  );
+  const nextValues = searchParams.getAll("next");
+  const next = authCallbackDestination(
+    nextValues.length === 1 ? nextValues[0] : null,
+    isMobile ? "/m" : "/rides",
+  );
 
   if (code) {
     const supabase = await createClient();
@@ -20,12 +30,7 @@ export async function GET(request: Request) {
         p_profile_id: user?.id ?? "",
       });
       if (!contactReady) {
-        const isMobile = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(
-          request.headers.get("user-agent") ?? "",
-        );
-        const onboardingPath = isMobile
-          ? "/m/profile/edit?onboarding=1"
-          : "/profile?onboarding=1";
+        const onboardingPath = authOnboardingDestination(isMobile, next);
         return NextResponse.redirect(`${origin}${onboardingPath}`);
       }
       return NextResponse.redirect(`${origin}${next}`);

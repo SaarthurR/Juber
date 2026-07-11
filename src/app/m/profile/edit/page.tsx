@@ -7,6 +7,7 @@ import { updateProfileMobile } from "@/app/m/actions";
 import { SubHeader } from "@/components/mobile/sub-header";
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { MSubmitButton } from "@/components/mobile/m-submit";
+import { authCallbackDestination } from "@/lib/route-targets";
 import type { Place } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -21,11 +22,25 @@ function Caption({ children }: { children: React.ReactNode }) {
 export default async function MobileEditProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ onboarding?: string; contact_required?: string }>;
+  searchParams: Promise<{
+    onboarding?: string;
+    contact_required?: string;
+    next?: string | string[];
+  }>;
 }) {
   const sp = await searchParams;
   const { user, profile } = await getCurrentUser();
   if (!user) redirect("/m");
+  const fallback = "/m/profile";
+  const nextValues = Array.isArray(sp.next)
+    ? sp.next
+    : sp.next === undefined
+      ? []
+      : [sp.next];
+  const safeNext = authCallbackDestination(
+    nextValues.length === 1 ? nextValues[0] : null,
+    fallback,
+  );
 
   const supabase = await createClient();
   const { data: places } = await supabase
@@ -47,6 +62,7 @@ export default async function MobileEditProfilePage({
 
   return (
     <form action={updateProfileMobile} className="pb-28">
+      {nextValues.length === 1 && <input type="hidden" name="next" value={safeNext} />}
       <SubHeader title="Edit profile" backFallback="/m/profile" />
 
       <div className="space-y-7 px-4 pt-2">

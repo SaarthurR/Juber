@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { authCallbackDestination } from "@/lib/route-targets";
 
 const ALLOWED_PATHS = new Set(["/profile", "/m/profile/edit"]);
 
@@ -15,13 +16,16 @@ export function ContactRequiredGate({
   const pathname = usePathname();
   const router = useRouter();
   const allowed = !required || ALLOWED_PATHS.has(pathname) || pathname.startsWith("/auth/");
-  const destination = pathname.startsWith("/m")
-    ? "/m/profile/edit?contact_required=1"
-    : "/profile?contact_required=1";
+  const isMobile = pathname.startsWith("/m");
+  const profilePath = isMobile ? "/m/profile/edit" : "/profile";
 
   useEffect(() => {
-    if (!allowed) router.replace(destination);
-  }, [allowed, destination, router]);
+    if (allowed) return;
+    const attemptedPath = `${window.location.pathname}${window.location.search}`;
+    const next = authCallbackDestination(attemptedPath, isMobile ? "/m" : "/rides");
+    const search = new URLSearchParams({ contact_required: "1", next });
+    router.replace(`${profilePath}?${search.toString()}`);
+  }, [allowed, isMobile, profilePath, router]);
 
   if (!allowed) {
     return (
