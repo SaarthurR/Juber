@@ -75,7 +75,7 @@ export default async function RootLayout({
               <div className="flex gap-12 text-sm">
                 <div>
                   <p className="mb-2.5 font-medium text-stone-900">Pages</p>
-                  <ul className="space-y-1.5 text-stone-500">
+                  <ul className="space-y-1.5 text-sand-text">
                     <li><Link href="/" className="hover:text-stone-900 transition">Home</Link></li>
                     <li><Link href="/rides" className="hover:text-stone-900 transition">Rides</Link></li>
                     <li><Link href="/events" className="hover:text-stone-900 transition">Events</Link></li>
@@ -84,14 +84,14 @@ export default async function RootLayout({
                 </div>
                 <div>
                   <p className="mb-2.5 font-medium text-stone-900">Contact</p>
-                  <ul className="space-y-1.5 text-stone-500">
+                  <ul className="space-y-1.5 text-sand-text">
                     <li><a href="https://wa.me/" className="hover:text-stone-900 transition">WhatsApp</a></li>
                     <li><a href="mailto:hello@jcnc.org" className="hover:text-stone-900 transition">Email</a></li>
                   </ul>
                 </div>
                 <div>
                   <p className="mb-2.5 font-medium text-stone-900">Legal</p>
-                  <ul className="space-y-1.5 text-stone-500">
+                  <ul className="space-y-1.5 text-sand-text">
                     <li><Link href="/terms" className="hover:text-stone-900 transition">Terms</Link></li>
                     <li><Link href="/privacy" className="hover:text-stone-900 transition">Privacy</Link></li>
                   </ul>

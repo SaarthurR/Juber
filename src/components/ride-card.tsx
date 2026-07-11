@@ -47,7 +47,7 @@ function VisualRoute({
   return (
     <div className="mt-5 grid grid-cols-[minmax(0,1fr)_minmax(76px,0.75fr)_minmax(0,1fr)] items-center gap-3">
       <div className="min-w-0">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#b09d86]">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-sand-text">
           From
         </p>
         <p className="truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
@@ -60,7 +60,7 @@ function VisualRoute({
         <span className={`h-4 w-4 shrink-0 rounded-full ${filled}`} />
       </div>
       <div className="min-w-0 text-right">
-        <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#b09d86]">
+        <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-sand-text">
           To
         </p>
         <p className="truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
@@ -89,7 +89,7 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
               {ride.driver?.full_name ?? "Driver"}
             </p>
             {ride.driver?.neighborhood && (
-              <p className="text-sm font-medium text-[#a8927a]">{ride.driver.neighborhood}</p>
+              <p className="text-sm font-medium text-sand-text">{ride.driver.neighborhood}</p>
             )}
           </div>
         </div>
@@ -98,7 +98,7 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
           <p className="mt-2 text-3xl font-black tracking-[-0.04em] text-ink">
             {price}
           </p>
-          <p className="text-[11px] font-bold uppercase tracking-wide text-stone-400">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-sand-text">
             {price === "Free" ? "gas" : "gas / seat"}
           </p>
         </div>
@@ -132,7 +132,7 @@ export function RideCard({ ride }: { ride: RideWithDriver }) {
       <VisualRoute from={ride.origin_label} to={ride.destination_label} />
 
       <div className="mt-5 flex items-center justify-between border-t border-[#f3ece1] pt-4">
-        <span className="text-sm font-bold text-[#a8927a]">
+        <span className="text-sm font-bold text-sand-text">
           View ride details
         </span>
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-tint text-brand-600 transition group-hover:bg-brand-600 group-hover:text-white">
@@ -165,7 +165,7 @@ export function RequestCard({ request }: { request: RideRequestWithRider }) {
             <p className="truncate text-base font-extrabold text-ink">
               {request.rider?.full_name ?? "Rider"}
             </p>
-            <p className="text-sm font-medium text-[#a8927a]">
+            <p className="text-sm font-medium text-sand-text">
               Needs a ride
               {request.rider?.neighborhood ? ` · ${request.rider.neighborhood}` : ""}
             </p>
@@ -175,7 +175,7 @@ export function RequestCard({ request }: { request: RideRequestWithRider }) {
           {request.event && <EventPill name={request.event.name} />}
           <p className="mt-2 text-2xl font-black tracking-[-0.04em] text-[#4f5cf7]">
             {request.seats_needed}
-            <span className="ml-1 text-sm font-extrabold text-stone-400">
+            <span className="ml-1 text-sm font-extrabold text-sand-text">
               seat{request.seats_needed > 1 ? "s" : ""}
             </span>
           </p>

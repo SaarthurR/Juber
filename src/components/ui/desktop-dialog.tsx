@@ -17,6 +17,8 @@ export function DesktopDialog({
   closeLabel = "Close dialog",
   children,
   className = "",
+  overlayClassName = "",
+  backdropClassName = "bg-black/40",
 }: {
   open: boolean;
   onDismiss: () => void;
@@ -25,6 +27,8 @@ export function DesktopDialog({
   closeLabel?: string;
   children?: React.ReactNode;
   className?: string;
+  overlayClassName?: string;
+  backdropClassName?: string;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -81,7 +85,7 @@ export function DesktopDialog({
 
   return (
     <div
-      className="motion-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
+      className={`motion-overlay fixed inset-0 z-50 flex items-center justify-center p-4 ${overlayClassName}`}
       onKeyDown={onKeyDown}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) dismiss("backdrop");
@@ -89,7 +93,7 @@ export function DesktopDialog({
     >
       <div
         aria-hidden="true"
-        className="absolute inset-0 bg-black/40"
+        className={`absolute inset-0 ${backdropClassName}`}
         onMouseDown={() => dismiss("backdrop")}
       />
       <div

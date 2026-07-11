@@ -6,6 +6,7 @@ import { getContact } from "@/lib/contact";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { ProfileTabs } from "@/components/mobile/profile-tabs";
 import { GoogleSignInButton } from "@/components/auth-button";
+import { PublicLegalLinks } from "@/components/landing-auth-gate";
 import { SignOutForm } from "@/components/sign-out-form";
 import type { RideWithDriver } from "@/lib/types";
 
@@ -29,10 +30,7 @@ export default async function MobileProfilePage() {
         <GoogleSignInButton
           className="rounded-full bg-brand-600 px-6 py-3 text-[14px] font-bold text-white"
         />
-        <div className="flex items-center gap-4 text-[13px] font-bold text-[#6f5b48]">
-          <Link href="/terms">Terms</Link>
-          <Link href="/privacy">Privacy</Link>
-        </div>
+        <PublicLegalLinks />
       </div>
     );
   }
