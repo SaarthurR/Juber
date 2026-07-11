@@ -94,7 +94,8 @@ begin
 end;
 $$;
 
-grant execute on function public.task4_expect_rejected(text, text, text, text) to authenticated;
+grant execute on function public.task4_expect_rejected(text, text, text, text)
+  to authenticated, anon;
 grant execute on function public.task4_capture_sqlstate(text) to authenticated;
 grant execute on function public.task4_assert(text, boolean) to authenticated;
 
@@ -879,17 +880,42 @@ where exists (
 )
 on conflict do nothing;
 
+insert into task4_failures
+select 'anon retains rides SELECT privilege', 'has_table_privilege returned true'
+where has_table_privilege('anon', 'public.rides', 'SELECT')
+on conflict do nothing;
+insert into task4_failures
+select 'anon retains ride_requests SELECT privilege', 'has_table_privilege returned true'
+where has_table_privilege('anon', 'public.ride_requests', 'SELECT')
+on conflict do nothing;
+insert into task4_failures
+select 'authenticated lost rides SELECT privilege', 'has_table_privilege returned false'
+where not has_table_privilege('authenticated', 'public.rides', 'SELECT')
+on conflict do nothing;
+insert into task4_failures
+select 'authenticated lost ride_requests SELECT privilege', 'has_table_privilege returned false'
+where not has_table_privilege('authenticated', 'public.ride_requests', 'SELECT')
+on conflict do nothing;
+
 set role anon;
-select count(*) as anon_ride_count from public.rides \gset
-select count(*) as anon_request_count from public.ride_requests \gset
+select public.task4_expect_rejected(
+  'anon direct rides SELECT denied',
+  'select * from public.rides limit 1',
+  '42501',
+  null
+);
+select public.task4_expect_rejected(
+  'anon direct ride_requests SELECT denied',
+  'select * from public.ride_requests limit 1',
+  '42501',
+  null
+);
+select count(*) as anon_public_ride_count
+from public.public_upcoming_rides(null, null, null, 50, null) \gset
 reset role;
 select public.task4_assert(
-  'anon cannot select lifecycle ride rows',
-  :'anon_ride_count'::bigint = 0
-);
-select public.task4_assert(
-  'anon cannot select lifecycle request rows',
-  :'anon_request_count'::bigint = 0
+  'anon public ride RPC remains callable',
+  :'anon_public_ride_count'::bigint >= 0
 );
 
 set role authenticated;
