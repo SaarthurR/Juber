@@ -55,6 +55,7 @@ export default async function MobileThreadPage({
       profileBase="/m/profile"
       archiveState={thread.archiveState}
       hiddenAt={thread.hiddenAt}
+      departAt={thread.context.kind === "missing" ? null : thread.context.departAt}
     />
   );
 }

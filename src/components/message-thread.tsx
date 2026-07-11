@@ -3,12 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { markConversationRead, sendMessage } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { mergeMessageWindow } from "@/lib/messages";
+import {
+  archiveRefreshDelay,
+  isCurrentCatchUp,
+  mergeMessageWindow,
+} from "@/lib/messages";
 import type { Message, Profile } from "@/lib/types";
 
 type ProfileBase = "/profile" | "/m/profile";
@@ -28,6 +33,7 @@ export function MessageThread({
   profileBase = "/profile",
   archiveState,
   hiddenAt,
+  departAt,
 }: {
   conversationId: string;
   currentUserId: string;
@@ -38,7 +44,9 @@ export function MessageThread({
   profileBase?: ProfileBase;
   archiveState: "active" | "archived";
   hiddenAt: string | null;
+  departAt: string | null;
 }) {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [draft, setDraft] = useState("");
   const [sendState, setSendState] = useState<SendState | null>(null);
@@ -48,6 +56,7 @@ export function MessageThread({
   const messagesRef = useRef(messages);
   const sendStateRef = useRef(sendState);
   const mountedRef = useRef(true);
+  const catchUpGeneration = useRef(0);
 
   useEffect(() => {
     sendStateRef.current = sendState;
@@ -57,12 +66,14 @@ export function MessageThread({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      catchUpGeneration.current += 1;
     };
   }, []);
 
   useEffect(() => {
     const supabase = createClient();
     function mergeIncoming(incoming: Message[]) {
+      if (!mountedRef.current) return;
       const pendingId = sendStateRef.current?.pendingId ?? null;
       const result = mergeMessageWindow(messagesRef.current, incoming, pendingId);
       messagesRef.current = result.messages;
@@ -74,6 +85,7 @@ export function MessageThread({
       }
     }
     async function catchUp() {
+      const generation = ++catchUpGeneration.current;
       let query = supabase
         .from("messages")
         .select("*")
@@ -82,6 +94,12 @@ export function MessageThread({
         .limit(50);
       if (hiddenAt) query = query.gt("created_at", hiddenAt);
       const { data, error } = await query;
+      if (
+        !mountedRef.current ||
+        !isCurrentCatchUp(generation, catchUpGeneration.current)
+      ) {
+        return;
+      }
       if (error) {
         setSyncError("Could not refresh recent messages.");
         return;
@@ -118,19 +136,39 @@ export function MessageThread({
         },
       )
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") void catchUp();
+        if (status === "SUBSCRIBED") {
+          void catchUp();
+          router.refresh();
+        }
       });
 
     function onVisible() {
-      if (document.visibilityState === "visible") void catchUp();
+      if (document.visibilityState === "visible") {
+        void catchUp();
+        router.refresh();
+      }
     }
     document.addEventListener("visibilitychange", onVisible);
 
     return () => {
+      catchUpGeneration.current += 1;
       document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
-  }, [conversationId, hiddenAt]);
+  }, [conversationId, hiddenAt, router]);
+
+  useEffect(() => {
+    const delay = archiveRefreshDelay(
+      departAt,
+      archiveState,
+      new Date().toISOString(),
+    );
+    if (delay === null) return;
+    const timeout = window.setTimeout(() => {
+      router.refresh();
+    }, Math.min(delay + 50, 2_147_483_647));
+    return () => window.clearTimeout(timeout);
+  }, [archiveState, departAt, router]);
 
   // Mark inbound messages read. Realtime pushes mutate `messages` frequently, so
   // guard with a ref to avoid overlapping calls, and don't let a failed update

@@ -1,13 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  applyThreadMessageInsert,
   buildThreadSummaries,
+  failClosedNotificationState,
+  isCurrentCatchUp,
   loadVisibleNotificationIds,
   mergeMessageWindow,
   messageMatchesRetry,
   newestThreadMessages,
   nextArchiveRefreshDelay,
+  replaceThreadSummary,
   type ConversationHide,
   type ThreadContext,
 } from "./messages";
@@ -295,41 +297,6 @@ test("canonical context key is independent of participant order", () => {
   assert.equal(fromA?.contextKey, fromB?.contextKey);
 });
 
-test("processed realtime inserts increment unread exactly once", () => {
-  const [thread] = summaries({ messages: [], unread: 0 });
-  const incoming = message("inbound-1", "chat-1", "2026-07-11T10:01:00.000Z");
-
-  const first = applyThreadMessageInsert(thread, incoming, currentUserId, new Set());
-  const duplicate = applyThreadMessageInsert(
-    first.thread,
-    incoming,
-    currentUserId,
-    first.processed,
-  );
-
-  assert.equal(first.thread.unread, 1);
-  assert.equal(duplicate.thread.unread, 1);
-  assert.equal(duplicate.processed.has(incoming.id), true);
-});
-
-test("realtime inserts at or before hide cutoff do not change summary", () => {
-  const [thread] = summaries({
-    messages: [message("visible", "chat-1", "2026-07-11T10:01:00.000Z")],
-    unread: 1,
-    hides: [{
-      conversation_id: "chat-1",
-      user_id: currentUserId,
-      hidden_at: "2026-07-11T10:00:00.000Z",
-    }],
-  });
-  const hidden = message("hidden", "chat-1", "2026-07-11T10:00:00.000Z");
-
-  const result = applyThreadMessageInsert(thread, hidden, currentUserId, new Set());
-
-  assert.equal(result.thread.last?.id, "visible");
-  assert.equal(result.thread.unread, 1);
-});
-
 test("bounded catch-up merges missed messages and confirms matching pending id", () => {
   const pending = message("pending-id", "chat-1", "2026-07-11T10:02:00.000Z", {
     sender_id: currentUserId,
@@ -402,4 +369,44 @@ test("notification visibility errors fail closed without throwing", async () => 
 
   assert.deepEqual(result.ids, []);
   assert.equal(result.error, "Could not load notification visibility.");
+});
+
+test("stale catch-up cannot clear an existing read timestamp", () => {
+  const current = message("same", "chat-1", "2026-07-11T10:00:00.000Z", {
+    read_at: "2026-07-11T10:05:00.000Z",
+  });
+  const stale = { ...current, read_at: null };
+
+  const result = mergeMessageWindow([current], [stale], null);
+
+  assert.equal(result.messages[0]?.read_at, current.read_at);
+});
+
+test("authoritative thread snapshots stay exact across event overlap", () => {
+  const [initial] = summaries({ messages: [], unread: 0 });
+  const [snapshot] = summaries({
+    messages: [message("new", "chat-1", "2026-07-11T10:01:00.000Z")],
+    unread: 1,
+  });
+
+  const first = replaceThreadSummary([initial], snapshot);
+  const eventAfterSnapshot = replaceThreadSummary(first, snapshot);
+
+  assert.equal(first[0]?.unread, 1);
+  assert.equal(eventAfterSnapshot[0]?.unread, 1);
+});
+
+test("only the latest catch-up generation may apply", () => {
+  assert.equal(isCurrentCatchUp(2, 2), true);
+  assert.equal(isCurrentCatchUp(1, 2), false);
+});
+
+test("notification detail failure clears stale state", () => {
+  const result = failClosedNotificationState<{ id: string }>(
+    "Could not refresh notifications.",
+  );
+
+  assert.deepEqual(result.items, []);
+  assert.equal(result.unread, 0);
+  assert.equal(result.error, "Could not refresh notifications.");
 });

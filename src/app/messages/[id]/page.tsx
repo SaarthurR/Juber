@@ -51,6 +51,7 @@ export default async function ThreadPage({
       initialMessages={newestThreadMessages((messages as Message[]) ?? [])}
       archiveState={thread.archiveState}
       hiddenAt={thread.hiddenAt}
+      departAt={thread.context.kind === "missing" ? null : thread.context.departAt}
     />
   );
 }

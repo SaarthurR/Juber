@@ -10,10 +10,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Message } from "@/lib/types";
 import {
-  applyThreadMessageInsert,
   loadThreadSummaries,
   nextArchiveRefreshDelay,
-  sortThreadSummaries,
+  replaceThreadSummary,
   type ThreadSummary,
 } from "@/lib/messages";
 
@@ -33,7 +32,6 @@ export function MessagesList({
   const [, startTransition] = useTransition();
   const fullRefreshVersion = useRef(0);
   const threadRefreshVersions = useRef(new Map<string, number>());
-  const processedMessageIds = useRef(new Set<string>());
   const initialKey = useMemo(
     () =>
       initialThreads
@@ -93,9 +91,7 @@ export function MessagesList({
       }
       setThreads((prev) => {
         const without = prev.filter((thread) => thread.id !== conversationId);
-        return nextThread
-          ? sortThreadSummaries([nextThread, ...without])
-          : without;
+        return nextThread ? replaceThreadSummary(prev, nextThread) : without;
       });
       setLoadError(null);
     } catch {
@@ -106,22 +102,9 @@ export function MessagesList({
 
   useEffect(() => {
     const supabase = createClient();
-    function rememberMessage(messageId: string) {
-      const next = new Set(processedMessageIds.current);
-      next.add(messageId);
-      if (next.size > 500) {
-        const oldest = next.values().next().value;
-        if (oldest) next.delete(oldest);
-      }
-      processedMessageIds.current = next;
-    }
-    function invalidateHiddenThread(conversationId: string) {
+    function refreshExactThread(conversationId: string) {
       fullRefreshVersion.current += 1;
-      threadRefreshVersions.current.set(
-        conversationId,
-        (threadRefreshVersions.current.get(conversationId) ?? 0) + 1,
-      );
-      setThreads((prev) => prev.filter((thread) => thread.id !== conversationId));
+      void refreshThread(conversationId);
     }
     const channel = supabase
       .channel(`inbox:${userId}`)
@@ -130,26 +113,7 @@ export function MessagesList({
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
           const msg = payload.new as Message;
-          if (processedMessageIds.current.has(msg.id)) return;
-          setThreads((prev) => {
-            const index = prev.findIndex((thread) => thread.id === msg.conversation_id);
-            if (index === -1) {
-              rememberMessage(msg.id);
-              void refreshThread(msg.conversation_id);
-              return prev;
-            }
-
-            const next = [...prev];
-            const result = applyThreadMessageInsert(
-              next[index],
-              msg,
-              userId,
-              processedMessageIds.current,
-            );
-            processedMessageIds.current = new Set(result.processed);
-            next[index] = result.thread;
-            return sortThreadSummaries(next);
-          });
+          refreshExactThread(msg.conversation_id);
         },
       )
       .on(
@@ -157,7 +121,7 @@ export function MessagesList({
         { event: "UPDATE", schema: "public", table: "messages" },
         (payload) => {
           const msg = payload.new as Message;
-          void refreshThread(msg.conversation_id);
+          refreshExactThread(msg.conversation_id);
         },
       )
       .on(
@@ -165,35 +129,7 @@ export function MessagesList({
         { event: "INSERT", schema: "public", table: "conversation_participants" },
         (payload) => {
           const row = payload.new as { conversation_id: string };
-          void refreshThread(row.conversation_id);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "conversation_hides",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const row = payload.new as { conversation_id: string };
-          invalidateHiddenThread(row.conversation_id);
-          void refreshThread(row.conversation_id);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "conversation_hides",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          const row = payload.new as { conversation_id: string };
-          invalidateHiddenThread(row.conversation_id);
-          void refreshThread(row.conversation_id);
+          refreshExactThread(row.conversation_id);
         },
       )
       .subscribe((status) => {

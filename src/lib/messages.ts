@@ -330,38 +330,19 @@ export function newestThreadMessages(messages: Message[], limit = 50): Message[]
   return [...messages].sort(compareMessagesNewestFirst).slice(0, limit).reverse();
 }
 
-export function applyThreadMessageInsert(
-  thread: ThreadSummary,
-  message: Message,
-  userId: string,
-  processed: ReadonlySet<string>,
-): { thread: ThreadSummary; processed: ReadonlySet<string> } {
-  if (processed.has(message.id)) return { thread, processed };
-  const nextProcessed = new Set(processed);
-  nextProcessed.add(message.id);
-  if (thread.hiddenAt && !isAfterHidden(message, thread.hiddenAt)) {
-    return { thread, processed: nextProcessed };
-  }
-  return {
-    thread: {
-      ...thread,
-      last: isNewerMessage(message, thread.last) ? message : thread.last,
-      unread:
-        message.sender_id !== userId && !message.read_at
-          ? thread.unread + 1
-          : thread.unread,
-    },
-    processed: nextProcessed,
-  };
-}
-
 export function mergeMessageWindow(
   current: Message[],
   incoming: Message[],
   pendingId: string | null,
 ): { messages: Message[]; pendingConfirmed: boolean } {
   const byId = new Map(current.map((message) => [message.id, message]));
-  for (const message of incoming) byId.set(message.id, message);
+  for (const message of incoming) {
+    const existing = byId.get(message.id);
+    byId.set(message.id, {
+      ...message,
+      read_at: latestReadAt(existing?.read_at ?? null, message.read_at),
+    });
+  }
   const pendingConfirmed =
     pendingId !== null && incoming.some((message) => message.id === pendingId);
   const pending =
@@ -374,17 +355,48 @@ export function mergeMessageWindow(
   };
 }
 
+export function replaceThreadSummary(
+  threads: ThreadSummary[],
+  next: ThreadSummary,
+): ThreadSummary[] {
+  return sortThreadSummaries([
+    next,
+    ...threads.filter((thread) => thread.id !== next.id),
+  ]);
+}
+
+export function isCurrentCatchUp(started: number, current: number): boolean {
+  return started === current;
+}
+
+export function failClosedNotificationState<T>(error: string): {
+  items: T[];
+  unread: number;
+  error: string;
+} {
+  return { items: [], unread: 0, error };
+}
+
 export function nextArchiveRefreshDelay(
   threads: ThreadSummary[],
   now: string,
 ): number | null {
-  const nowEpoch = timestampEpoch(now);
   const departures = threads.flatMap((thread) => {
     if (thread.archiveState !== "active" || thread.context.kind === "missing") return [];
-    return [timestampEpoch(thread.context.departAt)];
+    const delay = archiveRefreshDelay(thread.context.departAt, thread.archiveState, now);
+    return delay === null ? [] : [delay];
   });
   if (departures.length === 0) return null;
-  return Math.max(0, Math.min(...departures) - nowEpoch);
+  return Math.min(...departures);
+}
+
+export function archiveRefreshDelay(
+  departAt: string | null,
+  archiveState: ThreadSummary["archiveState"],
+  now: string,
+): number | null {
+  if (!departAt || archiveState !== "active") return null;
+  return Math.max(0, timestampEpoch(departAt) - timestampEpoch(now));
 }
 
 export function messageMatchesRetry(
@@ -417,11 +429,6 @@ export function isAfterHidden(
 ): boolean {
   const createdAt = typeof message === "string" ? message : message.created_at;
   return hiddenAt === null || timestampEpoch(createdAt) > timestampEpoch(hiddenAt);
-}
-
-export function isNewerMessage(candidate: Message, current: Message | null): boolean {
-  if (!current) return true;
-  return compareMessagesNewestFirst(candidate, current) < 0;
 }
 
 export function sortThreadSummaries(threads: ThreadSummary[]): ThreadSummary[] {
@@ -473,4 +480,10 @@ function timestampEpoch(value: string | null | undefined): number {
   if (!value) return Number.NEGATIVE_INFINITY;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
+}
+
+function latestReadAt(current: string | null, incoming: string | null): string | null {
+  if (!current) return incoming;
+  if (!incoming) return current;
+  return timestampEpoch(incoming) > timestampEpoch(current) ? incoming : current;
 }

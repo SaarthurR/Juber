@@ -11,25 +11,74 @@
 \set forged_request 00000000-0000-4000-8000-000000000201
 \set immutable_request 00000000-0000-4000-8000-000000000202
 \set accepted_request 00000000-0000-4000-8000-000000000203
+\set forged_insert_request 00000000-0000-4000-8000-000000000204
+\set valid_insert_request 00000000-0000-4000-8000-000000000205
 \set main_ride 00000000-0000-4000-8000-000000000301
 \set seat_ride 00000000-0000-4000-8000-000000000302
 \set cancel_ride 00000000-0000-4000-8000-000000000303
+\set admin_chain_ride 00000000-0000-4000-8000-000000000304
+\set concurrent_ride 00000000-0000-4000-8000-000000000305
 
-create temporary table task4_failures (label text primary key);
+create temporary table task4_failures (
+  label text primary key,
+  detail text not null
+);
 grant select, insert on task4_failures to authenticated;
 
-create or replace function public.task4_expect_rejected(label text, statement text)
+create or replace function public.task4_expect_rejected(
+  label text,
+  statement text,
+  expected_sqlstate text,
+  expected_message text default null
+)
 returns void
 language plpgsql
 set search_path = public, pg_temp
 as $$
+declare
+  actual_sqlstate text;
+  actual_message text;
 begin
   begin
     execute statement;
-    insert into task4_failures values (label) on conflict do nothing;
+    insert into task4_failures values (label, 'statement succeeded')
+    on conflict do nothing;
   exception
-    when others then null;
+    when others then
+      get stacked diagnostics
+        actual_sqlstate = returned_sqlstate,
+        actual_message = message_text;
+      if actual_sqlstate is distinct from expected_sqlstate
+         or (
+           expected_message is not null
+           and position(lower(expected_message) in lower(actual_message)) = 0
+         ) then
+        insert into task4_failures values (
+          label,
+          format(
+            'expected %s/%s, got %s/%s',
+            expected_sqlstate,
+            coalesce(expected_message, '*'),
+            actual_sqlstate,
+            actual_message
+          )
+        )
+        on conflict do nothing;
+      end if;
   end;
+end;
+$$;
+
+create or replace function public.task4_capture_sqlstate(statement text)
+returns text
+language plpgsql
+set search_path = public
+as $$
+begin
+  execute statement;
+  return '00000';
+exception
+  when others then return sqlstate;
 end;
 $$;
 
@@ -45,7 +94,8 @@ begin
 end;
 $$;
 
-grant execute on function public.task4_expect_rejected(text, text) to authenticated;
+grant execute on function public.task4_expect_rejected(text, text, text, text) to authenticated;
+grant execute on function public.task4_capture_sqlstate(text) to authenticated;
 grant execute on function public.task4_assert(text, boolean) to authenticated;
 
 insert into auth.users (id, raw_user_meta_data)
@@ -71,12 +121,17 @@ values
   (:'terminal_ride', :'driver', 'A', 'B', now() + interval '1 day', 2, 2, 'active'),
   (:'identity_ride', :'driver', 'A', 'B', now() + interval '1 day', 2, 2, 'active'),
   (:'target_ride', :'driver', 'A', 'B', now() + interval '1 day', 2, 2, 'active'),
-  (:'terminal_status_ride', :'driver', 'A', 'B', now() - interval '1 day', 1, 1, 'completed');
+  (:'terminal_status_ride', :'driver', 'A', 'B', now() - interval '1 day', 1, 1, 'completed'),
+  (:'admin_chain_ride', :'admin', 'A', 'B', now() + interval '1 day', 1, 1, 'active'),
+  (:'concurrent_ride', :'driver', 'A', 'B', now() + interval '1 day', 1, 1, 'active');
 
 insert into public.ride_passengers (ride_id, passenger_id, status)
 values
   (:'terminal_ride', :'rider', 'cancelled'),
-  (:'identity_ride', :'rider', 'pending');
+  (:'identity_ride', :'rider', 'pending'),
+  (:'admin_chain_ride', :'rider', 'pending'),
+  (:'concurrent_ride', :'rider', 'pending'),
+  (:'concurrent_ride', :'admin', 'pending');
 
 insert into public.ride_requests (
   id, rider_id, origin_label, destination_label, depart_at, status
@@ -94,7 +149,9 @@ select public.task4_expect_rejected(
     'insert into public.ride_passengers (ride_id, passenger_id, status) values (%L::uuid, %L::uuid, ''confirmed'')',
     :'forged_ride',
     :'rider'
-  )
+  ),
+  '42501',
+  'row-level security'
 );
 select public.task4_expect_rejected(
   'rider self-fulfilled request',
@@ -102,13 +159,128 @@ select public.task4_expect_rejected(
     'update public.ride_requests set status = ''fulfilled'', accepted_driver_id = %L::uuid where id = %L::uuid',
     :'admin',
     :'forged_request'
-  )
+  ),
+  'P0001',
+  'Invalid ride request status transition'
 );
 select public.task4_expect_rejected(
   'request depart_at immutable',
   format(
     'update public.ride_requests set depart_at = depart_at + interval ''1 day'' where id = %L::uuid',
     :'immutable_request'
+  ),
+  'P0001',
+  'Ride request departure cannot be changed'
+);
+select public.task4_expect_rejected(
+  'forged fulfilled request insert',
+  format(
+    'insert into public.ride_requests (id, rider_id, origin_label, destination_label, depart_at, status, accepted_driver_id, accepted_at) values (%L::uuid, %L::uuid, ''A'', ''B'', now() + interval ''1 day'', ''fulfilled'', %L::uuid, now())',
+    :'forged_insert_request',
+    :'rider',
+    :'admin'
+  ),
+  '42501',
+  'row-level security'
+);
+select public.task4_expect_rejected(
+  'self admin escalation',
+  format(
+    'update public.profiles set is_admin = true where id = %L::uuid',
+    :'rider'
+  ),
+  '42501',
+  null
+);
+insert into task4_failures
+select 'self admin escalation persisted', 'profiles.is_admin became true'
+where (select is_admin from public.profiles where id = :'rider')
+on conflict do nothing;
+update public.ride_passengers
+set status = 'confirmed'
+where ride_id = :'admin_chain_ride'
+  and passenger_id = :'rider';
+insert into task4_failures
+select 'self-admin confirmation chain succeeded', 'pending passenger became confirmed'
+where (
+  select status <> 'pending'
+  from public.ride_passengers
+  where ride_id = :'admin_chain_ride' and passenger_id = :'rider'
+)
+on conflict do nothing;
+insert into task4_failures
+select 'self-admin contact chain succeeded', 'shares_booking returned true'
+where public.shares_booking(:'admin')
+on conflict do nothing;
+insert into public.ride_requests (
+  id, rider_id, origin_label, destination_label, depart_at
+)
+values (
+  :'valid_insert_request',
+  :'rider',
+  'Valid A',
+  'Valid B',
+  now() + interval '1 day'
+);
+select public.task4_assert(
+  'active null request insert remains valid',
+  (
+    select status = 'active'
+      and accepted_driver_id is null
+      and accepted_at is null
+    from public.ride_requests
+    where id = :'valid_insert_request'
+  )
+);
+insert into task4_failures
+select 'forged request contact succeeded', 'shares_booking returned true'
+where public.shares_booking(:'admin')
+on conflict do nothing;
+select public.task4_expect_rejected(
+  'forged request cannot open conversation',
+  format(
+    'select public.open_conversation(%L::uuid, null, %L::uuid)',
+    :'admin',
+    :'forged_insert_request'
+  ),
+  'P0001',
+  'Messaging unlocks after this request is accepted'
+);
+select public.task4_expect_rejected(
+  'direct passenger delete denied',
+  format(
+    'delete from public.ride_passengers where ride_id = %L::uuid and passenger_id = %L::uuid',
+    :'terminal_ride',
+    :'rider'
+  ),
+  '42501',
+  null
+);
+select public.task4_expect_rejected(
+  'direct request delete denied',
+  format('delete from public.ride_requests where id = %L::uuid', :'forged_request'),
+  '42501',
+  null
+);
+update public.profiles
+set full_name = 'Rider Updated',
+    avatar_url = 'https://example.test/avatar.png',
+    neighborhood = 'North',
+    pronouns = 'they/them',
+    instagram = 'rider',
+    preferred_contact = 'message',
+    car_make_model = 'Test Car',
+    car_color = 'Blue',
+    bio = 'Updated'
+where id = :'rider';
+select public.task4_assert(
+  'current profile writers retain editable columns',
+  (
+    select full_name = 'Rider Updated'
+      and avatar_url = 'https://example.test/avatar.png'
+      and preferred_contact = 'message'
+    from public.profiles
+    where id = :'rider'
   )
 );
 reset role;
@@ -121,7 +293,9 @@ select public.task4_expect_rejected(
     'update public.ride_passengers set status = ''confirmed'' where ride_id = %L::uuid and passenger_id = %L::uuid',
     :'terminal_ride',
     :'rider'
-  )
+  ),
+  'P0001',
+  'Invalid ride passenger status transition'
 );
 select public.task4_expect_rejected(
   'passenger identity immutable',
@@ -130,7 +304,9 @@ select public.task4_expect_rejected(
     :'admin',
     :'identity_ride',
     :'rider'
-  )
+  ),
+  'P0001',
+  'Ride and passenger identity cannot be changed'
 );
 select public.task4_expect_rejected(
   'passenger ride immutable',
@@ -139,14 +315,24 @@ select public.task4_expect_rejected(
     :'target_ride',
     :'identity_ride',
     :'rider'
-  )
+  ),
+  'P0001',
+  'Ride and passenger identity cannot be changed'
 );
 select public.task4_expect_rejected(
   'terminal ride status immutable',
   format(
     'update public.rides set status = ''active'' where id = %L::uuid',
     :'terminal_status_ride'
-  )
+  ),
+  'P0001',
+  'Invalid ride status transition'
+);
+select public.task4_expect_rejected(
+  'direct ride delete denied',
+  format('delete from public.rides where id = %L::uuid', :'forged_ride'),
+  '42501',
+  null
 );
 reset role;
 
@@ -158,15 +344,93 @@ select public.task4_expect_rejected(
     'update public.ride_requests set rider_id = %L::uuid where id = %L::uuid',
     :'admin',
     :'immutable_request'
-  )
+  ),
+  'P0001',
+  'Ride request owner cannot be changed'
 );
 reset role;
+
+select dblink_connect('task4_confirm_1', format('dbname=%s', current_database()));
+select dblink_connect('task4_confirm_2', format('dbname=%s', current_database()));
+select dblink_exec('task4_confirm_1', 'begin');
+select dblink_exec('task4_confirm_1', 'set role authenticated');
+select dblink_exec(
+  'task4_confirm_1',
+  format('set request.jwt.claim.sub = %L', :'driver')
+);
+select dblink_exec(
+  'task4_confirm_1',
+  format(
+    'update public.ride_passengers set status = ''confirmed'' where ride_id = %L::uuid and passenger_id = %L::uuid',
+    :'concurrent_ride',
+    :'rider'
+  )
+);
+select dblink_exec('task4_confirm_2', 'set role authenticated');
+select dblink_exec(
+  'task4_confirm_2',
+  format('set request.jwt.claim.sub = %L', :'driver')
+);
+select dblink_send_query(
+  'task4_confirm_2',
+  format(
+    'select public.task4_capture_sqlstate(%L) as result',
+    format(
+      'update public.ride_passengers set status = ''confirmed'' where ride_id = %L::uuid and passenger_id = %L::uuid',
+      :'concurrent_ride',
+      :'admin'
+    )
+  )
+);
+select pg_sleep(0.1);
+select dblink_exec('task4_confirm_1', 'commit');
+create temporary table task4_concurrency_result as
+select result
+from dblink_get_result('task4_confirm_2') as response(result text);
+insert into task4_failures
+select 'concurrent direct confirmation was not rejected', 'second update returned ' || result
+from task4_concurrency_result
+where result <> 'P0001'
+on conflict do nothing;
+insert into task4_failures
+select 'concurrent direct confirmation overbooked', 'confirmed count exceeded one'
+where (
+  select count(*) <> 1
+  from public.ride_passengers
+  where ride_id = :'concurrent_ride' and status = 'confirmed'
+)
+on conflict do nothing;
+select dblink_disconnect('task4_confirm_1');
+select dblink_disconnect('task4_confirm_2');
+
+insert into task4_failures
+select 'conversation_hides remains realtime-published', 'supabase_realtime still contains table'
+where exists (
+  select 1
+  from pg_publication_tables
+  where pubname = 'supabase_realtime'
+    and schemaname = 'public'
+    and tablename = 'conversation_hides'
+)
+on conflict do nothing;
 
 table task4_failures;
 
 set session_replication_role = replica;
 delete from public.ride_passengers
-where ride_id in (:'forged_ride', :'terminal_ride', :'identity_ride', :'target_ride');
+where ride_id in (
+  :'forged_ride',
+  :'terminal_ride',
+  :'identity_ride',
+  :'target_ride',
+  :'admin_chain_ride',
+  :'concurrent_ride'
+);
+update public.ride_passengers
+set status = 'pending'
+where ride_id = :'admin_chain_ride' and passenger_id = :'rider';
+delete from public.ride_requests
+where id = :'forged_insert_request';
 update public.ride_requests
 set rider_id = :'rider',
     depart_at = now() + interval '1 day',
@@ -176,6 +440,7 @@ where id in (:'forged_request', :'immutable_request');
 update public.rides
 set status = 'completed'
 where id = :'terminal_status_ride';
+update public.profiles set is_admin = false where id = :'rider';
 set session_replication_role = origin;
 
 insert into public.rides (
@@ -198,7 +463,9 @@ select public.task4_expect_rejected(
     'select public.open_conversation(%L::uuid, %L::uuid, null)',
     :'driver',
     :'main_ride'
-  )
+  ),
+  'P0001',
+  'Messaging unlocks after this ride is booked'
 );
 reset role;
 
@@ -281,6 +548,31 @@ rollback;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
+select public.open_conversation(:'admin', null, :'accepted_request') as request_conversation \gset
+reset role;
+
+set session_replication_role = replica;
+update public.ride_requests
+set depart_at = now() - interval '24 hours 1 second'
+where id = :'accepted_request';
+set session_replication_role = origin;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'rider', false);
+select public.task4_assert(
+  'expired request revokes raw contact',
+  not public.shares_booking(:'admin')
+);
+select public.task4_assert(
+  'expired request reuses retained conversation',
+  public.open_conversation(:'admin', null, :'accepted_request') = :'request_conversation'
+);
+insert into public.messages (conversation_id, sender_id, body)
+values (:'request_conversation', :'rider', 'request lost-item follow-up');
+reset role;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'rider', false);
 select public.open_conversation(:'driver', :'main_ride', null) as main_conversation \gset
 reset role;
 
@@ -288,6 +580,12 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'driver', false);
 insert into public.messages (conversation_id, sender_id, body)
 values (:'main_conversation', :'driver', 'pre-hide');
+reset role;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'rider', false);
+insert into public.messages (conversation_id, sender_id, body)
+values (:'main_conversation', :'rider', 'peer-pre-hide');
 reset role;
 
 select pg_sleep(0.01);
@@ -325,13 +623,30 @@ select public.task4_assert(
       and notification.conversation_id = :'main_conversation'
   )
 );
+select public.task4_assert(
+  'hide cleared caller pre-hide message notifications',
+  (
+    select count(*) = 0
+    from public.notifications notification
+    join public.conversation_hides hide
+      on hide.conversation_id = notification.conversation_id
+     and hide.user_id = notification.recipient_id
+    where notification.recipient_id = :'rider'
+      and notification.conversation_id = :'main_conversation'
+      and notification.type = 'new_message'
+      and notification.created_at <= hide.hidden_at
+      and notification.read_at is null
+  )
+);
 select public.task4_expect_rejected(
   'direct hide mutation denied',
   format(
     'update public.conversation_hides set hidden_at = now() where conversation_id = %L::uuid and user_id = %L::uuid',
     :'main_conversation',
     :'rider'
-  )
+  ),
+  '42501',
+  null
 );
 reset role;
 
@@ -344,6 +659,17 @@ select public.task4_assert(
     from public.conversation_hides
     where conversation_id = :'main_conversation'
       and user_id = :'rider'
+  )
+);
+select public.task4_assert(
+  'hide preserved peer unread notification',
+  (
+    select count(*) = 1
+    from public.notifications
+    where recipient_id = :'driver'
+      and conversation_id = :'main_conversation'
+      and type = 'new_message'
+      and read_at is null
   )
 );
 reset role;
@@ -363,7 +689,7 @@ select public.task4_assert(
 );
 select public.task4_assert(
   'close retains messages',
-  (select count(*) = 2 from public.messages where conversation_id = :'main_conversation')
+  (select count(*) = 3 from public.messages where conversation_id = :'main_conversation')
 );
 select public.task4_assert(
   'close retains passenger history',
@@ -507,6 +833,20 @@ select public.task4_assert(
     where ride_id = :'cancel_ride' and type = 'ride_cancelled'
   )
 );
+
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'rider', false);
+select public.task4_assert(
+  'cancelled ride revokes raw contact',
+  not public.shares_booking(:'driver')
+);
+select public.task4_assert(
+  'cancelled ride reuses retained conversation',
+  public.open_conversation(:'driver', :'cancel_ride', null) = :'cancel_conversation'
+);
+insert into public.messages (conversation_id, sender_id, body)
+values (:'cancel_conversation', :'rider', 'cancelled ride lost-item follow-up');
+reset role;
 
 select public.task4_assert(
   'all rejected security transitions were denied',

@@ -7,7 +7,10 @@ import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react
 import { formatDistanceToNow } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { markNotificationsRead } from "@/app/messages/actions";
-import { loadVisibleNotificationIds } from "@/lib/messages";
+import {
+  failClosedNotificationState,
+  loadVisibleNotificationIds,
+} from "@/lib/messages";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
 
 const NOTIFICATION_SELECT =
@@ -109,15 +112,19 @@ export function NotificationBell({
 
   const refreshNotifications = useCallback(async () => {
     const supabase = createClient();
+    function failClosed(message: string) {
+      const failed = failClosedNotificationState<NotificationWithContext>(message);
+      setUnread(failed.unread);
+      setItems(failed.items);
+      setNotificationError(failed.error);
+    }
     try {
       const [unreadResult, notificationResult] = await Promise.all([
         loadVisibleNotificationIds(supabase, null, true),
         loadVisibleNotificationIds(supabase, 6, false),
       ]);
       if (unreadResult.error || notificationResult.error) {
-        setUnread(0);
-        setItems([]);
-        setNotificationError(
+        failClosed(
           unreadResult.error ?? notificationResult.error ?? "Could not refresh notifications.",
         );
         return;
@@ -154,7 +161,7 @@ export function NotificationBell({
       );
       setNotificationError(null);
     } catch {
-      setNotificationError("Could not refresh notifications.");
+      failClosed("Could not refresh notifications.");
     }
   }, [userId]);
 
