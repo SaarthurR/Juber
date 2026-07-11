@@ -34,7 +34,20 @@ test.before(async () => {
   ({ hasContact } = await import("./contact"));
 });
 
-type RpcResult = { data: boolean | null; error: { message: string } | null };
+test.after(() => {
+  nodeModule._resolveFilename = resolveFilename;
+  delete require.cache[serverOnlyStub];
+});
+
+type RpcResult = {
+  data: boolean | null;
+  error: {
+    message: string;
+    code: string;
+    details: string;
+    hint: string;
+  } | null;
+};
 
 function stubSupabase(result: RpcResult) {
   return {
@@ -59,10 +72,17 @@ test("hasContact fails open when RPC errors", async () => {
   try {
     const supabase = stubSupabase({
       data: null,
-      error: { message: "connection failed" },
+      error: {
+        message: "connection failed",
+        code: "PGRST000",
+        details: "",
+        hint: "",
+      },
     });
     assert.equal(await hasContact(supabase, "user-1"), true);
-    assert.ok(errorLogs.length > 0);
+    assert.deepEqual(errorLogs, [
+      ["profile_has_contact failed", { code: "PGRST000", userId: "user-1" }],
+    ]);
   } finally {
     console.error = originalError;
   }
