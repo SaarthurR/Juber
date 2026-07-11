@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
+import { MESSAGE_BASE_TARGETS, pickAllowed } from "@/lib/route-targets";
 
 /**
  * Finds an existing 1:1 conversation between the current user and `otherUserId`,
@@ -13,15 +14,11 @@ export async function openConversation(otherUserId: string, formData?: FormData)
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
-  const selfBase =
-    formData?.get("base")?.toString() === "/m/messages" ? "/m/messages" : "/messages";
-  if (user.id === otherUserId) redirect(selfBase);
+  const base = pickAllowed(formData?.get("base")?.toString(), MESSAGE_BASE_TARGETS, "/messages");
+  if (user.id === otherUserId) redirect(base);
 
   const rideId = formData?.get("ride_id")?.toString() || null;
   const requestId = formData?.get("request_id")?.toString() || null;
-  // Mobile callers pass base="/m/messages" so the chat opens inside the phone
-  // shell. Only an allow-listed prefix is honored to avoid open redirects.
-  const base = formData?.get("base")?.toString() === "/m/messages" ? "/m/messages" : "/messages";
   if (!rideId && !requestId) {
     throw new Error("Messaging unlocks after a ride is booked.");
   }

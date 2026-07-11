@@ -1,11 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { format } from "date-fns";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { formatEventDateRange, loadEventBoard } from "@/lib/events";
 import { RideCard, RequestCard } from "@/components/ride-card";
-import type { EventRow, RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -18,35 +17,13 @@ export default async function EventPage({
   const { user } = await getCurrentUser();
   const supabase = await createClient();
 
-  const { data: event } = await supabase
-    .from("events")
-    .select("*")
-    .eq("slug", slug)
-    .single<EventRow>();
+  const board = await loadEventBoard(supabase, slug);
+  if (!board) notFound();
 
-  if (!event) notFound();
-
-  const { data: rides } = await supabase
-    .from("rides")
-    .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
-    .eq("event_id", event.id)
-    .eq("status", "active")
-    .order("depart_at", { ascending: true });
-
-  const { data: requests } = await supabase
-    .from("ride_requests")
-    .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
-    .eq("event_id", event.id)
-    .eq("status", "active")
-    .order("depart_at", { ascending: true });
-
-  const rideList = (rides as RideWithDriver[]) ?? [];
-  const requestList = (requests as RideRequestWithRider[]) ?? [];
+  const { event, rides: rideList, requests: requestList } = board;
 
   const dateLabel = event.start_date
-    ? event.end_date && event.end_date !== event.start_date
-      ? `${format(new Date(event.start_date), "MMM d")} – ${format(new Date(event.end_date), "MMM d, yyyy")}`
-      : format(new Date(event.start_date), "MMMM d, yyyy")
+    ? formatEventDateRange(event.start_date, event.end_date)
     : null;
 
   return (

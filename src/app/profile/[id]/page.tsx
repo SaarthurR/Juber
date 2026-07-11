@@ -7,6 +7,7 @@ import { initials } from "@/lib/utils";
 import { RideCard, RequestCard } from "@/components/ride-card";
 import { openConversation } from "@/app/messages/actions";
 import { getContact } from "@/lib/contact";
+import { getProfileContactContext } from "@/lib/profile-contact";
 import type { Profile, RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -76,8 +77,11 @@ export default async function PublicProfilePage({
   if (!profile) notFound();
 
   const isMe = user?.id === id;
-  let canViewContact = isMe;
-  let messagingRideId: string | null = null;
+  const { canViewContact, messagingRideId } = await getProfileContactContext(
+    supabase,
+    user?.id,
+    id,
+  );
 
   const nowIso = new Date().toISOString();
 
@@ -116,30 +120,6 @@ export default async function PublicProfilePage({
       .gte("depart_at", nowIso)
       .order("depart_at", { ascending: true });
     rideRequests = (data ?? []) as RideRequestWithRider[];
-  }
-
-  if (user && !isMe) {
-    const [{ data: userPassengerRows }, { data: profilePassengerRows }] = await Promise.all([
-      supabase
-        .from("ride_passengers")
-        .select("ride:rides!ride_passengers_ride_id_fkey(id,driver_id,status)")
-        .eq("passenger_id", user.id)
-        .eq("status", "confirmed"),
-      supabase
-        .from("ride_passengers")
-        .select("ride:rides!ride_passengers_ride_id_fkey(id,driver_id,status)")
-        .eq("passenger_id", id)
-        .eq("status", "confirmed"),
-    ]);
-    type BookingRow = { ride: { id: string; driver_id: string; status: string } | null };
-    const userBooking = ((userPassengerRows as BookingRow[] | null) ?? []).find(
-      (row) => row.ride?.driver_id === id && row.ride.status === "active",
-    );
-    const profileBooking = ((profilePassengerRows as BookingRow[] | null) ?? []).find(
-      (row) => row.ride?.driver_id === user.id && row.ride.status === "active",
-    );
-    canViewContact = Boolean(userBooking);
-    messagingRideId = userBooking?.ride?.id ?? profileBooking?.ride?.id ?? null;
   }
 
   // Numbers come from the booking-scoped RPC, not the profile row.

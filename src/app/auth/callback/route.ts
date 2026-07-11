@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { AUTH_CALLBACK_TARGETS, pickAllowed } from "@/lib/route-targets";
 
 // Handles the OAuth redirect from Supabase, exchanging the code for a session.
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // Only honor internal absolute paths — reject protocol-relative ("//evil")
-  // or backslash-prefixed values that some browsers treat as external.
-  const rawNext = searchParams.get("next") ?? "/rides";
-  const next =
-    rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/\\")
-      ? rawNext
-      : "/rides";
+  const next = pickAllowed(searchParams.get("next"), AUTH_CALLBACK_TARGETS, "/rides");
 
   if (code) {
     const supabase = await createClient();
