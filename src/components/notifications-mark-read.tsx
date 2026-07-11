@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { markNotificationsRead } from "@/app/messages/actions";
-import { shouldStartNotificationMarkRead } from "@/lib/notifications-controller";
+import {
+  notificationWriteErrorMessage,
+  shouldStartNotificationMarkRead,
+} from "@/lib/notifications-controller";
 
 /**
  * Marks the viewer's notifications read once the inbox is shown, then refreshes
@@ -22,7 +25,7 @@ export function NotificationsMarkRead({ hasUnread }: { hasUnread: boolean }) {
       router.refresh();
     } catch {
       done.current = false;
-      setError("Could not mark notifications read.");
+      setError(notificationWriteErrorMessage("bulk"));
     }
   }, [router]);
 

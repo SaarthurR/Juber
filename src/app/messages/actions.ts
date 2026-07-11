@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { MESSAGE_BASE_TARGETS, pickAllowed } from "@/lib/route-targets";
 import { messageMatchesRetry } from "@/lib/messages";
+import { requireNotificationWriteAuthentication } from "@/lib/notifications-controller";
 import type { Message } from "@/lib/types";
 
 function revalidateMessageRoutes() {
@@ -49,8 +50,7 @@ export async function openConversation(otherUserId: string, formData?: FormData)
 /** Marks all of the current user's unread notifications as read. */
 export async function markNotificationsRead() {
   const supabase = await createClient();
-  const user = await getAuthUser(supabase);
-  if (!user) return;
+  const user = requireNotificationWriteAuthentication(await getAuthUser(supabase));
 
   const { error } = await supabase
     .from("notifications")
@@ -65,8 +65,7 @@ export async function markNotificationsRead() {
 /** Marks exactly one current-user notification as read. */
 export async function markNotificationRead(notificationId: string) {
   const supabase = await createClient();
-  const user = await getAuthUser(supabase);
-  if (!user) return;
+  const user = requireNotificationWriteAuthentication(await getAuthUser(supabase));
 
   const { data, error } = await supabase
     .from("notifications")

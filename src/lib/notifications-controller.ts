@@ -8,15 +8,29 @@ export type NotificationSnapshot = {
 
 export type NotificationBulkStatus = "idle" | "pending" | "success" | "error";
 
+export type NotificationWriteOperation =
+  | {
+      kind: "row";
+      id: string;
+      operationId: number;
+      startedRevision: number;
+    }
+  | {
+      kind: "bulk";
+      operationId: number;
+      startedRevision: number;
+    };
+
 export type NotificationControllerState = {
   items: NotificationWithContext[];
   unread: number;
   open: boolean;
   loadError: string | null;
-  bulkStatus: NotificationBulkStatus;
+  authoritativeRevision: number;
+  operation: NotificationWriteOperation | null;
+  bulkStatus: Exclude<NotificationBulkStatus, "pending">;
   bulkError: string | null;
   bulkStatusMessage: string | null;
-  rowPendingId: string | null;
   rowErrorId: string | null;
   rowError: string | null;
 };
@@ -26,12 +40,12 @@ export type NotificationControllerAction =
   | { type: "close" }
   | { type: "reconcile"; snapshot: NotificationSnapshot }
   | { type: "reconcile-failed"; error: string }
-  | { type: "mark-one-start"; id: string }
-  | { type: "mark-one-success"; id: string; readAt: string }
-  | { type: "mark-one-failed"; id: string; error: string }
-  | { type: "mark-all-start" }
-  | { type: "mark-all-success"; readAt: string }
-  | { type: "mark-all-failed"; error: string };
+  | { type: "mark-one-start"; id: string; operationId: number }
+  | { type: "mark-one-success"; id: string; operationId: number; readAt: string }
+  | { type: "mark-one-failed"; id: string; operationId: number; error: string }
+  | { type: "mark-all-start"; operationId: number }
+  | { type: "mark-all-success"; operationId: number; readAt: string }
+  | { type: "mark-all-failed"; operationId: number; error: string };
 
 export function createNotificationControllerState(
   snapshot: NotificationSnapshot,
@@ -41,10 +55,11 @@ export function createNotificationControllerState(
     unread: snapshot.error ? 0 : snapshot.unread,
     open: false,
     loadError: snapshot.error,
+    authoritativeRevision: 0,
+    operation: null,
     bulkStatus: "idle",
     bulkError: null,
     bulkStatusMessage: null,
-    rowPendingId: null,
     rowErrorId: null,
     rowError: null,
   };
@@ -63,28 +78,45 @@ export function notificationControllerReducer(
       if (action.snapshot.error) {
         return failClosedState(state, action.snapshot.error);
       }
-      const failedRowStillUnread = action.snapshot.items.some(
-        (item) => item.id === state.rowErrorId && item.read_at === null,
-      );
       return {
         ...state,
         items: action.snapshot.items,
         unread: action.snapshot.unread,
         loadError: null,
-        rowErrorId: failedRowStillUnread ? state.rowErrorId : null,
-        rowError: failedRowStillUnread ? state.rowError : null,
+        authoritativeRevision: state.authoritativeRevision + 1,
+        operation: reconcileOperation(state.operation, action.snapshot),
+        bulkStatus: "idle",
+        bulkError: null,
+        bulkStatusMessage: null,
+        rowErrorId: null,
+        rowError: null,
       };
     }
     case "reconcile-failed":
       return failClosedState(state, action.error);
     case "mark-one-start":
+      if (state.operation) return state;
       return {
         ...state,
-        rowPendingId: action.id,
+        operation: {
+          kind: "row",
+          id: action.id,
+          operationId: action.operationId,
+          startedRevision: state.authoritativeRevision,
+        },
+        bulkStatus: "idle",
+        bulkError: null,
+        bulkStatusMessage: null,
         rowErrorId: null,
         rowError: null,
       };
     case "mark-one-success": {
+      if (!matchesRowOperation(state.operation, action.id, action.operationId)) {
+        return state;
+      }
+      if (state.operation.startedRevision !== state.authoritativeRevision) {
+        return { ...state, operation: null };
+      }
       const target = state.items.find((item) => item.id === action.id);
       const decrementsUnread = target?.read_at === null;
       return {
@@ -93,26 +125,43 @@ export function notificationControllerReducer(
           item.id === action.id ? { ...item, read_at: action.readAt } : item,
         ),
         unread: decrementsUnread ? Math.max(0, state.unread - 1) : state.unread,
-        rowPendingId: null,
+        operation: null,
         rowErrorId: null,
         rowError: null,
       };
     }
     case "mark-one-failed":
+      if (!matchesRowOperation(state.operation, action.id, action.operationId)) {
+        return state;
+      }
       return {
         ...state,
-        rowPendingId: null,
+        operation: null,
         rowErrorId: action.id,
         rowError: action.error,
       };
     case "mark-all-start":
+      if (state.operation) return state;
       return {
         ...state,
-        bulkStatus: "pending",
+        operation: {
+          kind: "bulk",
+          operationId: action.operationId,
+          startedRevision: state.authoritativeRevision,
+        },
+        bulkStatus: "idle",
         bulkError: null,
         bulkStatusMessage: null,
+        rowErrorId: null,
+        rowError: null,
       };
     case "mark-all-success":
+      if (!matchesBulkOperation(state.operation, action.operationId)) {
+        return state;
+      }
+      if (state.operation.startedRevision !== state.authoritativeRevision) {
+        return { ...state, operation: null };
+      }
       return {
         ...state,
         items: state.items.map((item) => ({
@@ -120,16 +169,20 @@ export function notificationControllerReducer(
           read_at: item.read_at ?? action.readAt,
         })),
         unread: 0,
+        operation: null,
         bulkStatus: "success",
         bulkError: null,
         bulkStatusMessage: "All notifications marked read.",
-        rowPendingId: null,
         rowErrorId: null,
         rowError: null,
       };
     case "mark-all-failed":
+      if (!matchesBulkOperation(state.operation, action.operationId)) {
+        return state;
+      }
       return {
         ...state,
+        operation: null,
         bulkStatus: "error",
         bulkError: action.error,
         bulkStatusMessage: null,
@@ -146,10 +199,60 @@ function failClosedState(
     items: [],
     unread: 0,
     loadError: error,
-    rowPendingId: null,
+    authoritativeRevision: state.authoritativeRevision + 1,
+    operation: null,
+    bulkStatus: "idle",
+    bulkError: null,
+    bulkStatusMessage: null,
     rowErrorId: null,
     rowError: null,
   };
+}
+
+function reconcileOperation(
+  operation: NotificationWriteOperation | null,
+  snapshot: NotificationSnapshot,
+): NotificationWriteOperation | null {
+  if (!operation) return null;
+  if (operation.kind === "bulk") return snapshot.unread === 0 ? null : operation;
+  const row = snapshot.items.find((item) => item.id === operation.id);
+  return !row || row.read_at !== null ? null : operation;
+}
+
+function matchesRowOperation(
+  operation: NotificationWriteOperation | null,
+  id: string,
+  operationId: number,
+): operation is Extract<NotificationWriteOperation, { kind: "row" }> {
+  return (
+    operation?.kind === "row" &&
+    operation.id === id &&
+    operation.operationId === operationId
+  );
+}
+
+function matchesBulkOperation(
+  operation: NotificationWriteOperation | null,
+  operationId: number,
+): operation is Extract<NotificationWriteOperation, { kind: "bulk" }> {
+  return operation?.kind === "bulk" && operation.operationId === operationId;
+}
+
+export function notificationBulkControlStatus(
+  state: NotificationControllerState,
+): NotificationBulkStatus {
+  return state.operation?.kind === "bulk" ? "pending" : state.bulkStatus;
+}
+
+export function notificationWritePending(state: NotificationControllerState): boolean {
+  return state.operation !== null;
+}
+
+export function notificationRowPending(
+  state: NotificationControllerState,
+  id: string,
+): boolean {
+  return state.operation?.kind === "row" && state.operation.id === id;
 }
 
 export function notificationControllerKey(snapshot: NotificationSnapshot): string {
@@ -253,4 +356,20 @@ export function shouldStartNotificationMarkRead(
   attempted: boolean,
 ): boolean {
   return hasUnread && !attempted;
+}
+
+export const NOTIFICATION_AUTH_ERROR =
+  "Your session expired. Sign in again, then retry.";
+
+export function requireNotificationWriteAuthentication<T extends { id: string }>(
+  user: T | null | undefined,
+): T {
+  if (!user) throw new Error(NOTIFICATION_AUTH_ERROR);
+  return user;
+}
+
+export function notificationWriteErrorMessage(kind: "row" | "bulk"): string {
+  return kind === "row"
+    ? "Could not mark this notification read. If your session expired, sign in again and retry."
+    : "Could not mark notifications read. If your session expired, sign in again and retry.";
 }

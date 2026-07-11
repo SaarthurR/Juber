@@ -20,10 +20,14 @@ import {
 import {
   createNotificationControllerState,
   isCurrentNotificationRefresh,
+  notificationBulkControlStatus,
   notificationCancellationReason,
   notificationControllerKey,
   notificationControllerReducer,
+  notificationRowPending,
   notificationTitle,
+  notificationWriteErrorMessage,
+  notificationWritePending,
   subscribeToNotificationChanges,
   type NotificationSnapshot,
 } from "@/lib/notifications-controller";
@@ -86,6 +90,7 @@ function MNotificationBellController({
     createNotificationControllerState,
   );
   const refreshGeneration = useRef(0);
+  const operationSequence = useRef(0);
   const active = useRef(true);
 
   const refreshNotifications = useCallback(async () => {
@@ -200,38 +205,43 @@ function MNotificationBellController({
   }
 
   async function markAllRead() {
-    if (state.unread === 0 || state.bulkStatus === "pending") return;
-    dispatch({ type: "mark-all-start" });
+    if (state.unread === 0 || notificationWritePending(state)) return;
+    const operationId = ++operationSequence.current;
+    dispatch({ type: "mark-all-start", operationId });
     try {
       await markNotificationsRead();
       if (!active.current) return;
       dispatch({
         type: "mark-all-success",
+        operationId,
         readAt: new Date().toISOString(),
       });
     } catch {
       if (!active.current) return;
       dispatch({
         type: "mark-all-failed",
-        error: "Could not mark notifications read.",
+        operationId,
+        error: notificationWriteErrorMessage("bulk"),
       });
     }
   }
 
   async function markOneAndNavigate(n: NotificationWithContext, href: string) {
-    if (state.rowPendingId) return;
+    if (notificationWritePending(state)) return;
     if (n.read_at) {
       dispatch({ type: "close" });
       router.push(href);
       return;
     }
-    dispatch({ type: "mark-one-start", id: n.id });
+    const operationId = ++operationSequence.current;
+    dispatch({ type: "mark-one-start", id: n.id, operationId });
     try {
       await markNotificationRead(n.id);
       if (!active.current) return;
       dispatch({
         type: "mark-one-success",
         id: n.id,
+        operationId,
         readAt: new Date().toISOString(),
       });
       dispatch({ type: "close" });
@@ -242,7 +252,8 @@ function MNotificationBellController({
       dispatch({
         type: "mark-one-failed",
         id: n.id,
-        error: "Could not mark this notification read.",
+        operationId,
+        error: notificationWriteErrorMessage("row"),
       });
     }
   }
@@ -272,7 +283,8 @@ function MNotificationBellController({
           </p>
           <NotificationBulkReadControl
             unread={state.unread}
-            status={state.bulkStatus}
+            status={notificationBulkControlStatus(state)}
+            disabled={notificationWritePending(state)}
             onActivate={() => void markAllRead()}
           />
         </div>
@@ -294,7 +306,8 @@ function MNotificationBellController({
               <NotifRow
                 key={n.id}
                 n={n}
-                pending={state.rowPendingId === n.id}
+                pending={notificationRowPending(state, n.id)}
+                disabled={notificationWritePending(state)}
                 error={state.rowErrorId === n.id ? state.rowError : null}
                 onNavigate={(href) => void markOneAndNavigate(n, href)}
               />
@@ -309,11 +322,13 @@ function MNotificationBellController({
 function NotifRow({
   n,
   pending,
+  disabled,
   error,
   onNavigate,
 }: {
   n: NotificationWithContext;
   pending: boolean;
+  disabled: boolean;
   error: string | null;
   onNavigate: (href: string) => void;
 }) {
@@ -377,6 +392,7 @@ function NotifRow({
           title={title}
           unread={unread}
           pending={pending}
+          disabled={disabled}
           error={error}
           onActivate={() => onNavigate(href)}
           onRetry={() => onNavigate(href)}

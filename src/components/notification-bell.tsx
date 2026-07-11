@@ -14,8 +14,11 @@ import {
 import {
   createNotificationControllerState,
   isCurrentNotificationRefresh,
+  notificationBulkControlStatus,
   notificationControllerKey,
   notificationControllerReducer,
+  notificationWriteErrorMessage,
+  notificationWritePending,
   subscribeToNotificationChanges,
   type NotificationSnapshot,
 } from "@/lib/notifications-controller";
@@ -138,6 +141,7 @@ function NotificationBellController({
   );
   const ref = useRef<HTMLDivElement>(null);
   const refreshGeneration = useRef(0);
+  const operationSequence = useRef(0);
   const active = useRef(true);
 
   const refreshNotifications = useCallback(async () => {
@@ -278,13 +282,15 @@ function NotificationBellController({
   }, [state.open]);
 
   async function markAllRead() {
-    if (state.unread === 0 || state.bulkStatus === "pending") return;
-    dispatch({ type: "mark-all-start" });
+    if (state.unread === 0 || notificationWritePending(state)) return;
+    const operationId = ++operationSequence.current;
+    dispatch({ type: "mark-all-start", operationId });
     try {
       await markNotificationsRead();
       if (!active.current) return;
       dispatch({
         type: "mark-all-success",
+        operationId,
         readAt: new Date().toISOString(),
       });
       router.refresh();
@@ -292,16 +298,19 @@ function NotificationBellController({
       if (!active.current) return;
       dispatch({
         type: "mark-all-failed",
-        error: "Could not mark notifications read.",
+        operationId,
+        error: notificationWriteErrorMessage("bulk"),
       });
     }
   }
 
   async function markOneRead(id: string) {
+    if (notificationWritePending(state)) return;
     const target = state.items.find((n) => n.id === id);
     if (!target || target.read_at) return;
 
-    dispatch({ type: "mark-one-start", id });
+    const operationId = ++operationSequence.current;
+    dispatch({ type: "mark-one-start", id, operationId });
     const readAt = new Date().toISOString();
     const supabase = createClient();
     const { error } = await supabase
@@ -314,11 +323,12 @@ function NotificationBellController({
       dispatch({
         type: "mark-one-failed",
         id,
-        error: "Could not mark this notification read.",
+        operationId,
+        error: notificationWriteErrorMessage("row"),
       });
       return;
     }
-    dispatch({ type: "mark-one-success", id, readAt });
+    dispatch({ type: "mark-one-success", id, operationId, readAt });
     router.refresh();
   }
 
@@ -348,10 +358,10 @@ function NotificationBellController({
             <span className="text-base font-extrabold text-ink">Notifications</span>
             <button
               onClick={markAllRead}
-              disabled={state.unread === 0 || state.bulkStatus === "pending"}
+              disabled={state.unread === 0 || notificationWritePending(state)}
               className="whitespace-nowrap text-[13px] font-bold text-brand-600 transition hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {state.bulkStatus === "pending"
+              {notificationBulkControlStatus(state) === "pending"
                 ? "Marking…"
                 : state.bulkStatus === "error"
                   ? "Retry mark all read"

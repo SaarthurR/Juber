@@ -4,10 +4,12 @@ import type { NotificationBulkStatus } from "@/lib/notifications-controller";
 export function NotificationBulkReadControl({
   unread,
   status,
+  disabled = false,
   onActivate,
 }: {
   unread: number;
   status: NotificationBulkStatus;
+  disabled?: boolean;
   onActivate: () => void;
 }) {
   const pending = status === "pending";
@@ -18,7 +20,7 @@ export function NotificationBulkReadControl({
     <button
       type="button"
       onClick={onActivate}
-      disabled={unread === 0 || pending}
+      disabled={disabled || unread === 0 || pending}
       className="rounded-full px-2 py-1 text-xs font-bold text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
     >
       {label}
@@ -54,6 +56,7 @@ export function NotificationRowActions({
   title,
   unread,
   pending,
+  disabled = false,
   error,
   onActivate,
   onRetry,
@@ -62,6 +65,7 @@ export function NotificationRowActions({
   title: string;
   unread: boolean;
   pending: boolean;
+  disabled?: boolean;
   error: string | null;
   onActivate: () => void;
   onRetry: () => void;
@@ -72,7 +76,7 @@ export function NotificationRowActions({
       <button
         type="button"
         onClick={onActivate}
-        disabled={pending}
+        disabled={disabled || pending}
         aria-busy={pending || undefined}
         aria-label={`${title}${unread ? ", unread" : ""}`}
         className="block w-full text-left active:opacity-70 disabled:cursor-wait disabled:opacity-70"

@@ -131,18 +131,20 @@ test("mark-one success updates only that row and decrements once", async () => {
   const pending = controller.notificationControllerReducer(initial, {
     type: "mark-one-start",
     id: "one",
+    operationId: 1,
   });
   const succeeded = controller.notificationControllerReducer(pending, {
     type: "mark-one-success",
     id: "one",
+    operationId: 1,
     readAt: "2026-07-11T12:02:00.000Z",
   });
 
-  assert.equal(pending.rowPendingId, "one");
+  assert.equal(pending.operation?.kind, "row");
   assert.equal(succeeded.unread, 1);
   assert.equal(succeeded.items[0].read_at, "2026-07-11T12:02:00.000Z");
   assert.equal(succeeded.items[1].read_at, null);
-  assert.equal(succeeded.rowPendingId, null);
+  assert.equal(succeeded.operation, null);
 });
 
 test("mark-one failure preserves count and retries independently from bulk read", async () => {
@@ -159,20 +161,24 @@ test("mark-one failure preserves count and retries independently from bulk read"
     controller.notificationControllerReducer(initial, {
       type: "mark-one-start",
       id: "one",
+      operationId: 2,
     }),
     {
       type: "mark-one-failed",
       id: "one",
+      operationId: 2,
       error: "Could not mark this notification read.",
     },
   );
   const retrying = controller.notificationControllerReducer(failed, {
     type: "mark-one-start",
     id: "one",
+    operationId: 3,
   });
   const retried = controller.notificationControllerReducer(retrying, {
     type: "mark-one-success",
     id: "one",
+    operationId: 3,
     readAt: "2026-07-11T12:03:00.000Z",
   });
 
@@ -195,17 +201,23 @@ test("mark-all failure preserves rows and retry succeeds without row-error coupl
     error: null,
   });
   const failed = controller.notificationControllerReducer(
-    controller.notificationControllerReducer(initial, { type: "mark-all-start" }),
+    controller.notificationControllerReducer(initial, {
+      type: "mark-all-start",
+      operationId: 4,
+    }),
     {
       type: "mark-all-failed",
+      operationId: 4,
       error: "Could not mark notifications read.",
     },
   );
   const retrying = controller.notificationControllerReducer(failed, {
     type: "mark-all-start",
+    operationId: 5,
   });
   const retried = controller.notificationControllerReducer(retrying, {
     type: "mark-all-success",
+    operationId: 5,
     readAt: "2026-07-11T12:04:00.000Z",
   });
 
@@ -213,7 +225,7 @@ test("mark-all failure preserves rows and retry succeeds without row-error coupl
   assert.equal(failed.items.every((item) => item.read_at === null), true);
   assert.equal(failed.bulkStatus, "error");
   assert.equal(failed.rowErrorId, null);
-  assert.equal(retrying.bulkStatus, "pending");
+  assert.equal(controller.notificationBulkControlStatus(retrying), "pending");
   assert.equal(retried.unread, 0);
   assert.equal(retried.items.every((item) => item.read_at !== null), true);
   assert.equal(retried.bulkStatus, "success");
@@ -400,6 +412,291 @@ test("rendered bulk control exposes pending and retry labels only for bulk state
   assert.match(pending, /disabled=""/);
   assert.match(pending, />Marking…<\/button>/);
   assert.match(failed, />Retry mark all read<\/button>/);
+});
+
+test("row write blocks bulk start until the matching row completion", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const initial = controller.createNotificationControllerState({
+    items: [notification("one")],
+    unread: 1,
+    error: null,
+  });
+  const rowPending = controller.notificationControllerReducer(initial, {
+    type: "mark-one-start",
+    id: "one",
+    operationId: 1,
+  });
+  const blockedBulk = controller.notificationControllerReducer(rowPending, {
+    type: "mark-all-start",
+    operationId: 2,
+  });
+
+  assert.deepEqual(blockedBulk.operation, {
+    kind: "row",
+    id: "one",
+    operationId: 1,
+    startedRevision: 0,
+  });
+  assert.equal(blockedBulk.bulkStatus, "idle");
+  assert.equal(blockedBulk.unread, 1);
+});
+
+test("bulk write blocks every row start until matching bulk completion", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const initial = controller.createNotificationControllerState({
+    items: [notification("one"), notification("two")],
+    unread: 2,
+    error: null,
+  });
+  const bulkPending = controller.notificationControllerReducer(initial, {
+    type: "mark-all-start",
+    operationId: 10,
+  });
+  const blockedRow = controller.notificationControllerReducer(bulkPending, {
+    type: "mark-one-start",
+    id: "one",
+    operationId: 11,
+  });
+
+  assert.deepEqual(blockedRow.operation, {
+    kind: "bulk",
+    operationId: 10,
+    startedRevision: 0,
+  });
+  assert.equal(blockedRow.rowErrorId, null);
+  assert.equal(blockedRow.unread, 2);
+});
+
+test("stale success and error completions cannot finish a newer operation", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const initial = controller.createNotificationControllerState({
+    items: [notification("one")],
+    unread: 1,
+    error: null,
+  });
+  const pending = controller.notificationControllerReducer(initial, {
+    type: "mark-one-start",
+    id: "one",
+    operationId: 20,
+  });
+  const staleFailure = controller.notificationControllerReducer(pending, {
+    type: "mark-one-failed",
+    id: "one",
+    operationId: 19,
+    error: "stale failure",
+  });
+  const staleSuccess = controller.notificationControllerReducer(staleFailure, {
+    type: "mark-one-success",
+    id: "one",
+    operationId: 19,
+    readAt: "2026-07-11T12:06:00.000Z",
+  });
+
+  assert.deepEqual(staleFailure, pending);
+  assert.deepEqual(staleSuccess, pending);
+  assert.equal(staleSuccess.items[0].read_at, null);
+  assert.equal(staleSuccess.unread, 1);
+});
+
+test("authoritative reconcile clears obsolete terminal feedback", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const initial = controller.createNotificationControllerState({
+    items: [notification("one")],
+    unread: 1,
+    error: null,
+  });
+  const bulkSuccess = controller.notificationControllerReducer(
+    controller.notificationControllerReducer(initial, {
+      type: "mark-all-start",
+      operationId: 30,
+    }),
+    {
+      type: "mark-all-success",
+      operationId: 30,
+      readAt: "2026-07-11T12:07:00.000Z",
+    },
+  );
+  const afterNewInsert = controller.notificationControllerReducer(bulkSuccess, {
+    type: "reconcile",
+    snapshot: {
+      items: [notification("two")],
+      unread: 1,
+      error: null,
+    },
+  });
+  const rowFailure = controller.notificationControllerReducer(
+    controller.notificationControllerReducer(afterNewInsert, {
+      type: "mark-one-start",
+      id: "two",
+      operationId: 31,
+    }),
+    {
+      type: "mark-one-failed",
+      id: "two",
+      operationId: 31,
+      error: "Could not mark this notification read.",
+    },
+  );
+  const afterExternalRead = controller.notificationControllerReducer(rowFailure, {
+    type: "reconcile",
+    snapshot: {
+      items: [
+        notification("two", {
+          read_at: "2026-07-11T12:08:00.000Z",
+        }),
+      ],
+      unread: 0,
+      error: null,
+    },
+  });
+
+  assert.equal(afterNewInsert.unread, 1);
+  assert.equal(afterNewInsert.bulkStatus, "idle");
+  assert.equal(afterNewInsert.bulkError, null);
+  assert.equal(afterNewInsert.bulkStatusMessage, null);
+  assert.equal(afterExternalRead.rowErrorId, null);
+  assert.equal(afterExternalRead.rowError, null);
+  assert.equal(afterExternalRead.unread, 0);
+});
+
+test("authoritative confirmation clears pending operation and rejects its late completion", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const initial = controller.createNotificationControllerState({
+    items: [notification("one")],
+    unread: 1,
+    error: null,
+  });
+  const pending = controller.notificationControllerReducer(initial, {
+    type: "mark-one-start",
+    id: "one",
+    operationId: 40,
+  });
+  const confirmed = controller.notificationControllerReducer(pending, {
+    type: "reconcile",
+    snapshot: {
+      items: [
+        notification("one", {
+          read_at: "2026-07-11T12:09:00.000Z",
+        }),
+      ],
+      unread: 0,
+      error: null,
+    },
+  });
+  const lateFailure = controller.notificationControllerReducer(confirmed, {
+    type: "mark-one-failed",
+    id: "one",
+    operationId: 40,
+    error: "late failure",
+  });
+
+  assert.equal(confirmed.operation, null);
+  assert.equal(confirmed.unread, 0);
+  assert.deepEqual(lateFailure, confirmed);
+});
+
+test("authoritative sync during a write prevents stale optimistic completion", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const initial = controller.createNotificationControllerState({
+    items: [notification("one"), notification("two")],
+    unread: 2,
+    error: null,
+  });
+  const pending = controller.notificationControllerReducer(initial, {
+    type: "mark-all-start",
+    operationId: 50,
+  });
+  const newerTruth = controller.notificationControllerReducer(pending, {
+    type: "reconcile",
+    snapshot: {
+      items: [notification("three"), notification("one"), notification("two")],
+      unread: 3,
+      error: null,
+    },
+  });
+  const lateSuccess = controller.notificationControllerReducer(newerTruth, {
+    type: "mark-all-success",
+    operationId: 50,
+    readAt: "2026-07-11T12:10:00.000Z",
+  });
+
+  assert.equal(newerTruth.operation?.kind, "bulk");
+  assert.equal(newerTruth.authoritativeRevision, 1);
+  assert.equal(lateSuccess.operation, null);
+  assert.equal(lateSuccess.unread, 3);
+  assert.equal(lateSuccess.items.every((item) => item.read_at === null), true);
+  assert.equal(lateSuccess.bulkStatus, "idle");
+  assert.equal(lateSuccess.bulkStatusMessage, null);
+});
+
+test("unauthenticated notification writes throw the sign-in-safe contract", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  assert.equal(typeof controller.requireNotificationWriteAuthentication, "function");
+  assert.throws(
+    () => controller.requireNotificationWriteAuthentication(null),
+    /session expired.*sign in.*retry/i,
+  );
+  assert.deepEqual(
+    controller.requireNotificationWriteAuthentication({ id: "user-1" }),
+    { id: "user-1" },
+  );
+});
+
+test("rendered competing controls are disabled without false pending labels", async () => {
+  const controls = await loadControls();
+  assert.ok(controls, "notification controls must exist");
+  if (!controls) return;
+
+  const bulkBlockedByRow = renderToStaticMarkup(
+    createElement(controls.NotificationBulkReadControl, {
+      unread: 2,
+      status: "idle",
+      disabled: true,
+      onActivate: () => undefined,
+    }),
+  );
+  const rowBlockedByBulk = renderToStaticMarkup(
+    createElement(
+      controls.NotificationRowActions,
+      {
+        title: "Your seat was confirmed",
+        unread: true,
+        pending: false,
+        disabled: true,
+        error: null,
+        onActivate: () => undefined,
+        onRetry: () => undefined,
+      },
+      createElement("span", null, "Notification row"),
+    ),
+  );
+
+  assert.match(bulkBlockedByRow, /disabled=""/);
+  assert.match(bulkBlockedByRow, />Mark all read<\/button>/);
+  assert.doesNotMatch(bulkBlockedByRow, /Marking/);
+  assert.match(rowBlockedByBulk, /disabled=""/);
+  assert.doesNotMatch(rowBlockedByBulk, /aria-busy="true"/);
 });
 
 test("ride cancellation reason remains available to the mobile renderer", async () => {
