@@ -98,7 +98,7 @@ export default async function HomePage() {
 
       {/* Recent rides */}
       <section className="mt-14">
-        <SectionHeader title="Scheduled rides" href="/rides" />
+        <SectionHeader title="Scheduled rides" href="/rides" allowAnonymousBrowse />
         {rides && rides.length > 0 ? (
           <div className="grid gap-3">
             {(rides as RideWithDriver[]).map((ride) => (

@@ -46,7 +46,7 @@ export default async function MobileEventPage({
 
   return (
     <div className="pb-[calc(5rem+env(safe-area-inset-bottom)+1rem)]">
-      <SubHeader title="Ride board" backFallback="/m/events" />
+      <SubHeader title="Ride board" backFallback="/m/events" allowAnonymousBack />
 
       <div className="space-y-5 px-4 pt-2">
         <section className="rounded-3xl bg-brand-600 p-5 text-white shadow-[0_18px_44px_-34px_rgba(92,59,46,0.55)]">

@@ -28,6 +28,15 @@ export function EventRequestForm({
   return (
     <section className={compact ? "px-4 pt-4" : "mt-8"}>
       <div className="rounded-2xl border border-[#e7ddcf] bg-white p-5 shadow-[0_18px_44px_-34px_rgba(92,59,46,0.5)]">
+        {state.message && (
+          <p
+            role={state.status === "error" ? "alert" : "status"}
+            className={`mb-4 ${messageClass}`}
+          >
+            {state.message}
+          </p>
+        )}
+
         <details key={state.resetKey} className="group">
           <summary className="flex cursor-pointer list-none items-start gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-brand-100">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-tint text-brand-600">
@@ -44,12 +53,6 @@ export function EventRequestForm({
             <span className="pt-1 text-xs font-bold text-brand-600 group-open:hidden">Expand</span>
             <span className="hidden pt-1 text-xs font-bold text-brand-600 group-open:inline">Close</span>
           </summary>
-
-          {state.message && (
-            <p role={state.status === "error" ? "alert" : "status"} className={`mt-4 ${messageClass}`}>
-              {state.message}
-            </p>
-          )}
 
           {signedIn ? (
             <form action={formAction} className="mt-5 space-y-4">

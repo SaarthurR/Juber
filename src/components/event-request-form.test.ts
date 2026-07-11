@@ -27,3 +27,24 @@ test("EventRequestForm renders typed action-state feedback", () => {
   assert.match(markup, /role="alert"/);
   assert.match(markup, /Please add an event name\./);
 });
+
+test("EventRequestForm keeps success feedback visible after reset closes the fields", () => {
+  const markup = renderToStaticMarkup(
+    createElement(EventRequestForm, {
+      signedIn: true,
+      initialState: {
+        status: "success",
+        message: "Sent to admins. It will appear here once approved.",
+        resetKey: 1,
+      },
+    }),
+  );
+
+  const statusAt = markup.indexOf('role="status"');
+  const detailsAt = markup.indexOf("<details");
+
+  assert.ok(statusAt >= 0, "success must render in an accessible status region");
+  assert.ok(detailsAt >= 0, "the secondary form remains a disclosure");
+  assert.ok(statusAt < detailsAt, "success must remain outside the closed disclosure");
+  assert.doesNotMatch(markup, /<details[^>]*open/);
+});

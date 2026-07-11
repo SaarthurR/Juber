@@ -24,5 +24,37 @@ test("landing browse links are marked anonymous-safe", () => {
 
   assert.match(home, /href="\/rides"[\s\S]*data-auth-allowed="true"/);
   assert.match(home, /SectionHeader title="Upcoming events" href="\/events" allowAnonymousBrowse/);
+  assert.match(home, /SectionHeader title="Scheduled rides" href="\/rides" allowAnonymousBrowse/);
   assert.match(home, /<EventCard[\s\S]*allowAnonymousBrowse/);
+});
+
+test("anonymous mobile event detail opts its Back control into public browsing", () => {
+  const page = readFileSync(
+    fileURLToPath(new URL("app/m/events/[slug]/page.tsx", root)),
+    "utf8",
+  );
+
+  assert.match(
+    page,
+    /<SubHeader title="Ride board" backFallback="\/m\/events" allowAnonymousBack \/>/,
+  );
+});
+
+test("mobile event post and request actions remain auth-gated", () => {
+  const page = readFileSync(
+    fileURLToPath(new URL("app/m/events/[slug]/page.tsx", root)),
+    "utf8",
+  );
+  const actionLinks = page.slice(
+    page.indexOf("const actionLinks"),
+    page.indexOf("return (", page.indexOf("const actionLinks")),
+  );
+
+  assert.match(actionLinks, /href=\{`\/m\/rides\/new\?event_id=/);
+  assert.match(actionLinks, /href=\{`\/m\/requests\/new\?event_id=/);
+  assert.doesNotMatch(actionLinks, /data-auth-allowed/);
+  assert.match(
+    page,
+    /\{user \? actionLinks : <LandingAuthGate>\{actionLinks\}<\/LandingAuthGate>\}/,
+  );
 });
