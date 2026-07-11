@@ -1228,9 +1228,26 @@ test("rendered evicted retry remains one focused button and switches to Retrying
   assert.match(pending, accessibleName);
   assert.equal((idle.match(/<button/g) ?? []).length, 1);
   assert.equal((pending.match(/<button/g) ?? []).length, 1);
-  assert.match(pending, /disabled=""/);
+  assert.doesNotMatch(pending, /\sdisabled=""/);
+  assert.match(pending, /aria-disabled="true"/);
   assert.match(pending, /aria-busy="true"/);
   assert.match(pending, />Retrying…<\/button>/);
+});
+
+test("evicted retry activation guard ignores pending and runs idle retry", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  let calls = 0;
+  const retry = () => {
+    calls += 1;
+  };
+
+  controller.activateNotificationRetry(true, retry);
+  assert.equal(calls, 0);
+  controller.activateNotificationRetry(false, retry);
+  assert.equal(calls, 1);
 });
 
 test("ride cancellation reason remains available to the mobile renderer", async () => {

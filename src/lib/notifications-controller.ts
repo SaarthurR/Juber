@@ -325,6 +325,13 @@ export function notificationEvictedRowRetry(
     : { context, error, pending: retainedOperation !== null };
 }
 
+export function activateNotificationRetry(
+  pending: boolean,
+  onRetry: () => void,
+): void {
+  if (!pending) onRetry();
+}
+
 export function notificationControllerKey(snapshot: NotificationSnapshot): string {
   return JSON.stringify(snapshot);
 }

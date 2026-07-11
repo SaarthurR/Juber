@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
-import type { NotificationBulkStatus } from "@/lib/notifications-controller";
+import {
+  activateNotificationRetry,
+  type NotificationBulkStatus,
+} from "@/lib/notifications-controller";
 
 export function NotificationBulkReadControl({
   unread,
@@ -122,11 +125,13 @@ export function NotificationEvictedRowRetry({
       <span>{error}</span>
       <button
         type="button"
-        onClick={onRetry}
-        disabled={pending}
+        onClick={() => activateNotificationRetry(pending, onRetry)}
+        aria-disabled={pending || undefined}
         aria-busy={pending || undefined}
         aria-label={`Retry marking ${title} read`}
-        className="shrink-0 rounded-full bg-white px-3 py-1 font-bold text-red-700 disabled:cursor-wait disabled:opacity-60"
+        className={`shrink-0 rounded-full bg-white px-3 py-1 font-bold text-red-700 ${
+          pending ? "cursor-wait opacity-60" : ""
+        }`}
       >
         {pending ? "Retrying…" : "Retry"}
       </button>
