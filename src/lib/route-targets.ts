@@ -1,5 +1,6 @@
 export const AUTH_CALLBACK_TARGETS = ["/rides", "/events", "/m/events"] as const;
 export const MESSAGE_BASE_TARGETS = ["/messages", "/m/messages"] as const;
+export const RIDE_LIST_TARGETS = ["/rides", "/m/rides"] as const;
 
 export function pickAllowed<T extends string>(
   value: unknown,

@@ -14,7 +14,9 @@ import {
   PassengerStatusButtons,
   CancelSeatButton,
   DriverRideActions,
+  LostItemMessageButton,
 } from "@/components/ride-actions";
+import { PendingActionGroup } from "@/components/pending-action-button";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -71,7 +73,7 @@ export default async function RideDetailPage({
   // phone/whatsapp aren't on the profile join anymore (column-level RLS); read
   // the driver's numbers through the booking-scoped RPC, only when entitled.
   const driverContact =
-    user && !isDriver && myJoin?.status === "confirmed"
+    user && !isDriver && ride.status === "active" && myJoin?.status === "confirmed"
       ? await getContact(supabase, ride.driver_id)
       : { phone: null, whatsapp: null };
 
@@ -83,6 +85,7 @@ export default async function RideDetailPage({
 
   const cancelled = ride.status === "cancelled";
   const completed = ride.status === "completed";
+  const terminal = cancelled || completed;
 
   return (
     <div>
@@ -205,7 +208,7 @@ export default async function RideDetailPage({
               )}
             </div>
           </Link>
-          {user && !isDriver && myJoin?.status === "confirmed" && (
+          {user && !isDriver && ride.status === "active" && myJoin?.status === "confirmed" && (
             <ContactModal
               driverName={ride.driver?.full_name?.split(" ")[0] ?? "Driver"}
               phone={driverContact.phone}
@@ -285,7 +288,60 @@ export default async function RideDetailPage({
             </div>
           )}
         </div>
+        {user && terminal && (
+          <LostItemPanel
+            rideId={ride.id}
+            isDriver={isDriver}
+            driverId={ride.driver_id}
+            myJoinStatus={myJoin?.status}
+            confirmed={confirmed}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+function LostItemPanel({
+  rideId,
+  isDriver,
+  driverId,
+  myJoinStatus,
+  confirmed,
+}: {
+  rideId: string;
+  isDriver: boolean;
+  driverId: string;
+  myJoinStatus?: string;
+  confirmed: PassengerRow[];
+}) {
+  if (!isDriver && myJoinStatus !== "confirmed") return null;
+
+  if (!isDriver) {
+    return (
+      <div className="mt-4">
+        <LostItemMessageButton rideId={rideId} otherUserId={driverId} />
+      </div>
+    );
+  }
+
+  if (!confirmed.length) return null;
+
+  return (
+    <div className="mt-4 space-y-2 rounded-xl border border-stone-200 bg-white p-4">
+      <p className="text-sm font-bold text-stone-900">Lost item follow-up</p>
+      <PendingActionGroup>
+        <div className="space-y-2">
+          {confirmed.map((passenger) => (
+            <LostItemMessageButton
+              key={passenger.id}
+              rideId={rideId}
+              otherUserId={passenger.passenger_id}
+              label={`Message ${passenger.passenger?.full_name ?? "confirmed passenger"}`}
+            />
+          ))}
+        </div>
+      </PendingActionGroup>
     </div>
   );
 }

@@ -15,7 +15,9 @@ import {
   PassengerStatusButtons,
   CancelSeatButton,
   DriverRideActions,
+  LostItemMessageButton,
 } from "@/components/ride-actions";
+import { PendingActionGroup } from "@/components/pending-action-button";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +50,7 @@ export default async function MobileTripPage({
   const isDriver = user?.id === ride.driver_id;
   const myJoin = passengerRows.find((p) => p.passenger_id === user?.id);
   const driverContact =
-    user && !isDriver && myJoin?.status === "confirmed"
+    user && !isDriver && ride.status === "active" && myJoin?.status === "confirmed"
       ? await getContact(supabase, ride.driver_id)
       : { phone: null, whatsapp: null };
   const confirmed = passengerRows.filter((p) => p.status === "confirmed");
@@ -59,6 +61,8 @@ export default async function MobileTripPage({
   const pickupLocation = ride.pickup_location || ride.origin_label;
   const dropoffLocation = ride.dropoff_location || ride.destination_label;
   const cancelled = ride.status === "cancelled";
+  const completed = ride.status === "completed";
+  const terminal = cancelled || completed;
   const driverFirst = ride.driver?.full_name?.split(" ")[0] ?? "the driver";
   const carLine = [
     ride.driver?.pronouns,
@@ -152,7 +156,7 @@ export default async function MobileTripPage({
               {carLine && <p className="truncate text-xs text-muted-warm">{carLine}</p>}
             </div>
           </Link>
-          {user && !isDriver && myJoin?.status === "confirmed" && (
+          {user && !isDriver && ride.status === "active" && myJoin?.status === "confirmed" && (
             <ContactSheet
               driverId={ride.driver_id}
               driverFullName={ride.driver?.full_name ?? null}
@@ -228,10 +232,24 @@ export default async function MobileTripPage({
             )}
             {ride.status === "active" && (
               <div className="mt-4 border-t border-border-soft pt-4">
-                <DriverRideActions rideId={ride.id} confirmedRiderCount={confirmed.length} />
+                <DriverRideActions
+                  rideId={ride.id}
+                  confirmedRiderCount={confirmed.length}
+                  base="/m/rides"
+                />
               </div>
             )}
           </div>
+        )}
+
+        {user && terminal && (
+          <LostItemPanel
+            rideId={ride.id}
+            isDriver={isDriver}
+            driverId={ride.driver_id}
+            myJoinStatus={myJoin?.status}
+            confirmed={confirmed}
+          />
         )}
       </div>
 
@@ -256,7 +274,7 @@ export default async function MobileTripPage({
             </div>
             {ride.status === "active" &&
               (myJoin.status === "pending" || myJoin.status === "confirmed") && (
-              <CancelSeatButton rideId={ride.id} redirectTo={`/m/rides/${ride.id}`} />
+              <CancelSeatButton rideId={ride.id} base="/m/rides" />
             )}
           </div>
         ) : ride.seats_available > 0 ? (
@@ -268,5 +286,48 @@ export default async function MobileTripPage({
         )}
       </div>
     </div>
+  );
+}
+
+function LostItemPanel({
+  rideId,
+  isDriver,
+  driverId,
+  myJoinStatus,
+  confirmed,
+}: {
+  rideId: string;
+  isDriver: boolean;
+  driverId: string;
+  myJoinStatus?: string;
+  confirmed: PassengerRow[];
+}) {
+  if (!isDriver && myJoinStatus !== "confirmed") return null;
+
+  if (!isDriver) {
+    return (
+      <div>
+        <LostItemMessageButton rideId={rideId} otherUserId={driverId} base="/m/messages" />
+      </div>
+    );
+  }
+
+  if (!confirmed.length) return null;
+
+  return (
+    <section className="space-y-2 rounded-2xl border border-border bg-white p-4">
+      <p className="text-[13px] font-extrabold text-ink">Lost item follow-up</p>
+      <PendingActionGroup>
+        {confirmed.map((passenger) => (
+          <LostItemMessageButton
+            key={passenger.id}
+            rideId={rideId}
+            otherUserId={passenger.passenger_id}
+            base="/m/messages"
+            label={`Message ${passenger.passenger?.full_name ?? "confirmed passenger"}`}
+          />
+        ))}
+      </PendingActionGroup>
+    </section>
   );
 }

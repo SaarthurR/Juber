@@ -10,6 +10,7 @@ import { GoogleSignInButton } from "@/components/auth-button";
 import { openConversation } from "@/app/messages/actions";
 import { acceptRideRequest } from "@/app/rides/actions";
 import { CancelRequestButton } from "@/components/ride-actions";
+import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import type { EventRow, Profile, RideRequest } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -214,13 +215,14 @@ function OwnerActions({
 function ResponderActions({ requestId }: { requestId: string }) {
   return (
     <form action={acceptRideRequest.bind(null, requestId)}>
-      <button
-        type="submit"
+      <PendingActionButton
+        actionKey={`accept-request-${requestId}`}
+        pendingLabel="Accepting..."
         className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
       >
         <CheckCircle2 size={17} />
         Accept request
-      </button>
+      </PendingActionButton>
     </form>
   );
 }
@@ -233,15 +235,18 @@ function BookedMessageButton({
   requestId: string;
 }) {
   return (
-    <form action={openConversation.bind(null, otherUserId)}>
-      <input type="hidden" name="request_id" value={requestId} />
-      <button
-        type="submit"
-        className="flex w-full items-center justify-center gap-2 rounded-full border border-stone-200 px-5 py-3 text-sm font-bold text-stone-700 transition hover:bg-white active:scale-[0.98]"
-      >
-        <MessageCircle size={17} />
-        Message ride partner
-      </button>
-    </form>
+    <PendingActionGroup>
+      <form action={openConversation.bind(null, otherUserId)}>
+        <input type="hidden" name="request_id" value={requestId} />
+        <PendingActionButton
+          actionKey={`message-request-${requestId}`}
+          pendingLabel="Opening..."
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-stone-200 px-5 py-3 text-sm font-bold text-stone-700 transition hover:bg-white active:scale-[0.98]"
+        >
+          <MessageCircle size={17} />
+          Message ride partner
+        </PendingActionButton>
+      </form>
+    </PendingActionGroup>
   );
 }

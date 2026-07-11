@@ -2,10 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { JCNC_LABEL } from "@/lib/constants";
 import { sendSms } from "@/lib/sms";
+import { dateOnlyToIso } from "@/lib/date-time";
+import {
+  MESSAGE_BASE_TARGETS,
+  RIDE_LIST_TARGETS,
+  pickAllowed,
+} from "@/lib/route-targets";
 
 type CancellationContact = {
   id: string;
@@ -67,6 +74,7 @@ function isoDate(v: FormDataEntryValue | null) {
 }
 
 export type RideFormState = { error: string } | null;
+export type RequestFormState = { error: string } | null;
 
 export async function postRide(
   _previousState: RideFormState,
@@ -144,53 +152,57 @@ export async function postRide(
   redirect("/rides");
 }
 
-export async function postRequest(formData: FormData) {
+export async function postRequest(
+  _previousState: RequestFormState,
+  formData: FormData,
+): Promise<RequestFormState> {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const earliestDate = str(formData.get("earliest_date")); // "YYYY-MM-DD"
-  const latestDate = str(formData.get("latest_date"));
-  const maxPrice = parseNonNegativeNumber(formData.get("max_price"), "Max gas contribution");
+  try {
+    const earliestDate = str(formData.get("earliest_date"));
+    const latestDate = str(formData.get("latest_date"));
+    const maxPrice = parseNonNegativeNumber(formData.get("max_price"), "Max gas contribution");
 
-  if (!earliestDate) throw new Error("Please choose a start date.");
-  if (!latestDate) throw new Error("Please choose an end date.");
-  const earliest = new Date(`${earliestDate}T00:00:00`);
-  const latest = new Date(`${latestDate}T00:00:00`);
-  if (Number.isNaN(earliest.getTime()) || Number.isNaN(latest.getTime())) {
-    throw new Error("Please choose a valid date range.");
+    if (!earliestDate) throw new Error("Please choose a start date.");
+    if (!latestDate) throw new Error("Please choose an end date.");
+    const earliest = dateOnlyToIso(earliestDate, "00:00");
+    const latest = dateOnlyToIso(latestDate, "00:00");
+    if (new Date(earliest) > new Date(latest)) {
+      throw new Error("The start date must be before the end date.");
+    }
+
+    const departAt = dateOnlyToIso(earliestDate);
+
+    const { error } = await supabase.from("ride_requests").insert({
+      rider_id: user.id,
+      origin_label: str(formData.get("origin_label")),
+      destination_label:
+        str(formData.get("destination_label")) ??
+        "JCNC",
+      depart_at: departAt,
+      earliest_date: earliestDate,
+      latest_date: latestDate,
+      max_price: maxPrice,
+      seats_needed: parsePositiveInt(formData.get("seats_needed"), 1, "Seats needed"),
+      notes: str(formData.get("notes")),
+      event_id: str(formData.get("event_id")),
+    });
+
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Unable to post this request." };
   }
-  if (earliest > latest) {
-    throw new Error("The start date must be before the end date.");
-  }
-
-  // depart_at set to noon on earliest_date for backward-compat queries
-  const departAt = new Date(`${earliestDate}T12:00:00`).toISOString();
-
-  const { error } = await supabase.from("ride_requests").insert({
-    rider_id: user.id,
-    origin_label: str(formData.get("origin_label")),
-    destination_label:
-      str(formData.get("destination_label")) ??
-      "JCNC",
-    depart_at: departAt,
-    earliest_date: earliestDate,
-    latest_date: latestDate,
-    max_price: maxPrice,
-    seats_needed: parsePositiveInt(formData.get("seats_needed"), 1, "Seats needed"),
-    notes: str(formData.get("notes")),
-    event_id: str(formData.get("event_id")),
-  });
-
-  if (error) throw new Error(error.message);
   revalidatePath("/rides");
   redirect("/rides?tab=requests");
 }
 
-export async function cancelRideRequest(requestId: string) {
+export async function cancelRideRequest(requestId: string, formData?: FormData) {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
+  const base = pickAllowed(formData?.get("base")?.toString(), RIDE_LIST_TARGETS, "/rides");
 
   const { error } = await supabase
     .from("ride_requests")
@@ -202,13 +214,14 @@ export async function cancelRideRequest(requestId: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/rides");
   revalidatePath(`/requests/${requestId}`);
-  redirect("/rides?tab=requests");
+  redirect(`${base}?tab=requests`);
 }
 
-export async function acceptRideRequest(requestId: string) {
+export async function acceptRideRequest(requestId: string, formData?: FormData) {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
+  const base = pickAllowed(formData?.get("base")?.toString(), MESSAGE_BASE_TARGETS, "/messages");
 
   const { data: request } = await supabase
     .from("ride_requests")
@@ -240,7 +253,7 @@ export async function acceptRideRequest(requestId: string) {
   revalidatePath("/rides");
   revalidatePath(`/requests/${requestId}`);
   revalidateMessageRoutes();
-  redirect(`/messages/${conversationId}`);
+  redirect(`${base}/${conversationId}`);
 }
 
 export async function requestSeat(rideId: string) {
@@ -248,41 +261,7 @@ export async function requestSeat(rideId: string) {
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const { data: ride } = await supabase
-    .from("rides")
-    .select("driver_id,status,depart_at,seats_available")
-    .eq("id", rideId)
-    .single<{ driver_id: string; status: string; depart_at: string; seats_available: number }>();
-  if (!ride) throw new Error("Ride not found.");
-  if (ride.driver_id === user.id) throw new Error("You cannot reserve a seat in your own ride.");
-  if (ride.status !== "active") throw new Error("This ride is not accepting reservations.");
-  if (new Date(ride.depart_at) <= new Date()) throw new Error("This ride has already departed.");
-  if (ride.seats_available <= 0) throw new Error("This ride is full.");
-
-  const { error } = await supabase
-    .from("ride_passengers")
-    .insert({ ride_id: rideId, passenger_id: user.id })
-    .select()
-    .single();
-
-  if (error?.code === "23505") {
-    const { data: existing, error: existingError } = await supabase
-      .from("ride_passengers")
-      .select("status")
-      .eq("ride_id", rideId)
-      .eq("passenger_id", user.id)
-      .maybeSingle<{ status: "pending" | "confirmed" | "declined" | "cancelled" }>();
-    if (existingError) throw new Error(existingError.message);
-    if (existing?.status === "pending" || existing?.status === "confirmed") {
-      revalidatePath(`/rides/${rideId}`);
-      return;
-    }
-    if (existing?.status === "cancelled" || existing?.status === "declined") {
-      throw new Error(
-        `Your previous seat request was ${existing.status}. Contact the driver to rejoin.`,
-      );
-    }
-  }
+  const { error } = await supabase.rpc("request_seat", { p_ride_id: rideId });
   if (error) throw new Error(error.message);
   revalidatePath(`/rides/${rideId}`);
 }
@@ -340,8 +319,9 @@ export async function setPassengerStatus(
   revalidateMessageRoutes();
 }
 
-export async function cancelRide(rideId: string, reason: string) {
+export async function cancelRide(rideId: string, reason: string, baseValue?: string) {
   const trimmed = (reason ?? "").trim();
+  const base = pickAllowed(baseValue, RIDE_LIST_TARGETS, "/rides");
 
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
@@ -390,23 +370,24 @@ export async function cancelRide(rideId: string, reason: string) {
     const contactsById = new Map(contacts?.map((contact) => [contact.id, contact]));
     const driverName = cancellationName(contactsById.get(user.id), "Your driver");
     const route = `${ride.origin_label} to ${ride.destination_label}`;
-    await sendCancellationTexts(
+    after(() => sendCancellationTexts(
       passengerIds.map((passengerId) => ({
         to: contactsById.get(passengerId)?.phone ?? null,
         body: `${driverName} cancelled your ride from ${route}. Reason: ${trimmed}`,
       })),
-    );
+    ));
   }
 
   revalidatePath("/rides");
   revalidateMessageRoutes();
-  return { success: true };
+  return { success: true, redirectTo: base };
 }
 
-export async function closeRide(rideId: string) {
+export async function closeRide(rideId: string, formData?: FormData) {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
+  const base = pickAllowed(formData?.get("base")?.toString(), RIDE_LIST_TARGETS, "/rides");
 
   const { data: closed, error } = await supabase.rpc("close_ride", {
     p_ride_id: rideId,
@@ -417,11 +398,12 @@ export async function closeRide(rideId: string) {
   revalidatePath("/rides");
   revalidateMessageRoutes();
   revalidatePath(`/rides/${rideId}`);
-  redirect("/rides");
+  redirect(base);
 }
 
-export async function cancelSeat(rideId: string, message: string, redirectTo?: string) {
+export async function cancelSeat(rideId: string, message: string, baseValue?: string) {
   const trimmed = (message ?? "").trim();
+  const base = pickAllowed(baseValue, RIDE_LIST_TARGETS, "/rides");
   if (!trimmed) {
     return { error: "Please tell the driver why you are cancelling." };
   }
@@ -458,16 +440,16 @@ export async function cancelSeat(rideId: string, message: string, redirectTo?: s
     const contactsById = new Map(contacts?.map((contact) => [contact.id, contact]));
     const riderName = cancellationName(contactsById.get(user.id), "A rider");
     const route = `${ride.origin_label} to ${ride.destination_label}`;
-    await sendCancellationTexts([
+    after(() => sendCancellationTexts([
       {
         to: contactsById.get(ride.driver_id)?.phone ?? null,
         body: `${riderName} cancelled their seat for your ride from ${route}. Reason: ${trimmed}`,
       },
-    ]);
+    ]));
   }
 
   revalidatePath("/rides");
   revalidatePath(`/rides/${rideId}`);
   revalidateMessageRoutes();
-  redirect(redirectTo ?? `/rides/${rideId}`);
+  redirect(`${base}/${rideId}`);
 }

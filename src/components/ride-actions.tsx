@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useScrollLock } from "@/lib/use-scroll-lock";
+import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import {
   requestSeat,
   setPassengerStatus,
@@ -12,37 +12,18 @@ import {
   cancelSeat,
   cancelRideRequest,
 } from "@/app/rides/actions";
-
-function PendingButton({
-  children,
-  pendingLabel,
-  className,
-}: {
-  children: React.ReactNode;
-  pendingLabel: string;
-  className: string;
-}) {
-  const { pending } = useFormStatus();
-  return (
-    <button
-      type="submit"
-      disabled={pending}
-      className={className}
-    >
-      {pending ? pendingLabel : children}
-    </button>
-  );
-}
+import { openConversation } from "@/app/messages/actions";
 
 export function ReserveSeatButton({ rideId }: { rideId: string }) {
   return (
     <form action={requestSeat.bind(null, rideId)}>
-      <PendingButton
+      <PendingActionButton
+        actionKey={`reserve-${rideId}`}
         pendingLabel="Reserving…"
         className="w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
       >
         Reserve a seat
-      </PendingButton>
+      </PendingActionButton>
     </form>
   );
 }
@@ -55,28 +36,38 @@ export function PassengerStatusButtons({
   rideId: string;
 }) {
   return (
-    <div className="flex gap-2">
-      <form action={setPassengerStatus.bind(null, passengerId, rideId, "confirmed")}>
-        <PendingButton
-          pendingLabel="…"
-          className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          Confirm
-        </PendingButton>
-      </form>
-      <form action={setPassengerStatus.bind(null, passengerId, rideId, "declined")}>
-        <PendingButton
-          pendingLabel="…"
-          className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-50 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          Decline
-        </PendingButton>
-      </form>
-    </div>
+    <PendingActionGroup>
+      <div className="flex gap-2">
+        <form action={setPassengerStatus.bind(null, passengerId, rideId, "confirmed")}>
+          <PendingActionButton
+            actionKey={`confirm-${passengerId}`}
+            pendingLabel="…"
+            className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            Confirm
+          </PendingActionButton>
+        </form>
+        <form action={setPassengerStatus.bind(null, passengerId, rideId, "declined")}>
+          <PendingActionButton
+            actionKey={`decline-${passengerId}`}
+            pendingLabel="…"
+            className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-50 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            Decline
+          </PendingActionButton>
+        </form>
+      </div>
+    </PendingActionGroup>
   );
 }
 
-export function CancelRequestButton({ requestId }: { requestId: string }) {
+export function CancelRequestButton({
+  requestId,
+  base,
+}: {
+  requestId: string;
+  base?: "/rides" | "/m/rides";
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +76,9 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
     setError(null);
     startTransition(async () => {
       try {
-        await cancelRideRequest(requestId);
+        const formData = new FormData();
+        if (base) formData.set("base", base);
+        await cancelRideRequest(requestId, formData);
       } catch (e) {
         if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
           setError(e.message);
@@ -118,6 +111,9 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
             <p className="mt-1 text-sm text-stone-500">
               Drivers will no longer see it in ride requests. You can always post a new one.
             </p>
+            <p className="mt-2 text-sm text-stone-500">
+              To change trip details, cancel this post and create a new one.
+            </p>
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -147,9 +143,11 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
 export function CancelRideButton({
   rideId,
   confirmedRiderCount,
+  base = "/rides",
 }: {
   rideId: string;
   confirmedRiderCount: number;
+  base?: "/rides" | "/m/rides";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -171,12 +169,12 @@ export function CancelRideButton({
     setError(null);
     startTransition(async () => {
       try {
-        const result = await cancelRide(rideId, reason);
+        const result = await cancelRide(rideId, reason, base);
         if (result?.error) {
           setError(result.error);
           return;
         }
-        router.push("/rides");
+        router.push(result?.redirectTo ?? base);
         router.refresh();
       } catch (e) {
         console.error("Cancel ride failed", e);
@@ -211,6 +209,9 @@ export function CancelRideButton({
               {confirmedRiderCount > 0
                 ? "Your confirmed riders will be notified with the reason below."
                 : "Are you sure? This ride will be removed from active listings."}
+            </p>
+            <p className="mt-2 text-sm text-stone-500">
+              To change trip details, cancel this post and create a new one.
             </p>
 
             {confirmedRiderCount > 0 && (
@@ -267,8 +268,10 @@ export function CancelRideButton({
 
 export function CloseRideButton({
   rideId,
+  base,
 }: {
   rideId: string;
+  base?: "/rides" | "/m/rides";
 }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -284,7 +287,9 @@ export function CloseRideButton({
     setError(null);
     startTransition(async () => {
       try {
-        await closeRide(rideId);
+        const formData = new FormData();
+        if (base) formData.set("base", base);
+        await closeRide(rideId, formData);
       } catch (e) {
         if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
           setError(e.message);
@@ -347,24 +352,52 @@ export function CloseRideButton({
 export function DriverRideActions({
   rideId,
   confirmedRiderCount,
+  base,
 }: {
   rideId: string;
   confirmedRiderCount: number;
+  base?: "/rides" | "/m/rides";
 }) {
   return (
     <div className="grid grid-cols-2 gap-2">
-      <CloseRideButton rideId={rideId} />
-      <CancelRideButton rideId={rideId} confirmedRiderCount={confirmedRiderCount} />
+      <CloseRideButton rideId={rideId} base={base} />
+      <CancelRideButton rideId={rideId} confirmedRiderCount={confirmedRiderCount} base={base} />
     </div>
+  );
+}
+
+export function LostItemMessageButton({
+  rideId,
+  otherUserId,
+  base,
+  label = "Lost an item? Message about this ride",
+}: {
+  rideId: string;
+  otherUserId: string;
+  base?: "/messages" | "/m/messages";
+  label?: string;
+}) {
+  return (
+    <form action={openConversation.bind(null, otherUserId)}>
+      <input type="hidden" name="ride_id" value={rideId} />
+      {base && <input type="hidden" name="base" value={base} />}
+      <PendingActionButton
+        actionKey={`lost-item-${rideId}-${otherUserId}`}
+        pendingLabel="Opening..."
+        className="flex w-full items-center justify-center rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-bold text-stone-700 transition hover:bg-stone-50 active:scale-[0.98]"
+      >
+        {label}
+      </PendingActionButton>
+    </form>
   );
 }
 
 export function CancelSeatButton({
   rideId,
-  redirectTo,
+  base,
 }: {
   rideId: string;
-  redirectTo?: string;
+  base?: "/rides" | "/m/rides";
 }) {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
@@ -380,7 +413,7 @@ export function CancelSeatButton({
     setError(null);
     startTransition(async () => {
       try {
-        const result = await cancelSeat(rideId, message, redirectTo);
+        const result = await cancelSeat(rideId, message, base);
         if (result?.error) setError(result.error);
       } catch (e) {
         if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
@@ -413,6 +446,9 @@ export function CancelSeatButton({
             <h2 className="text-lg font-bold text-stone-900">Cancel your seat?</h2>
             <p className="mt-1 text-sm text-stone-500">
               The driver will get a notification with your reason.
+            </p>
+            <p className="mt-2 text-sm text-stone-500">
+              To change trip details, cancel this post and create a new one.
             </p>
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-stone-500">
               Reason <span className="text-red-500">*</span>

@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { JCNC_LABEL } from "@/lib/constants";
+import { dateOnlyToIso } from "@/lib/date-time";
+import type { RequestFormState } from "@/app/rides/actions";
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -25,46 +27,51 @@ function parseNonNegativeNumber(v: FormDataEntryValue | null, label: string) {
   return n;
 }
 
-/** Post a ride request from the mobile form, then return to the mobile requests tab. */
-export async function postRequestMobile(formData: FormData) {
+export async function postRequestMobile(
+  _previousState: RequestFormState,
+  formData: FormData,
+): Promise<RequestFormState> {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/m");
 
-  const direction = str(formData.get("direction")) ?? "toJCNC";
-  const neighborhood = str(formData.get("neighborhood"));
-  if (!neighborhood) throw new Error("Please choose your pick-up neighborhood.");
+  try {
+    const direction = str(formData.get("direction")) ?? "toJCNC";
+    const neighborhood = str(formData.get("neighborhood"));
+    if (!neighborhood) throw new Error("Please choose your pick-up neighborhood.");
 
-  const origin = direction === "toJCNC" ? neighborhood : JCNC_LABEL;
-  const destination = direction === "toJCNC" ? JCNC_LABEL : neighborhood;
+    const origin = direction === "toJCNC" ? neighborhood : JCNC_LABEL;
+    const destination = direction === "toJCNC" ? JCNC_LABEL : neighborhood;
 
-  const earliestDate = str(formData.get("earliest_date"));
-  const latestDate = str(formData.get("latest_date"));
-  if (!earliestDate) throw new Error("Please choose a start date.");
-  if (!latestDate) throw new Error("Please choose an end date.");
-  const earliest = new Date(`${earliestDate}T00:00:00`);
-  const latest = new Date(`${latestDate}T00:00:00`);
-  if (Number.isNaN(earliest.getTime()) || Number.isNaN(latest.getTime())) {
-    throw new Error("Please choose a valid date range.");
+    const earliestDate = str(formData.get("earliest_date"));
+    const latestDate = str(formData.get("latest_date"));
+    if (!earliestDate) throw new Error("Please choose a start date.");
+    if (!latestDate) throw new Error("Please choose an end date.");
+    const earliest = dateOnlyToIso(earliestDate, "00:00");
+    const latest = dateOnlyToIso(latestDate, "00:00");
+    if (new Date(earliest) > new Date(latest)) {
+      throw new Error("The start date must be before the end date.");
+    }
+
+    const departAt = dateOnlyToIso(earliestDate);
+
+    const { error } = await supabase.from("ride_requests").insert({
+      rider_id: user.id,
+      origin_label: origin,
+      destination_label: destination,
+      depart_at: departAt,
+      earliest_date: earliestDate,
+      latest_date: latestDate,
+      max_price: parseNonNegativeNumber(formData.get("max_price"), "Max gas"),
+      seats_needed: parsePositiveInt(formData.get("seats_needed"), 1, "Seats"),
+      notes: str(formData.get("notes")),
+      event_id: str(formData.get("event_id")),
+    });
+
+    if (error) throw new Error(error.message);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Unable to post this request." };
   }
-  if (earliest > latest) throw new Error("The start date must be before the end date.");
-
-  const departAt = new Date(`${earliestDate}T12:00:00`).toISOString();
-
-  const { error } = await supabase.from("ride_requests").insert({
-    rider_id: user.id,
-    origin_label: origin,
-    destination_label: destination,
-    depart_at: departAt,
-    earliest_date: earliestDate,
-    latest_date: latestDate,
-    max_price: parseNonNegativeNumber(formData.get("max_price"), "Max gas"),
-    seats_needed: parsePositiveInt(formData.get("seats_needed"), 1, "Seats"),
-    notes: str(formData.get("notes")),
-    event_id: str(formData.get("event_id")),
-  });
-
-  if (error) throw new Error(error.message);
   revalidatePath("/m/requests");
   redirect("/m/requests");
 }

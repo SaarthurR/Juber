@@ -10,6 +10,7 @@ import { GoogleSignInButton } from "@/components/auth-button";
 import { openConversation } from "@/app/messages/actions";
 import { acceptRideRequest } from "@/app/rides/actions";
 import { CancelRequestButton } from "@/components/ride-actions";
+import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import { formatRideDateTime } from "@/lib/date-time";
 import type { EventRow, Profile, RideRequest } from "@/lib/types";
 
@@ -128,7 +129,7 @@ export default async function MobileRequestDetailPage({
               <GoogleSignInButton className="flex w-full items-center justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition active:scale-[0.98]" />
             ) : isOwner ? (
               isActive ? (
-                <CancelRequestButton requestId={request.id} />
+                <CancelRequestButton requestId={request.id} base="/m/rides" />
               ) : request.accepted_driver_id ? (
                 <BookedMessageButton otherUserId={request.accepted_driver_id} requestId={request.id} />
               ) : (
@@ -136,13 +137,15 @@ export default async function MobileRequestDetailPage({
               )
             ) : isActive ? (
               <form action={acceptRideRequest.bind(null, request.id)}>
-                <button
-                  type="submit"
+                <input type="hidden" name="base" value="/m/messages" />
+                <PendingActionButton
+                  actionKey={`mobile-accept-request-${request.id}`}
+                  pendingLabel="Accepting..."
                   className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition active:scale-[0.98]"
                 >
                   <CheckCircle2 size={17} />
                   Accept request
-                </button>
+                </PendingActionButton>
               </form>
             ) : request.status === "fulfilled" && user.id === request.accepted_driver_id ? (
               <BookedMessageButton otherUserId={request.rider_id} requestId={request.id} />
@@ -181,16 +184,19 @@ function BookedMessageButton({
   requestId: string;
 }) {
   return (
-    <form action={openConversation.bind(null, otherUserId)}>
-      <input type="hidden" name="request_id" value={requestId} />
-      <input type="hidden" name="base" value="/m/messages" />
-      <button
-        type="submit"
-        className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-white px-5 py-3 text-sm font-bold text-brand-700 transition active:scale-[0.98]"
-      >
-        <MessageCircle size={17} />
-        Message ride partner
-      </button>
-    </form>
+    <PendingActionGroup>
+      <form action={openConversation.bind(null, otherUserId)}>
+        <input type="hidden" name="request_id" value={requestId} />
+        <input type="hidden" name="base" value="/m/messages" />
+        <PendingActionButton
+          actionKey={`mobile-message-request-${requestId}`}
+          pendingLabel="Opening..."
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-white px-5 py-3 text-sm font-bold text-brand-700 transition active:scale-[0.98]"
+        >
+          <MessageCircle size={17} />
+          Message ride partner
+        </PendingActionButton>
+      </form>
+    </PendingActionGroup>
   );
 }
