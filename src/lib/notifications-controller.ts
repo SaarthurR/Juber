@@ -3,6 +3,7 @@ import type { NotificationWithContext } from "@/lib/types";
 export type NotificationSnapshot = {
   items: NotificationWithContext[];
   unread: number;
+  unreadIds?: readonly string[] | null;
   error: string | null;
 };
 
@@ -216,7 +217,11 @@ function reconcileOperation(
   if (!operation) return null;
   if (operation.kind === "bulk") return snapshot.unread === 0 ? null : operation;
   const row = snapshot.items.find((item) => item.id === operation.id);
-  return !row || row.read_at !== null ? null : operation;
+  if (row) return row.read_at !== null ? null : operation;
+  const completeUnreadIds = snapshot.unreadIds;
+  return completeUnreadIds && !completeUnreadIds.includes(operation.id)
+    ? null
+    : operation;
 }
 
 function matchesRowOperation(

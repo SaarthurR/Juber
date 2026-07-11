@@ -170,6 +170,7 @@ function MNotificationBellController({
         type: "reconcile",
         snapshot: {
           unread: unreadResult.ids.length,
+          unreadIds: unreadResult.ids,
           items: ((data ?? []) as NotificationWithContext[]).map((n) => ({
             ...n,
             request: n.request ?? null,

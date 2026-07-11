@@ -610,6 +610,142 @@ test("authoritative confirmation clears pending operation and rejects its late c
   assert.deepEqual(lateFailure, confirmed);
 });
 
+test("bounded eviction preserves the row lock until matching success completes", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const pendingId = "pending";
+  const initialItems = [
+    notification("one"),
+    notification("two"),
+    notification("three"),
+    notification("four"),
+    notification("five"),
+    notification("six"),
+    notification("seven"),
+    notification(pendingId),
+  ];
+  const initial = controller.createNotificationControllerState({
+    items: initialItems,
+    unread: 8,
+    error: null,
+  });
+  const pending = controller.notificationControllerReducer(initial, {
+    type: "mark-one-start",
+    id: pendingId,
+    operationId: 41,
+  });
+  const evicted = controller.notificationControllerReducer(pending, {
+    type: "reconcile",
+    snapshot: {
+      items: [notification("new"), ...initialItems.slice(0, 7)],
+      unread: 9,
+      unreadIds: ["new", ...initialItems.map((item) => item.id)],
+      error: null,
+    },
+  });
+  const completed = controller.notificationControllerReducer(evicted, {
+    type: "mark-one-success",
+    id: pendingId,
+    operationId: 41,
+    readAt: "2026-07-11T12:09:30.000Z",
+  });
+
+  assert.equal(evicted.operation?.kind, "row");
+  assert.equal(evicted.operation?.operationId, 41);
+  assert.equal(evicted.unread, 9);
+  assert.equal(completed.operation, null);
+  assert.equal(completed.unread, 9);
+  assert.deepEqual(
+    completed.items.map((item) => item.id),
+    evicted.items.map((item) => item.id),
+  );
+});
+
+test("bounded eviction preserves the row lock until matching failure completes", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const pendingId = "pending";
+  const initialItems = [
+    notification("one"),
+    notification("two"),
+    notification("three"),
+    notification("four"),
+    notification("five"),
+    notification("six"),
+    notification("seven"),
+    notification(pendingId),
+  ];
+  const initial = controller.createNotificationControllerState({
+    items: initialItems,
+    unread: 8,
+    error: null,
+  });
+  const pending = controller.notificationControllerReducer(initial, {
+    type: "mark-one-start",
+    id: pendingId,
+    operationId: 42,
+  });
+  const evicted = controller.notificationControllerReducer(pending, {
+    type: "reconcile",
+    snapshot: {
+      items: [notification("new"), ...initialItems.slice(0, 7)],
+      unread: 9,
+      unreadIds: ["new", ...initialItems.map((item) => item.id)],
+      error: null,
+    },
+  });
+  const failed = controller.notificationControllerReducer(evicted, {
+    type: "mark-one-failed",
+    id: pendingId,
+    operationId: 42,
+    error: "Could not mark this notification read.",
+  });
+
+  assert.equal(evicted.operation?.kind, "row");
+  assert.equal(evicted.operation?.operationId, 42);
+  assert.equal(failed.operation, null);
+  assert.equal(failed.rowErrorId, pendingId);
+  assert.equal(failed.unread, 9);
+  assert.deepEqual(
+    failed.items.map((item) => item.id),
+    evicted.items.map((item) => item.id),
+  );
+});
+
+test("complete unread IDs can positively confirm an evicted row is read", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const initial = controller.createNotificationControllerState({
+    items: [notification("pending")],
+    unread: 1,
+    error: null,
+  });
+  const pending = controller.notificationControllerReducer(initial, {
+    type: "mark-one-start",
+    id: "pending",
+    operationId: 43,
+  });
+  const confirmed = controller.notificationControllerReducer(pending, {
+    type: "reconcile",
+    snapshot: {
+      items: [notification("new")],
+      unread: 1,
+      unreadIds: ["new"],
+      error: null,
+    },
+  });
+
+  assert.equal(confirmed.operation, null);
+  assert.equal(confirmed.unread, 1);
+  assert.deepEqual(confirmed.items.map((item) => item.id), ["new"]);
+});
+
 test("authoritative sync during a write prevents stale optimistic completion", async () => {
   const controller = await loadController();
   assert.ok(controller, "notification controller must exist");
