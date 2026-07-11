@@ -2,24 +2,36 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { MobileRequestForm } from "@/components/mobile/request-form";
-import type { Place } from "@/lib/types";
+import type { EventRow, Place } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function MobileNewRequestPage() {
+export default async function MobileNewRequestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ event_id?: string | string[] }>;
+}) {
+  const sp = await searchParams;
+  const eventId = Array.isArray(sp.event_id) ? sp.event_id[0] : sp.event_id;
   const { user } = await getCurrentUser();
   if (!user) redirect("/m");
 
   const today = new Date().toISOString().slice(0, 10);
   const supabase = await createClient();
-  const { data: places } = await supabase
-    .from("places")
-    .select("*")
-    .eq("active", true)
-    .order("name", { ascending: true });
+  const [{ data: places }, { data: events }] = await Promise.all([
+    supabase
+      .from("places")
+      .select("*")
+      .eq("active", true)
+      .order("name", { ascending: true }),
+    eventId
+      ? supabase.from("events").select("id,name,slug").eq("id", eventId).single()
+      : Promise.resolve({ data: null }),
+  ]);
 
   const neighborhoods = ((places as Place[]) ?? []).filter((p) => p.kind !== "event");
   const options = neighborhoods.length ? neighborhoods : ((places as Place[]) ?? []);
+  const event = events as Pick<EventRow, "id" | "name" | "slug"> | null;
 
-  return <MobileRequestForm options={options} today={today} />;
+  return <MobileRequestForm options={options} today={today} eventId={event?.id} eventName={event?.name} />;
 }

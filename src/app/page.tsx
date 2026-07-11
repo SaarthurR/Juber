@@ -7,7 +7,8 @@ import { RideCard } from "@/components/ride-card";
 import { EventCard } from "@/components/event-card";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { LandingAuthGate } from "@/components/landing-auth-gate";
-import type { EventRow, RideWithDriver } from "@/lib/types";
+import { loadEventSummaries } from "@/lib/events";
+import type { RideWithDriver } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -33,14 +34,9 @@ export default async function HomePage() {
         p_round_trip: null,
       });
 
-  const [{ data: rides }, { data: events }] = await Promise.all([
+  const [{ data: rides }, eventSummaries] = await Promise.all([
     ridesPromise,
-    supabase
-      .from("events")
-      .select("*")
-      .eq("is_active", true)
-      .order("start_date", { ascending: true })
-      .limit(3),
+    loadEventSummaries(supabase, Boolean(user)),
   ]);
 
   const content = (
@@ -67,6 +63,7 @@ export default async function HomePage() {
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <Link
               href="/rides"
+              data-auth-allowed="true"
               className="inline-flex items-center gap-2 rounded-xl bg-white px-6 py-2.5 text-sm font-bold text-brand-600 transition hover:bg-[#fbf7f0] active:scale-95"
             >
               Find a ride <ArrowRight size={15} />
@@ -88,12 +85,12 @@ export default async function HomePage() {
       </section>
 
       {/* Upcoming events */}
-      {events && events.length > 0 && (
+      {eventSummaries.length > 0 && (
         <section className="mt-14">
-          <SectionHeader title="Upcoming events" href="/events" />
+          <SectionHeader title="Upcoming events" href="/events" allowAnonymousBrowse />
           <div className="grid gap-3 sm:grid-cols-3">
-            {(events as EventRow[]).map((e) => (
-              <EventCard key={e.id} event={e} />
+            {eventSummaries.slice(0, 3).map(({ event }) => (
+              <EventCard key={event.id} event={event} allowAnonymousBrowse />
             ))}
           </div>
         </section>
@@ -120,12 +117,21 @@ export default async function HomePage() {
   return content;
 }
 
-function SectionHeader({ title, href }: { title: string; href: string }) {
+function SectionHeader({
+  title,
+  href,
+  allowAnonymousBrowse = false,
+}: {
+  title: string;
+  href: string;
+  allowAnonymousBrowse?: boolean;
+}) {
   return (
     <div className="mb-4 flex items-center justify-between">
       <h2 className="text-xl font-bold text-stone-900">{title}</h2>
       <Link
         href={href}
+        data-auth-allowed={allowAnonymousBrowse ? "true" : undefined}
         className="flex items-center gap-1 text-sm font-medium text-brand-600 hover:text-brand-700"
       >
         View all <ArrowRight size={14} />

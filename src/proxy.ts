@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
-// Phones get the /m mobile system. Only the top-level routes are mapped — detail
-// pages (rides/[id], profile/[id], events/[slug]) stay on the shared desktop
-// views that the mobile screens intentionally link to, which also avoids loops.
+// Phones get the /m mobile system. Ride/profile details stay shared; event
+// details have a mobile-shell page so event browsing does not exit /m.
 const MOBILE_ROUTE: Record<string, string> = {
   "/": "/m",
   "/rides": "/m",
@@ -34,10 +33,19 @@ export async function proxy(request: NextRequest) {
   const target = MOBILE_ROUTE[pathname];
   const optedOut = request.cookies.get(DESKTOP_COOKIE)?.value === "1";
   const isMobile = MOBILE_UA.test(request.headers.get("user-agent") ?? "");
+  const eventDetailSlug = pathname.startsWith("/events/")
+    ? pathname.slice("/events/".length)
+    : null;
 
   if (target && isMobile && !optedOut) {
     const url = request.nextUrl.clone();
     url.pathname = target;
+    return NextResponse.redirect(url);
+  }
+
+  if (eventDetailSlug && isMobile && !optedOut) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/m/events/${eventDetailSlug}`;
     return NextResponse.redirect(url);
   }
 

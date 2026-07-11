@@ -23,15 +23,20 @@ function Label({ children }: { children: React.ReactNode }) {
 export function MobileRequestForm({
   options,
   today,
+  eventId,
+  eventName,
 }: {
   options: Place[];
   today: string;
+  eventId?: string;
+  eventName?: string;
 }) {
   const [state, formAction] = useActionState(postRequestMobile, null);
 
   return (
     <form action={formAction} className="pb-28">
       <SubHeader title="Request a ride" backFallback="/m/requests" />
+      {eventId && <input type="hidden" name="event_id" value={eventId} />}
 
       <div className="space-y-6 px-4 pt-2">
         {state?.error && (
@@ -44,6 +49,11 @@ export function MobileRequestForm({
           <p className="mt-1 text-[13px] text-muted-warm">
             Pick a direction — we&apos;ll match drivers going the same way.
           </p>
+          {eventName && (
+            <p className="mt-3 rounded-xl bg-tint px-3 py-2 text-[12px] font-bold text-brand-700">
+              This request will appear on the {eventName} ride board.
+            </p>
+          )}
           <div className="mt-4">
             <DirectionToggle defaultDir="toJCNC" />
           </div>

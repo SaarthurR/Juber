@@ -1,29 +1,26 @@
 import Link from "next/link";
-import { format } from "date-fns";
 import { CalendarDays } from "lucide-react";
-import type { EventRow } from "@/lib/types";
-
-function eventDates(event: EventRow) {
-  if (!event.start_date) return null;
-  const start = format(new Date(`${event.start_date}T12:00:00`), "MMM d");
-  if (!event.end_date || event.end_date === event.start_date) return start;
-  return `${start} – ${format(new Date(`${event.end_date}T12:00:00`), "MMM d")}`;
-}
+import { formatEventDateShort, type EventCardEvent } from "@/lib/events";
 
 export function EventCard({
   event,
   rides,
   seats,
+  href,
+  allowAnonymousBrowse = false,
 }: {
-  event: EventRow;
+  event: EventCardEvent;
   rides?: number;
   seats?: number;
+  href?: string;
+  allowAnonymousBrowse?: boolean;
 }) {
-  const dates = eventDates(event);
+  const dates = formatEventDateShort(event);
   return (
     <Link
-      href={`/events/${event.slug}`}
+      href={href ?? `/events/${event.slug}`}
       data-motion="card"
+      data-auth-allowed={allowAnonymousBrowse ? "true" : undefined}
       className="group flex flex-col rounded-2xl border border-[#ebe7e0] bg-white p-[22px] transition hover:-translate-y-0.5 hover:border-[#e0d3bf] hover:shadow-[0_24px_50px_-32px_rgba(92,59,46,0.4)]"
     >
       <div className="mb-3.5 flex items-start justify-between">
@@ -47,7 +44,7 @@ export function EventCard({
 
       <div className="mt-auto flex items-center justify-between border-t border-[#f0ece5] pt-3.5 [margin-top:16px]">
         <span className="text-[13px] text-[#a8927a]">
-          {seats !== undefined ? `${seats} seats open` : "View board"}
+          {seats !== undefined ? `${seats} seats open` : "Ride board"}
         </span>
         <span className="text-sm font-bold text-brand-600">View rides →</span>
       </div>
