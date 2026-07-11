@@ -4,6 +4,7 @@ import {
   DESKTOP_COOKIE,
   authCallbackDestination,
   authOnboardingDestination,
+  desktopAuthDestination,
 } from "@/lib/route-targets";
 
 // Handles the OAuth redirect from Supabase, exchanging the code for a session.
@@ -20,6 +21,9 @@ export async function GET(request: NextRequest) {
     nextValues.length === 1 ? nextValues[0] : null,
     fallback,
   );
+  const effectiveNext = forceDesktop
+    ? desktopAuthDestination(next, "/rides")
+    : next;
 
   if (code) {
     const supabase = await createClient();
@@ -33,13 +37,13 @@ export async function GET(request: NextRequest) {
         p_profile_id: user?.id ?? "",
       });
       if (!contactReady) {
-        const onboardingPath = authOnboardingDestination(next, {
+        const onboardingPath = authOnboardingDestination(effectiveNext, {
           fallback,
           forceDesktop,
         });
         return NextResponse.redirect(`${origin}${onboardingPath}`);
       }
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${origin}${effectiveNext}`);
     }
   }
 

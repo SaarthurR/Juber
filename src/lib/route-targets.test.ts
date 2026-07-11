@@ -9,12 +9,58 @@ import {
   authCallbackDestination,
   authOnboardingDestination,
   authRevalidationPath,
+  desktopAuthDestination,
   mobileNotificationDestination,
   pickAllowed,
   requestListDestination,
   requestRevalidationTargets,
   rideDetailDestination,
 } from "./route-targets";
+
+const mappingId = "123e4567-e89b-42d3-a456-426614174000";
+const mappingEventId = "123e4567-e89b-42d3-a456-426614174001";
+const desktopOptOutMappings = [
+  { mobile: "/m", desktop: "/rides", page: "/rides" },
+  {
+    mobile: `/m/rides/new?event_id=${mappingEventId}`,
+    desktop: `/rides/new?event_id=${mappingEventId}`,
+    page: "/rides/new",
+  },
+  {
+    mobile: `/m/rides/${mappingId}`,
+    desktop: `/rides/${mappingId}`,
+    page: "/rides/[id]",
+  },
+  { mobile: "/m/requests", desktop: "/rides?tab=requests", page: "/rides" },
+  {
+    mobile: `/m/requests/new?event_id=${mappingEventId}`,
+    desktop: `/requests/new?event_id=${mappingEventId}`,
+    page: "/requests/new",
+  },
+  {
+    mobile: `/m/requests/${mappingId}`,
+    desktop: `/requests/${mappingId}`,
+    page: "/requests/[id]",
+  },
+  { mobile: "/m/events", desktop: "/events", page: "/events" },
+  {
+    mobile: "/m/events/paryushan-2026",
+    desktop: "/events/paryushan-2026",
+    page: "/events/[slug]",
+  },
+  { mobile: "/m/messages", desktop: "/messages", page: "/messages" },
+  {
+    mobile: `/m/messages/${mappingId}`,
+    desktop: `/messages/${mappingId}`,
+    page: "/messages/[id]",
+  },
+  { mobile: "/m/profile", desktop: "/profile", page: "/profile" },
+  {
+    mobile: `/m/profile/${mappingId}`,
+    desktop: `/profile/${mappingId}`,
+    page: "/profile/[id]",
+  },
+] as const;
 
 test("pickAllowed returns fallback for disallowed values", () => {
   const allowed = ["/events"] as const;
@@ -302,8 +348,84 @@ test("desktop opt-out forces desktop onboarding and fallback", () => {
       fallback: "/rides",
       forceDesktop: true,
     }),
-    `/profile?onboarding=1&next=%2Fm%2Frequests%2Fnew%3Fevent_id%3D${eventId}`,
+    `/profile?onboarding=1&next=%2Frequests%2Fnew%3Fevent_id%3D${eventId}`,
   );
+});
+
+test("desktop opt-out maps every mobile route category to an existing desktop page", () => {
+  for (const { mobile, desktop, page } of desktopOptOutMappings) {
+    assert.equal(desktopAuthDestination(mobile), desktop);
+    const pageFile = fileURLToPath(new URL(`../app${page}/page.tsx`, import.meta.url));
+    assert.equal(existsSync(pageFile), true, `${desktop} must resolve to ${page}`);
+  }
+});
+
+test("desktop opt-out composes contact-ready and contact-required final destinations", () => {
+  const profileFallback = `/profile/${mappingId}`;
+
+  for (const { mobile, desktop } of desktopOptOutMappings) {
+    const contactReadyDestination = desktopAuthDestination(mobile);
+    assert.equal(contactReadyDestination, desktop);
+
+    const onboarding = authOnboardingDestination(mobile, {
+      fallback: "/rides",
+      forceDesktop: true,
+    });
+    const onboardingUrl = new URL(onboarding, "https://juber.invalid");
+    assert.equal(onboardingUrl.pathname, "/profile");
+
+    const hiddenNext = onboardingUrl.searchParams.get("next");
+    assert.equal(hiddenNext, desktop);
+    const profileSaveDestination = authCallbackDestination(
+      hiddenNext,
+      profileFallback,
+    );
+    assert.equal(profileSaveDestination, desktop);
+  }
+});
+
+test("desktop mapping preserves canonical query only and rejects hostile input", () => {
+  assert.equal(
+    desktopAuthDestination(
+      `/m/rides/new?tracking=1&event_id=${mappingEventId}#ignored`,
+    ),
+    `/rides/new?event_id=${mappingEventId}`,
+  );
+  assert.equal(
+    desktopAuthDestination(`/m/requests/new?event_id=invalid`),
+    "/requests/new",
+  );
+  assert.equal(desktopAuthDestination("/m/requests"), "/rides?tab=requests");
+  assert.equal(desktopAuthDestination("https://evil.test/m"), "/rides");
+  assert.equal(desktopAuthDestination("/m/rides/../../admin"), "/rides");
+  assert.equal(desktopAuthDestination("/m%5crides/new"), "/rides");
+});
+
+test("desktop mapping leaves canonical desktop destinations unchanged", () => {
+  for (const destination of [
+    "/rides",
+    "/rides?tab=requests",
+    `/rides/new?event_id=${mappingEventId}`,
+    `/requests/${mappingId}`,
+    "/events/paryushan-2026",
+    `/messages/${mappingId}`,
+    `/profile/${mappingId}`,
+  ]) {
+    assert.equal(desktopAuthDestination(destination), destination);
+  }
+});
+
+test("normal mobile onboarding remains mobile without desktop opt-out", () => {
+  for (const { mobile } of desktopOptOutMappings) {
+    const canonicalMobile = authCallbackDestination(mobile, "/m");
+    assert.equal(canonicalMobile, mobile);
+    const onboarding = new URL(
+      authOnboardingDestination(mobile, { fallback: "/m" }),
+      "https://juber.invalid",
+    );
+    assert.equal(onboarding.pathname, "/m/profile/edit");
+    assert.equal(onboarding.searchParams.get("next"), mobile);
+  }
 });
 
 test("route targets expose a sanitized onboarding destination builder", () => {
@@ -325,11 +447,29 @@ test("callback and contact gate pass only sanitized next into the correct profil
   assert.match(callback, /authOnboardingDestination/);
   assert.match(callback, /request\.cookies\.get\(DESKTOP_COOKIE\)/);
   assert.match(callback, /isMobileUa && !forceDesktop/);
+  assert.match(callback, /desktopAuthDestination/);
+  assert.match(callback, /NextResponse\.redirect\(`\$\{origin\}\$\{effectiveNext\}`\)/);
   assert.match(gate, /window\.location\.pathname.*window\.location\.search/);
   assert.match(gate, /authCallbackDestination/);
   assert.match(gate, /new URLSearchParams/);
   assert.match(gate, /"\/m\/profile\/edit"/);
   assert.match(gate, /"\/profile"/);
+});
+
+test("proxy preserves selected desktop onboarding and shares opt-out semantics", () => {
+  const proxy = readFileSync(
+    fileURLToPath(new URL("../proxy.ts", import.meta.url)),
+    "utf8",
+  );
+  const callback = readFileSync(
+    fileURLToPath(new URL("../app/auth/callback/route.ts", import.meta.url)),
+    "utf8",
+  );
+
+  assert.match(proxy, /import \{ DESKTOP_COOKIE \} from "@\/lib\/route-targets"/);
+  assert.match(callback, /DESKTOP_COOKIE/);
+  assert.match(proxy, /preserveDesktopProfileFlow/);
+  assert.match(proxy, /!preserveDesktopProfileFlow/);
 });
 
 test("safe revalidation helper returns only canonical pathnames", () => {

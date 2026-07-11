@@ -31,11 +31,16 @@ export async function proxy(request: NextRequest) {
   const target = MOBILE_ROUTE[pathname];
   const optedOut = request.cookies.get(DESKTOP_COOKIE)?.value === "1";
   const isMobile = MOBILE_UA.test(request.headers.get("user-agent") ?? "");
+  const preserveDesktopProfileFlow =
+    pathname === "/profile"
+    && searchParams.has("next")
+    && (searchParams.get("onboarding") === "1"
+      || searchParams.get("contact_required") === "1");
   const eventDetailSlug = pathname.startsWith("/events/")
     ? pathname.slice("/events/".length)
     : null;
 
-  if (target && isMobile && !optedOut) {
+  if (target && isMobile && !optedOut && !preserveDesktopProfileFlow) {
     const url = request.nextUrl.clone();
     url.pathname = target;
     return NextResponse.redirect(url);

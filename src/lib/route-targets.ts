@@ -3,6 +3,8 @@ export const AUTH_CALLBACK_TARGETS = [
   "/rides/new",
   "/requests/new",
   "/events",
+  "/messages",
+  "/profile",
   "/m",
   "/m/rides/new",
   "/m/requests/new",
@@ -53,6 +55,24 @@ export function authCallbackDestination(value: unknown, fallback = "/rides") {
     ?? "/rides";
 }
 
+export function desktopAuthDestination(destination: unknown, fallback = "/rides") {
+  const canonicalDestination = authCallbackDestination(destination, fallback);
+  const parsed = new URL(canonicalDestination, AUTH_ORIGIN);
+  let desktopDestination: string;
+
+  if (parsed.pathname === "/m") {
+    desktopDestination = "/rides";
+  } else if (parsed.pathname === "/m/requests") {
+    desktopDestination = "/rides?tab=requests";
+  } else if (parsed.pathname.startsWith("/m/")) {
+    desktopDestination = `${parsed.pathname.slice(2)}${parsed.search}`;
+  } else {
+    return canonicalDestination;
+  }
+
+  return authCallbackDestination(desktopDestination, "/rides");
+}
+
 export function authOnboardingDestination(
   nextValue: unknown,
   {
@@ -68,7 +88,10 @@ export function authOnboardingDestination(
       ? nextValue[0]
       : null
     : nextValue;
-  const next = authCallbackDestination(candidate, fallback);
+  const canonicalNext = authCallbackDestination(candidate, fallback);
+  const next = forceDesktop
+    ? desktopAuthDestination(canonicalNext, "/rides")
+    : canonicalNext;
   const search = new URLSearchParams({ onboarding: "1", next });
   const isMobileDestination = next === "/m" || next.startsWith("/m/");
   const profilePath =
