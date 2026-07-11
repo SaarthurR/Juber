@@ -218,7 +218,7 @@ test("production auth-gate decision lets rendered legal controls navigate", () =
   assert.equal(shouldIntercept({ hasAction: false, authAllowed: false }), false);
 });
 
-test("bottom navigation exposes Profile browsing while keeping actions gated", () => {
+test("bottom navigation applies the auth gate contract to all five controls", () => {
   const BottomNavView = bottomNavExports.BottomNavView;
   const shouldIntercept = authGateExports.shouldInterceptAuthAction;
   assert.equal(typeof BottomNavView, "function");
@@ -228,25 +228,31 @@ test("bottom navigation exposes Profile browsing while keeping actions gated", (
   const html = renderToStaticMarkup(
     React.createElement(BottomNavView, { pathname: "/m" }),
   );
-  const profileLink = html.match(/<a [^>]*href="\/m\/profile"[^>]*>/)?.[0] ?? "";
-  const postLink = html.match(/<a [^>]*href="\/m\/rides\/new"[^>]*>/)?.[0] ?? "";
+  const controls = [
+    { label: "Rides", href: "/m", intercept: false },
+    { label: "Requests", href: "/m/requests", intercept: true },
+    { label: "Events", href: "/m/events", intercept: false },
+    { label: "Profile", href: "/m/profile", intercept: false },
+    { label: "Post", href: "/m/rides/new", intercept: true },
+  ] as const;
 
-  assert.match(profileLink, /data-auth-allowed="true"/);
-  assert.equal(
-    shouldIntercept({
-      hasAction: true,
-      authAllowed: profileLink.includes('data-auth-allowed="true"'),
-    }),
-    false,
-  );
-  assert.doesNotMatch(postLink, /data-auth-allowed/);
-  assert.equal(
-    shouldIntercept({
-      hasAction: true,
-      authAllowed: postLink.includes('data-auth-allowed="true"'),
-    }),
-    true,
-  );
+  for (const control of controls) {
+    const openingTag =
+      html.match(new RegExp(`<a [^>]*href="${control.href}"[^>]*>`))?.[0] ?? "";
+    assert.notEqual(openingTag, "", `${control.label} should render its destination`);
+    assert.equal(
+      shouldIntercept({
+        hasAction: true,
+        authAllowed: openingTag.includes('data-auth-allowed="true"'),
+      }),
+      control.intercept,
+      `${control.label} should ${control.intercept ? "" : "not "}be intercepted`,
+    );
+  }
+
+  const ridesLink = html.match(/<a [^>]*href="\/m"[^>]*>/)?.[0] ?? "";
+  assert.match(ridesLink, /aria-current="page"/);
+  assert.match(ridesLink, /text-brand-600/);
 });
 
 test("landing auth next-path helper preserves the attempted destination", () => {

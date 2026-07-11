@@ -6,9 +6,9 @@ import { useState } from "react";
 import { Car, MessageSquare, Calendar, User, Plus } from "lucide-react";
 
 const TABS = [
-  { href: "/m", label: "Rides", icon: Car, allowAnonymousBrowse: false },
+  { href: "/m", label: "Rides", icon: Car, allowAnonymousBrowse: true },
   { href: "/m/requests", label: "Requests", icon: MessageSquare, allowAnonymousBrowse: false },
-  { href: "/m/events", label: "Events", icon: Calendar, allowAnonymousBrowse: false },
+  { href: "/m/events", label: "Events", icon: Calendar, allowAnonymousBrowse: true },
   { href: "/m/profile", label: "Profile", icon: User, allowAnonymousBrowse: true },
 ] as const;
 
