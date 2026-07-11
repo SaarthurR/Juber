@@ -110,6 +110,116 @@ test("OAuth next accepts only closed route patterns", () => {
   }
 });
 
+test("OAuth next preserves canonical event context on mobile create routes", () => {
+  const eventId = "123e4567-e89b-42d3-a456-426614174000";
+
+  assert.equal(
+    authCallbackDestination(`/m/rides/new?event_id=${eventId}`),
+    `/m/rides/new?event_id=${eventId}`,
+  );
+  assert.equal(
+    authCallbackDestination(`/m/requests/new?event_id=${eventId}`),
+    `/m/requests/new?event_id=${eventId}`,
+  );
+});
+
+test("OAuth next preserves canonical event context on desktop create routes", () => {
+  const eventId = "123E4567-E89B-42D3-A456-426614174000";
+  const canonicalId = eventId.toLowerCase();
+
+  assert.equal(
+    authCallbackDestination(`/rides/new?event_id=${eventId}`),
+    `/rides/new?event_id=${canonicalId}`,
+  );
+  assert.equal(
+    authCallbackDestination(`/requests/new?event_id=${eventId}`),
+    `/requests/new?event_id=${canonicalId}`,
+  );
+});
+
+test("OAuth next preserves only the used rides tab", () => {
+  assert.equal(authCallbackDestination("/rides?tab=requests"), "/rides?tab=requests");
+  assert.equal(authCallbackDestination("/rides?tab=notifications"), "/rides");
+  assert.equal(authCallbackDestination("/m?tab=requests"), "/m");
+});
+
+test("OAuth next drops unknown, invalid, duplicate, and misplaced query parameters", () => {
+  const eventId = "123e4567-e89b-42d3-a456-426614174000";
+
+  assert.equal(
+    authCallbackDestination(
+      `/m/rides/new?utm_source=invite&event_id=${eventId}&next=%2Fadmin#details`,
+    ),
+    `/m/rides/new?event_id=${eventId}`,
+  );
+  assert.equal(authCallbackDestination("/m/requests/new?event_id=not-a-uuid"), "/m/requests/new");
+  assert.equal(
+    authCallbackDestination(
+      `/rides/new?event_id=${eventId}&event_id=${eventId}`,
+    ),
+    "/rides/new",
+  );
+  assert.equal(
+    authCallbackDestination("/rides?tab=requests&tab=requests"),
+    "/rides",
+  );
+  assert.equal(
+    authCallbackDestination(`/rides?event_id=${eventId}&tab=requests#requests`),
+    "/rides?tab=requests",
+  );
+  assert.equal(
+    authCallbackDestination(`/events?event_id=${eventId}&tab=requests`),
+    "/events",
+  );
+});
+
+test("OAuth next rejects encoded path attacks and drops encoded query attacks", () => {
+  const eventId = "123e4567-e89b-42d3-a456-426614174000";
+
+  for (const target of [
+    "/m/events/%2e%2e/%2e%2e/admin",
+    "/m%5crides/new",
+    "/m/rides/%0a123e4567-e89b-42d3-a456-426614174000",
+    "/%2f%2fevil.test/m",
+  ]) {
+    assert.equal(authCallbackDestination(target, "/rides"), "/rides");
+  }
+
+  assert.equal(
+    authCallbackDestination(`/m/rides/new?event_id=${eventId}%5cadmin`),
+    "/m/rides/new",
+  );
+  assert.equal(
+    authCallbackDestination("/rides?tab=requests%0d%0aLocation%3A%20%2Fadmin"),
+    "/rides",
+  );
+});
+
+test("OAuth next normalizes unsafe input to a safe fallback", () => {
+  for (const target of [
+    null,
+    "",
+    "//evil.test/m",
+    "https://evil.test/m",
+    "/admin?next=/m",
+  ]) {
+    assert.equal(authCallbackDestination(target, "/m"), "/m");
+  }
+  assert.equal(authCallbackDestination("//evil.test/m", "//evil.test"), "/rides");
+});
+
+test("sign-in without an explicit next includes the current safe query", () => {
+  const authButton = readFileSync(
+    fileURLToPath(new URL("../components/auth-button.tsx", import.meta.url)),
+    "utf8",
+  );
+
+  assert.match(
+    authButton,
+    /window\.location\.pathname.*window\.location\.search/,
+  );
+});
+
 test("mobile notifications map to concrete detail pages only", () => {
   assert.equal(
     mobileNotificationDestination({ ride_id: "ride-123" }),

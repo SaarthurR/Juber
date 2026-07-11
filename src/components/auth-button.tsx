@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { authCallbackDestination } from "@/lib/route-targets";
 
@@ -15,12 +14,12 @@ export function GoogleSignInButton({
   googleBranding?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
-  const pathname = usePathname();
-  const nextPath = authCallbackDestination(next ?? pathname ?? "/rides", "/rides");
 
   async function signIn() {
     setLoading(true);
     const supabase = createClient();
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    const nextPath = authCallbackDestination(next ?? currentPath, "/rides");
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
     await supabase.auth.signInWithOAuth({

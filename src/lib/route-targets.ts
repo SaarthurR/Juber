@@ -14,18 +14,28 @@ export const AUTH_CALLBACK_TARGETS = [
 export const MESSAGE_BASE_TARGETS = ["/messages", "/m/messages"] as const;
 export const RIDE_LIST_TARGETS = ["/rides", "/m"] as const;
 
+const AUTH_ORIGIN = "https://juber.invalid";
+const UUID_SEGMENT =
+  "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+const UUID_VALUE = new RegExp(`^${UUID_SEGMENT}$`, "i");
 const AUTH_CALLBACK_PATTERNS = [
   /^\/events\/[a-z0-9-]+$/,
   /^\/m\/events\/[a-z0-9-]+$/,
-  /^\/rides\/[0-9a-f-]{8,}$/,
-  /^\/m\/rides\/[0-9a-f-]{8,}$/,
-  /^\/requests\/[0-9a-f-]{8,}$/,
-  /^\/m\/requests\/[0-9a-f-]{8,}$/,
-  /^\/messages\/[0-9a-f-]{8,}$/,
-  /^\/m\/messages\/[0-9a-f-]{8,}$/,
-  /^\/profile\/[0-9a-f-]{8,}$/,
-  /^\/m\/profile\/[0-9a-f-]{8,}$/,
+  new RegExp(`^/rides/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/m/rides/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/requests/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/m/requests/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/messages/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/m/messages/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/profile/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/m/profile/${UUID_SEGMENT}$`, "i"),
 ];
+const EVENT_CONTEXT_TARGETS = new Set([
+  "/rides/new",
+  "/requests/new",
+  "/m/rides/new",
+  "/m/requests/new",
+]);
 
 export function pickAllowed<T extends string>(
   value: unknown,
@@ -37,22 +47,46 @@ export function pickAllowed<T extends string>(
 }
 
 export function authCallbackDestination(value: unknown, fallback = "/rides") {
+  return normalizeAuthCallbackDestination(value)
+    ?? normalizeAuthCallbackDestination(fallback)
+    ?? "/rides";
+}
+
+function normalizeAuthCallbackDestination(value: unknown) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return fallback;
+    return null;
   }
-  if (/[\u0000-\u001f\\]/.test(value)) return fallback;
+  if (/[\u0000-\u001f\\]/.test(value)) return null;
 
-  let pathname: string;
+  let parsed: URL;
   try {
-    const parsed = new URL(value, "https://juber.invalid");
-    if (parsed.origin !== "https://juber.invalid") return fallback;
-    pathname = parsed.pathname;
+    parsed = new URL(value, AUTH_ORIGIN);
+    if (parsed.origin !== AUTH_ORIGIN) return null;
   } catch {
-    return fallback;
+    return null;
   }
 
-  if ((AUTH_CALLBACK_TARGETS as readonly string[]).includes(pathname)) return pathname;
-  return AUTH_CALLBACK_PATTERNS.some((pattern) => pattern.test(pathname)) ? pathname : fallback;
+  const { pathname, searchParams } = parsed;
+  const isAllowedPath =
+    (AUTH_CALLBACK_TARGETS as readonly string[]).includes(pathname)
+    || AUTH_CALLBACK_PATTERNS.some((pattern) => pattern.test(pathname));
+  if (!isAllowedPath) return null;
+
+  const canonicalQuery = new URLSearchParams();
+  if (EVENT_CONTEXT_TARGETS.has(pathname)) {
+    const eventIds = searchParams.getAll("event_id");
+    if (eventIds.length === 1 && UUID_VALUE.test(eventIds[0])) {
+      canonicalQuery.set("event_id", eventIds[0].toLowerCase());
+    }
+  } else if (pathname === "/rides") {
+    const tabs = searchParams.getAll("tab");
+    if (tabs.length === 1 && tabs[0] === "requests") {
+      canonicalQuery.set("tab", "requests");
+    }
+  }
+
+  const query = canonicalQuery.toString();
+  return query ? `${pathname}?${query}` : pathname;
 }
 
 export function requestRevalidationTargets(requestId: string) {
