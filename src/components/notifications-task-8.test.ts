@@ -450,6 +450,7 @@ test("row write blocks bulk start until the matching row completion", async () =
     kind: "row",
     id: "one",
     context: rowContext("one"),
+    retainFallback: false,
     operationId: 1,
     startedRevision: 0,
   });
@@ -930,6 +931,7 @@ test("evicted row failure retains safe retry context and destination", async () 
   assert.deepEqual(controller.notificationEvictedRowRetry(failed), {
     context,
     error: "Could not mark this notification read.",
+    pending: false,
   });
 });
 
@@ -1048,6 +1050,187 @@ test("rendered evicted fallback exposes one specifically named retry", async () 
     /aria-label="Retry marking Your seat was confirmed read"/,
   );
   assert.equal((html.match(/>Retry<\/button>/g) ?? []).length, 1);
+});
+
+test("evicted retry start keeps the same fallback context mounted and pending", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const context = rowContext("pending");
+  const failed = {
+    ...controller.createNotificationControllerState({
+      items: [notification("new")],
+      unread: 2,
+      error: null,
+    }),
+    rowErrorId: context.id,
+    rowError: "Could not mark this notification read.",
+    rowErrorContext: context,
+  };
+  const retrying = controller.notificationControllerReducer(failed, {
+    type: "mark-one-start",
+    id: context.id,
+    operationId: 70,
+    context,
+    retainFallback: true,
+  });
+  const blockedBulk = controller.notificationControllerReducer(retrying, {
+    type: "mark-all-start",
+    operationId: 71,
+  });
+
+  assert.deepEqual(retrying.rowErrorContext, context);
+  assert.equal(retrying.rowError, failed.rowError);
+  assert.deepEqual(controller.notificationEvictedRowRetry(retrying), {
+    context,
+    error: "Could not mark this notification read.",
+    pending: true,
+  });
+  assert.deepEqual(blockedBulk.operation, retrying.operation);
+});
+
+test("evicted retry completion clears on success and remounts retry on failure", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const context = rowContext("pending");
+  const failed = {
+    ...controller.createNotificationControllerState({
+      items: [notification("new")],
+      unread: 2,
+      error: null,
+    }),
+    rowErrorId: context.id,
+    rowError: "Could not mark this notification read.",
+    rowErrorContext: context,
+  };
+  const retryingSuccess = controller.notificationControllerReducer(failed, {
+    type: "mark-one-start",
+    id: context.id,
+    operationId: 72,
+    context,
+    retainFallback: true,
+  });
+  const succeeded = controller.notificationControllerReducer(retryingSuccess, {
+    type: "mark-one-success",
+    id: context.id,
+    operationId: 72,
+    readAt: "2026-07-11T12:12:00.000Z",
+  });
+  const retryingFailure = controller.notificationControllerReducer(failed, {
+    type: "mark-one-start",
+    id: context.id,
+    operationId: 73,
+    context,
+    retainFallback: true,
+  });
+  const failedAgain = controller.notificationControllerReducer(retryingFailure, {
+    type: "mark-one-failed",
+    id: context.id,
+    operationId: 73,
+    error: "Could not mark this notification read.",
+  });
+
+  assert.equal(controller.notificationEvictedRowRetry(succeeded), null);
+  assert.equal(succeeded.rowErrorContext, null);
+  assert.deepEqual(controller.notificationEvictedRowRetry(failedAgain), {
+    context,
+    error: "Could not mark this notification read.",
+    pending: false,
+  });
+});
+
+test("row return does not duplicate a pending evicted retry and positive read clears it", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const context = rowContext("pending");
+  const failed = {
+    ...controller.createNotificationControllerState({
+      items: [notification("new")],
+      unread: 2,
+      error: null,
+    }),
+    rowErrorId: context.id,
+    rowError: "Could not mark this notification read.",
+    rowErrorContext: context,
+  };
+  const retrying = controller.notificationControllerReducer(failed, {
+    type: "mark-one-start",
+    id: context.id,
+    operationId: 74,
+    context,
+    retainFallback: true,
+  });
+  const returnedUnread = controller.notificationControllerReducer(retrying, {
+    type: "reconcile",
+    snapshot: {
+      items: [notification("pending"), notification("new")],
+      unread: 2,
+      unreadIds: ["pending", "new"],
+      error: null,
+    },
+  });
+  const returnedRead = controller.notificationControllerReducer(retrying, {
+    type: "reconcile",
+    snapshot: {
+      items: [
+        notification("pending", {
+          read_at: "2026-07-11T12:13:00.000Z",
+        }),
+        notification("new"),
+      ],
+      unread: 1,
+      unreadIds: ["new"],
+      error: null,
+    },
+  });
+
+  assert.deepEqual(controller.notificationEvictedRowRetry(returnedUnread), {
+    context,
+    error: "Could not mark this notification read.",
+    pending: true,
+  });
+  assert.equal(returnedUnread.operation?.kind, "row");
+  assert.equal(controller.notificationEvictedRowRetry(returnedRead), null);
+  assert.equal(returnedRead.operation, null);
+  assert.equal(returnedRead.rowErrorContext, null);
+});
+
+test("rendered evicted retry remains one focused button and switches to Retrying", async () => {
+  const controls = await loadControls();
+  assert.ok(controls, "notification controls must exist");
+  if (!controls) return;
+
+  const idle = renderToStaticMarkup(
+    createElement(controls.NotificationEvictedRowRetry, {
+      title: "Your seat was confirmed",
+      error: "Could not mark this notification read.",
+      pending: false,
+      onRetry: () => undefined,
+    }),
+  );
+  const pending = renderToStaticMarkup(
+    createElement(controls.NotificationEvictedRowRetry, {
+      title: "Your seat was confirmed",
+      error: "Could not mark this notification read.",
+      pending: true,
+      onRetry: () => undefined,
+    }),
+  );
+
+  const accessibleName =
+    /aria-label="Retry marking Your seat was confirmed read"/;
+  assert.match(idle, accessibleName);
+  assert.match(pending, accessibleName);
+  assert.equal((idle.match(/<button/g) ?? []).length, 1);
+  assert.equal((pending.match(/<button/g) ?? []).length, 1);
+  assert.match(pending, /disabled=""/);
+  assert.match(pending, /aria-busy="true"/);
+  assert.match(pending, />Retrying…<\/button>/);
 });
 
 test("ride cancellation reason remains available to the mobile renderer", async () => {

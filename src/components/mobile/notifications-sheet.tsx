@@ -233,6 +233,7 @@ function MNotificationBellController({
   async function markOneAndNavigate(
     context: NotificationRowContext,
     alreadyRead: boolean,
+    retainFallback = false,
   ) {
     if (notificationWritePending(state)) return;
     if (alreadyRead) {
@@ -246,6 +247,7 @@ function MNotificationBellController({
       id: context.id,
       operationId,
       context,
+      retainFallback,
     });
     try {
       await markNotificationRead(context.id);
@@ -315,9 +317,9 @@ function MNotificationBellController({
           <NotificationEvictedRowRetry
             title={evictedRetry.context.title}
             error={evictedRetry.error}
-            pending={notificationWritePending(state)}
+            pending={evictedRetry.pending}
             onRetry={() =>
-              void markOneAndNavigate(evictedRetry.context, false)
+              void markOneAndNavigate(evictedRetry.context, false, true)
             }
           />
         ) : null}
@@ -332,7 +334,13 @@ function MNotificationBellController({
                 n={n}
                 pending={notificationRowPending(state, n.id)}
                 disabled={notificationWritePending(state)}
-                error={state.rowErrorId === n.id ? state.rowError : null}
+                error={
+                  evictedRetry?.context.id === n.id
+                    ? null
+                    : state.rowErrorId === n.id
+                      ? state.rowError
+                      : null
+                }
                 onNavigate={(href) =>
                   void markOneAndNavigate(
                     {

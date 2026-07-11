@@ -20,6 +20,7 @@ export type NotificationWriteOperation =
       kind: "row";
       id: string;
       context: NotificationRowContext;
+      retainFallback: boolean;
       operationId: number;
       startedRevision: number;
     }
@@ -54,6 +55,7 @@ export type NotificationControllerAction =
       id: string;
       operationId: number;
       context: NotificationRowContext;
+      retainFallback?: boolean;
     }
   | { type: "mark-one-success"; id: string; operationId: number; readAt: string }
   | { type: "mark-one-failed"; id: string; operationId: number; error: string }
@@ -111,30 +113,42 @@ export function notificationControllerReducer(
     }
     case "reconcile-failed":
       return failClosedState(state, action.error);
-    case "mark-one-start":
+    case "mark-one-start": {
       if (state.operation) return state;
+      const retainFallback =
+        action.retainFallback === true &&
+        state.rowErrorContext?.id === action.id &&
+        state.rowError !== null;
       return {
         ...state,
         operation: {
           kind: "row",
           id: action.id,
           context: action.context,
+          retainFallback,
           operationId: action.operationId,
           startedRevision: state.authoritativeRevision,
         },
         bulkStatus: "idle",
         bulkError: null,
         bulkStatusMessage: null,
-        rowErrorId: null,
-        rowError: null,
-        rowErrorContext: null,
+        rowErrorId: retainFallback ? state.rowErrorId : null,
+        rowError: retainFallback ? state.rowError : null,
+        rowErrorContext: retainFallback ? state.rowErrorContext : null,
       };
+    }
     case "mark-one-success": {
       if (!matchesRowOperation(state.operation, action.id, action.operationId)) {
         return state;
       }
       if (state.operation.startedRevision !== state.authoritativeRevision) {
-        return { ...state, operation: null };
+        return {
+          ...state,
+          operation: null,
+          rowErrorId: null,
+          rowError: null,
+          rowErrorContext: null,
+        };
       }
       const target = state.items.find((item) => item.id === action.id);
       const decrementsUnread = target?.read_at === null;
@@ -294,13 +308,21 @@ export function notificationRowPending(
 
 export function notificationEvictedRowRetry(
   state: NotificationControllerState,
-): { context: NotificationRowContext; error: string } | null {
-  const context = state.rowErrorContext;
+): {
+  context: NotificationRowContext;
+  error: string;
+  pending: boolean;
+} | null {
+  const retainedOperation =
+    state.operation?.kind === "row" && state.operation.retainFallback
+      ? state.operation
+      : null;
+  const context = retainedOperation?.context ?? state.rowErrorContext;
   const error = state.rowError;
   if (!context || !error) return null;
-  return state.items.some((item) => item.id === context.id)
+  return state.items.some((item) => item.id === context.id) && !retainedOperation
     ? null
-    : { context, error };
+    : { context, error, pending: retainedOperation !== null };
 }
 
 export function notificationControllerKey(snapshot: NotificationSnapshot): string {

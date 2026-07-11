@@ -128,7 +128,7 @@ export function NotificationEvictedRowRetry({
         aria-label={`Retry marking ${title} read`}
         className="shrink-0 rounded-full bg-white px-3 py-1 font-bold text-red-700 disabled:cursor-wait disabled:opacity-60"
       >
-        Retry
+        {pending ? "Retrying…" : "Retry"}
       </button>
     </div>
   );
