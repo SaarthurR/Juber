@@ -5,13 +5,19 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { ArrowLeft, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { markConversationRead } from "@/app/messages/actions";
+import { markConversationRead, sendMessage } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { newestThreadMessages } from "@/lib/messages";
 import type { Message, Profile } from "@/lib/types";
 
 type ProfileBase = "/profile" | "/m/profile";
+type SendState = {
+  pendingId: string;
+  body: string;
+  status: "sending" | "failed";
+  error: string | null;
+};
 
 export function MessageThread({
   conversationId,
@@ -20,6 +26,7 @@ export function MessageThread({
   initialMessages,
   backHref = "/messages",
   profileBase = "/profile",
+  archiveState,
 }: {
   conversationId: string;
   currentUserId: string;
@@ -28,11 +35,27 @@ export function MessageThread({
   /** Where the back arrow returns to — "/m/messages" on the mobile shell. */
   backHref?: string;
   profileBase?: ProfileBase;
+  archiveState: "active" | "archived";
 }) {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [draft, setDraft] = useState("");
+  const [sendState, setSendState] = useState<SendState | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
   const messagesRef = useRef(messages);
+  const sendStateRef = useRef(sendState);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    sendStateRef.current = sendState;
+  }, [sendState]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Subscribe to new messages in this conversation via Supabase Realtime.
   useEffect(() => {
@@ -50,18 +73,11 @@ export function MessageThread({
         (payload) => {
           const msg = payload.new as Message;
           setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            const pendingIndex = prev.findIndex(
-              (m) =>
-                m.id.startsWith("pending:") &&
-                m.sender_id === msg.sender_id &&
-                m.body === msg.body,
+            return addConfirmedMessage(
+              prev,
+              msg,
+              sendStateRef.current?.pendingId ?? null,
             );
-            if (pendingIndex === -1) return newestThreadMessages([...prev, msg]);
-
-            const next = [...prev];
-            next[pendingIndex] = msg;
-            return newestThreadMessages(next);
           });
         },
       )
@@ -106,10 +122,18 @@ export function MessageThread({
       markingReadRef.current = true;
       rerunMarkReadRef.current = false;
       markConversationRead(conversationId)
-        .catch((e) => console.error("Failed to mark conversation read:", e))
+        .then(() => {
+          if (mountedRef.current) setReadError(null);
+        })
+        .catch(() => {
+          if (mountedRef.current) {
+            setReadError("Could not update read status. Messages remain available.");
+          }
+        })
         .finally(() => {
           markingReadRef.current = false;
           const shouldRerun =
+            mountedRef.current &&
             rerunMarkReadRef.current &&
             messagesRef.current.some((m) => m.sender_id !== currentUserId && !m.read_at);
           if (shouldRerun) runMarkRead();
@@ -128,12 +152,11 @@ export function MessageThread({
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const body = (formData.get("body") ?? "").toString().trim();
+    if (sendStateRef.current) return;
+    const body = draft.trim();
     if (!body) return;
 
-    const pendingId = `pending:${crypto.randomUUID()}`;
+    const pendingId = crypto.randomUUID();
     const pendingMessage: Message = {
       id: pendingId,
       conversation_id: conversationId,
@@ -143,35 +166,49 @@ export function MessageThread({
       read_at: null,
     };
 
-    formRef.current?.reset();
-    setMessages((prev) => newestThreadMessages([...prev, pendingMessage]));
-
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("messages")
-      .insert({
-        conversation_id: conversationId,
-        sender_id: currentUserId,
-        body,
-      })
-      .select()
-      .single<Message>();
-
-    if (error || !data) {
-      setMessages((prev) => prev.filter((m) => m.id !== pendingId));
-      window.alert(error?.message ?? "Could not send this message.");
-      return;
-    }
-
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === data.id)) {
-        return prev.filter((m) => m.id !== pendingId);
-      }
-      return newestThreadMessages(prev.map((m) => (m.id === pendingId ? data : m)));
-    });
+    setMessages((prev) => [...prev, pendingMessage]);
+    await performSend(body, pendingId);
   }
 
-  const lastMessage = messages.at(-1);
+  async function performSend(body: string, pendingId: string) {
+    if (sendStateRef.current?.status === "sending") return;
+    const sending: SendState = { pendingId, body, status: "sending", error: null };
+    sendStateRef.current = sending;
+    setSendState(sending);
+    try {
+      const formData = new FormData();
+      formData.set("body", body);
+      formData.set("client_message_id", pendingId);
+      const result = await sendMessage(conversationId, formData);
+      if (result.error || !result.message) {
+        const failed: SendState = {
+          pendingId,
+          body,
+          status: "failed",
+          error: result.error ?? "Could not send this message. Please try again.",
+        };
+        sendStateRef.current = failed;
+        setSendState(failed);
+        return;
+      }
+
+      setMessages((prev) => reconcileMessage(prev, pendingId, result.message));
+      sendStateRef.current = null;
+      setSendState(null);
+      setDraft("");
+    } catch {
+      const failed: SendState = {
+        pendingId,
+        body,
+        status: "failed",
+        error: "Could not send this message. Please try again.",
+      };
+      sendStateRef.current = failed;
+      setSendState(failed);
+    }
+  }
+
+  const lastMessage = messages.findLast((message) => message.id !== sendState?.pendingId);
   const receiptMessageId =
     lastMessage?.sender_id === currentUserId ? lastMessage.id : null;
 
@@ -190,6 +227,19 @@ export function MessageThread({
           {other?.full_name ?? "Member"}
         </Link>
       </div>
+
+      {archiveState === "archived" && (
+        <p className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Past ride — this chat stays available for lost items and follow-up. Phone and WhatsApp
+          access ends 24 hours after departure and ends immediately when a ride is closed or
+          cancelled.
+        </p>
+      )}
+      {readError && (
+        <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {readError}
+        </p>
+      )}
 
       <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto py-4">
         {messages.length === 0 && (
@@ -217,6 +267,11 @@ export function MessageThread({
                     {m.read_at ? "Read" : "Sent"}
                   </span>
                 )}
+                {m.id === sendState?.pendingId && (
+                  <span className="mt-1 self-end text-[11px] font-semibold text-stone-400">
+                    {sendState.status === "sending" ? "Sending…" : "Not sent"}
+                  </span>
+                )}
               </div>
             </div>
           );
@@ -224,23 +279,69 @@ export function MessageThread({
       </div>
 
       <form
-        ref={formRef}
         onSubmit={submitMessage}
-        className="flex items-center gap-2 border-t border-stone-200 py-4"
+        className="border-t border-stone-200 py-4"
       >
-        <input
-          name="body"
-          autoComplete="off"
-          placeholder="Type a message…"
-          className="flex-1 rounded-full border border-stone-300 px-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-        />
-        <button
-          type="submit"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white hover:bg-brand-700"
-        >
-          <Send size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            name="body"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            disabled={sendState !== null}
+            autoComplete="off"
+            placeholder="Type a message…"
+            className="flex-1 rounded-full border border-stone-300 px-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-stone-100"
+          />
+          <button
+            type="submit"
+            disabled={sendState !== null || !draft.trim()}
+            aria-label="Send message"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Send size={18} />
+          </button>
+        </div>
+        {sendState?.status === "failed" && (
+          <div
+            role="alert"
+            className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
+            <span>{sendState.error}</span>
+            <button
+              type="button"
+              onClick={() => void performSend(sendState.body, sendState.pendingId)}
+              className="shrink-0 font-bold underline underline-offset-2"
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );
+}
+
+function addConfirmedMessage(
+  messages: Message[],
+  message: Message,
+  pendingId: string | null,
+): Message[] {
+  const pending = pendingId
+    ? messages.filter((item) => item.id === pendingId && item.id !== message.id)
+    : [];
+  const confirmed = messages.filter(
+    (item) => item.id !== pendingId && item.id !== message.id,
+  );
+  return [...newestThreadMessages([...confirmed, message]), ...pending];
+}
+
+function reconcileMessage(
+  messages: Message[],
+  pendingId: string,
+  message: Message,
+): Message[] {
+  const confirmed = messages.filter(
+    (item) => item.id !== pendingId && item.id !== message.id,
+  );
+  return newestThreadMessages([...confirmed, message]);
 }

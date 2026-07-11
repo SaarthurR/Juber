@@ -2,8 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { MessageThread } from "@/components/message-thread";
-import type { Message, Profile } from "@/lib/types";
-import { newestThreadMessages } from "@/lib/messages";
+import type { Message } from "@/lib/types";
+import { loadThreadSummaries, newestThreadMessages } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -19,34 +19,41 @@ export default async function MobileThreadPage({
   if (!user) redirect("/m");
   const supabase = await createClient();
 
-  // RLS ensures we only get the convo if we're a participant.
-  const { data: participants } = await supabase
+  const { data: membership, error: membershipError } = await supabase
     .from("conversation_participants")
-    .select("user_id, user:profiles!conversation_participants_user_id_fkey(*)")
-    .eq("conversation_id", id);
+    .select("user_id")
+    .eq("conversation_id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
 
-  if (!participants || !participants.some((p) => p.user_id === user.id)) {
-    notFound();
-  }
+  if (membershipError) throw new Error("Could not verify conversation access.");
+  if (!membership) notFound();
 
-  const other =
-    (participants.find((p) => p.user_id !== user.id)?.user as unknown as Profile) ?? null;
+  const [thread] = await loadThreadSummaries(supabase, user.id, id);
+  if (!thread) redirect("/m/messages");
 
-  const { data: messages } = await supabase
+  let messageQuery = supabase
     .from("messages")
     .select("*")
     .eq("conversation_id", id)
     .order("created_at", { ascending: false })
     .limit(50);
+  if (thread.hiddenAt) {
+    messageQuery = messageQuery.gt("created_at", thread.hiddenAt);
+  }
+  const { data: messages, error: messageError } = await messageQuery;
+  if (messageError) throw new Error("Could not load this conversation.");
 
   return (
     <MessageThread
+      key={id}
       conversationId={id}
       currentUserId={user.id}
-      other={other}
+      other={thread.other}
       initialMessages={newestThreadMessages((messages as Message[]) ?? [])}
       backHref="/m/messages"
       profileBase="/m/profile"
+      archiveState={thread.archiveState}
     />
   );
 }

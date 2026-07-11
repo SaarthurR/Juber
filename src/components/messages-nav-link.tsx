@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { loadVisibleNotificationIds } from "@/lib/messages";
 
 /**
  * Messages nav item with a combined unread badge for notifications and chats.
@@ -26,14 +27,13 @@ export function MessagesNavLink({
   }
 
   const refreshUnread = useCallback(async () => {
-    const supabase = createClient();
-    const { count: notificationCount } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("recipient_id", userId)
-      .is("read_at", null);
-    setUnread(notificationCount ?? 0);
-  }, [userId]);
+    try {
+      const notificationIds = await loadVisibleNotificationIds(createClient(), null, true);
+      setUnread(notificationIds.length);
+    } catch {
+      return;
+    }
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();

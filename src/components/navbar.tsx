@@ -8,6 +8,7 @@ import { GoogleSignInButton } from "@/components/auth-button";
 import { NotificationBell } from "@/components/notification-bell";
 import { MessagesNavLink } from "@/components/messages-nav-link";
 import { ActiveNavLink, ActiveProfileLink } from "@/components/active-nav-link";
+import { loadVisibleNotificationIds } from "@/lib/messages";
 import type { NotificationWithContext } from "@/lib/types";
 
 export async function Navbar() {
@@ -18,22 +19,21 @@ export async function Navbar() {
   let notifications: NotificationWithContext[] = [];
   if (user) {
     const supabase = await createClient();
-    const [{ count }, notificationsResult] = await Promise.all([
-      supabase
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("recipient_id", user.id)
-        .is("read_at", null),
-      supabase
-        .from("notifications")
-        .select(
-          "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)",
-        )
-        .eq("recipient_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(6),
+    const [unreadIds, notificationIds] = await Promise.all([
+      loadVisibleNotificationIds(supabase, null, true),
+      loadVisibleNotificationIds(supabase, 6, false),
     ]);
-    notificationUnread = count ?? 0;
+    const notificationsResult = notificationIds.length
+      ? await supabase
+          .from("notifications")
+          .select(
+            "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)",
+          )
+          .eq("recipient_id", user.id)
+          .in("id", notificationIds)
+          .order("created_at", { ascending: false })
+      : { data: [] as NotificationWithContext[], error: null };
+    notificationUnread = unreadIds.length;
     unread = notificationUnread;
     let data = notificationsResult.data;
     if (notificationsResult.error) {
@@ -43,8 +43,10 @@ export async function Navbar() {
           "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)",
         )
         .eq("recipient_id", user.id)
+        .in("id", notificationIds)
         .order("created_at", { ascending: false })
-        .limit(6);
+        .limit(notificationIds.length);
+      if (fallback.error) throw new Error("Could not load notifications.");
       data = fallback.data;
     }
     notifications = (((data as NotificationWithContext[] | null) ?? []).map((n) => ({

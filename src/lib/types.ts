@@ -106,7 +106,7 @@ export type RideRequest = {
   created_at: string;
 };
 
-export type PassengerStatus = "pending" | "confirmed" | "declined";
+export type PassengerStatus = "pending" | "confirmed" | "declined" | "cancelled";
 
 export type RidePassenger = {
   id: string;

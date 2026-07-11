@@ -5,6 +5,14 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { MESSAGE_BASE_TARGETS, pickAllowed } from "@/lib/route-targets";
+import type { Message } from "@/lib/types";
+
+function revalidateMessageRoutes() {
+  revalidatePath("/messages");
+  revalidatePath("/m/messages");
+  revalidatePath("/messages/[id]", "page");
+  revalidatePath("/m/messages/[id]", "page");
+}
 
 /**
  * Finds an existing 1:1 conversation between the current user and `otherUserId`,
@@ -23,48 +31,6 @@ export async function openConversation(otherUserId: string, formData?: FormData)
     throw new Error("Messaging unlocks after a ride is booked.");
   }
 
-  if (rideId) {
-    const { data: bookings } = await supabase
-      .from("ride_passengers")
-      .select("passenger_id,ride:rides!ride_passengers_ride_id_fkey(driver_id,status)")
-      .eq("ride_id", rideId)
-      .eq("status", "confirmed")
-      .returns<Array<{
-        passenger_id: string;
-        ride: { driver_id: string; status: string } | null;
-      }>>();
-    const booking = bookings?.find((row) => {
-      const participants = new Set([row.passenger_id, row.ride?.driver_id]);
-      return participants.has(user.id) && participants.has(otherUserId);
-    });
-    const participants = new Set([booking?.passenger_id, booking?.ride?.driver_id]);
-    if (
-      booking?.ride?.status !== "active" ||
-      !participants.has(user.id) ||
-      !participants.has(otherUserId)
-    ) {
-      throw new Error("Messaging unlocks after this ride is booked.");
-    }
-  } else if (requestId) {
-    const { data: request } = await supabase
-      .from("ride_requests")
-      .select("rider_id,accepted_driver_id,status")
-      .eq("id", requestId)
-      .maybeSingle<{
-        rider_id: string;
-        accepted_driver_id: string | null;
-        status: string;
-      }>();
-    const participants = new Set([request?.rider_id, request?.accepted_driver_id]);
-    if (
-      request?.status !== "fulfilled" ||
-      !participants.has(user.id) ||
-      !participants.has(otherUserId)
-    ) {
-      throw new Error("Messaging unlocks after this request is accepted.");
-    }
-  }
-
   const { data: conversationId, error } = await supabase.rpc("open_conversation", {
     p_other_user_id: otherUserId,
     p_ride_id: rideId,
@@ -75,6 +41,7 @@ export async function openConversation(otherUserId: string, formData?: FormData)
     throw new Error(error?.message ?? "Could not start chat");
   }
 
+  revalidateMessageRoutes();
   redirect(`${base}/${conversationId}`);
 }
 
@@ -91,7 +58,7 @@ export async function markNotificationsRead() {
     .is("read_at", null);
   if (error) throw new Error(error.message);
 
-  revalidatePath("/messages");
+  revalidateMessageRoutes();
 }
 
 export async function sendMessage(conversationId: string, formData: FormData) {
@@ -100,15 +67,29 @@ export async function sendMessage(conversationId: string, formData: FormData) {
   if (!user) redirect("/");
 
   const body = (formData.get("body") ?? "").toString().trim();
-  if (!body) return;
+  if (!body) return { message: null, error: "Write a message before sending." };
+  const clientMessageId = (formData.get("client_message_id") ?? "").toString();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientMessageId)) {
+    return { message: null, error: "Could not send this message. Please try again." };
+  }
 
-  const { error } = await supabase.from("messages").insert({
-    conversation_id: conversationId,
-    sender_id: user.id,
-    body,
-  });
-  if (error) throw new Error(error.message);
-  revalidatePath(`/messages/${conversationId}`);
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      id: clientMessageId,
+      conversation_id: conversationId,
+      sender_id: user.id,
+      body,
+    })
+    .select("*")
+    .single<Message>();
+  if (error || !data) {
+    console.error("send message failed", { code: error?.code, conversationId });
+    return { message: null, error: "Could not send this message. Please try again." };
+  }
+
+  revalidateMessageRoutes();
+  return { message: data, error: null };
 }
 
 export async function markConversationRead(conversationId: string) {
@@ -135,8 +116,7 @@ export async function markConversationRead(conversationId: string) {
     .is("read_at", null);
   if (notificationError) throw new Error(notificationError.message);
 
-  revalidatePath("/messages");
-  revalidatePath(`/messages/${conversationId}`);
+  revalidateMessageRoutes();
 }
 
 export async function deleteConversation(conversationId: string) {
@@ -151,5 +131,5 @@ export async function deleteConversation(conversationId: string) {
   if (error) throw new Error(error.message);
   if (!deleted) throw new Error("Could not delete this chat.");
 
-  revalidatePath("/messages");
+  revalidateMessageRoutes();
 }

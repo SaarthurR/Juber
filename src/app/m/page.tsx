@@ -9,6 +9,7 @@ import { HomeBoard } from "@/components/mobile/home-board";
 import { MNotificationBell } from "@/components/mobile/notifications-sheet";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { getTodayDateInputValue } from "@/lib/date-time";
+import { loadVisibleNotificationIds } from "@/lib/messages";
 import type {
   NotificationWithContext,
   RideRequestWithRider,
@@ -141,21 +142,20 @@ async function loadNotifications(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
 ) {
-  const [{ count }, result] = await Promise.all([
-    supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("recipient_id", userId)
-      .is("read_at", null),
-    supabase
-      .from("notifications")
-      .select(
-        "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)",
-      )
-      .eq("recipient_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(8),
+  const [unreadIds, notificationIds] = await Promise.all([
+    loadVisibleNotificationIds(supabase, null, true),
+    loadVisibleNotificationIds(supabase, 8, false),
   ]);
+  const result = notificationIds.length
+    ? await supabase
+        .from("notifications")
+        .select(
+          "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)",
+        )
+        .eq("recipient_id", userId)
+        .in("id", notificationIds)
+        .order("created_at", { ascending: false })
+    : { data: [] as NotificationWithContext[], error: null };
 
   let data = result.data;
   if (result.error) {
@@ -165,8 +165,10 @@ async function loadNotifications(
         "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)",
       )
       .eq("recipient_id", userId)
+      .in("id", notificationIds)
       .order("created_at", { ascending: false })
-      .limit(8);
+      .limit(notificationIds.length);
+    if (fallback.error) throw new Error("Could not load notifications.");
     data = fallback.data;
   }
 
@@ -174,5 +176,5 @@ async function loadNotifications(
     ...n,
     request: n.request ?? null,
   })));
-  return { items, unread: count ?? 0 };
+  return { items, unread: unreadIds.length };
 }

@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {
   buildThreadSummaries,
   newestThreadMessages,
-  type ConversationMembership,
-  type ConversationProfile,
+  type ConversationHide,
+  type ThreadContext,
 } from "./messages";
 import type { Message, Profile } from "./types";
 
@@ -46,54 +46,209 @@ function profile(id: string): Profile {
 }
 
 function summaries({
-  memberships,
+  conversationId = "chat-1",
+  userId = currentUserId,
+  otherId = otherUserId,
+  hides = [],
   messages,
+  context = {
+    kind: "ride",
+    id: "ride-1",
+    status: "active",
+    departAt: "2026-07-11T12:00:00.000Z",
+    passengerStatus: "confirmed",
+  },
+  unread,
 }: {
-  memberships: ConversationMembership[];
+  conversationId?: string;
+  userId?: string;
+  otherId?: string;
+  hides?: ConversationHide[];
   messages: Message[];
+  context?: ThreadContext;
+  unread?: number;
 }) {
-  const others: ConversationProfile[] = memberships.map((membership) => ({
-    conversation_id: membership.conversation_id,
-    user: profile(otherUserId),
-  }));
-  return buildThreadSummaries({ memberships, others, messages, userId: currentUserId });
+  const sorted = [...messages].sort(
+    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+  );
+  return buildThreadSummaries({
+    memberships: [{ conversation_id: conversationId, user_id: userId }],
+    hides,
+    others: [{ conversation_id: conversationId, user: profile(otherId) }],
+    aggregates: [{
+      conversation_id: conversationId,
+      last: sorted[0] ?? null,
+      unread:
+        unread ??
+        messages.filter((item) => item.sender_id !== userId && item.read_at === null).length,
+    }],
+    contexts: [{ conversation_id: conversationId, context }],
+    userId,
+    now: "2026-07-11T10:00:00.000Z",
+  });
 }
 
-test("hidden conversations resurrect only after a post-hide message", () => {
-  const memberships = [
-    { conversation_id: "hidden-only-old", hidden_at: "2026-07-10T10:00:00.000Z" },
-    { conversation_id: "hidden-with-new", hidden_at: "2026-07-10T10:00:00.000Z" },
-    { conversation_id: "never-hidden", hidden_at: null },
-  ];
+test("hide lookup is scoped to the current user", () => {
+  const messages = [message("old", "chat-1", "2026-07-11T09:00:00.000Z")];
+  const peerHide = {
+    conversation_id: "chat-1",
+    user_id: otherUserId,
+    hidden_at: "2026-07-11T09:30:00.000Z",
+  };
+  const ownHide = { ...peerHide, user_id: currentUserId };
 
-  assert.deepEqual(
-    summaries({
-      memberships,
-      messages: [
-        message("old", "hidden-only-old", "2026-07-10T09:59:00.000Z"),
-        message("new", "hidden-with-new", "2026-07-10T10:01:00.000Z"),
-      ],
-    }).map((thread) => thread.id),
-    ["hidden-with-new", "never-hidden"],
-  );
+  assert.equal(summaries({ hides: [peerHide], messages }).length, 1);
+  assert.equal(summaries({ hides: [ownHide], messages }).length, 0);
 });
 
-test("unread counts include only inbound messages after hidden_at", () => {
+test("pre-hide messages are excluded from summary and unread", () => {
   const [thread] = summaries({
-    memberships: [{ conversation_id: "chat-1", hidden_at: "2026-07-10T10:00:00.000Z" }],
+    hides: [{
+      conversation_id: "chat-1",
+      user_id: currentUserId,
+      hidden_at: "2026-07-11T09:30:00.000Z",
+    }],
     messages: [
-      message("pre-hide-unread", "chat-1", "2026-07-10T09:59:00.000Z"),
-      message("post-hide-read", "chat-1", "2026-07-10T10:01:00.000Z", {
-        read_at: "2026-07-10T10:02:00.000Z",
-      }),
-      message("post-hide-outbound", "chat-1", "2026-07-10T10:03:00.000Z", {
+      message("pre-hide", "chat-1", "2026-07-11T09:00:00.000Z"),
+      message("post-hide", "chat-1", "2026-07-11T10:00:00.000Z", {
         sender_id: currentUserId,
       }),
-      message("post-hide-unread", "chat-1", "2026-07-10T10:04:00.000Z"),
     ],
+    unread: 0,
   });
 
+  assert.equal(thread?.last?.id, "post-hide");
+  assert.equal(thread?.unread, 0);
+});
+
+test("first post-hide inbound message resurrects with unread one", () => {
+  const [thread] = summaries({
+    hides: [{
+      conversation_id: "chat-1",
+      user_id: currentUserId,
+      hidden_at: "2026-07-11T09:30:00.000Z",
+    }],
+    messages: [
+      message("pre-hide", "chat-1", "2026-07-11T09:00:00.000Z"),
+      message("post-hide", "chat-1", "2026-07-11T10:00:00.000Z"),
+    ],
+    unread: 1,
+  });
+
+  assert.equal(thread?.last?.id, "post-hide");
   assert.equal(thread?.unread, 1);
+});
+
+test("active confirmed future ride stays active", () => {
+  const [thread] = summaries({
+    messages: [],
+    context: {
+      kind: "ride",
+      id: "ride-1",
+      status: "active",
+      departAt: "2026-07-11T12:00:00.000Z",
+      passengerStatus: "confirmed",
+    },
+  });
+
+  assert.equal(thread?.archiveState, "active");
+});
+
+test("completed ride is archived", () => {
+  const [thread] = summaries({
+    messages: [],
+    context: {
+      kind: "ride",
+      id: "ride-1",
+      status: "completed",
+      departAt: "2026-07-11T12:00:00.000Z",
+      passengerStatus: "confirmed",
+    },
+  });
+
+  assert.equal(thread?.archiveState, "archived");
+});
+
+test("cancelled ride is archived", () => {
+  const [thread] = summaries({
+    messages: [],
+    context: {
+      kind: "ride",
+      id: "ride-1",
+      status: "cancelled",
+      departAt: "2026-07-11T12:00:00.000Z",
+      passengerStatus: "confirmed",
+    },
+  });
+
+  assert.equal(thread?.archiveState, "archived");
+});
+
+test("elapsed active ride is archived", () => {
+  const [thread] = summaries({
+    messages: [],
+    context: {
+      kind: "ride",
+      id: "ride-1",
+      status: "active",
+      departAt: "2026-07-11T09:59:59.000Z",
+      passengerStatus: "confirmed",
+    },
+  });
+
+  assert.equal(thread?.archiveState, "archived");
+});
+
+test("seat-cancelled ride is archived", () => {
+  const [thread] = summaries({
+    messages: [],
+    context: {
+      kind: "ride",
+      id: "ride-1",
+      status: "active",
+      departAt: "2026-07-11T12:00:00.000Z",
+      passengerStatus: "cancelled",
+    },
+  });
+
+  assert.equal(thread?.archiveState, "archived");
+});
+
+test("future fulfilled request stays active", () => {
+  const [thread] = summaries({
+    messages: [],
+    context: {
+      kind: "request",
+      id: "request-1",
+      status: "fulfilled",
+      departAt: "2026-07-11T12:00:00.000Z",
+    },
+  });
+
+  assert.equal(thread?.archiveState, "active");
+});
+
+test("elapsed fulfilled request is archived", () => {
+  const [thread] = summaries({
+    messages: [],
+    context: {
+      kind: "request",
+      id: "request-1",
+      status: "fulfilled",
+      departAt: "2026-07-11T09:59:59.000Z",
+    },
+  });
+
+  assert.equal(thread?.archiveState, "archived");
+});
+
+test("missing context is archived", () => {
+  const [thread] = summaries({
+    messages: [],
+    context: { kind: "missing", id: "missing-1" },
+  });
+
+  assert.equal(thread?.archiveState, "archived");
 });
 
 test("thread window keeps the newest 50 messages in ascending display order", () => {
@@ -102,9 +257,9 @@ test("thread window keeps the newest 50 messages in ascending display order", ()
     return message(
       `message-${number}`,
       "chat-1",
-      `2026-07-10T10:${String(number).padStart(2, "0")}:00.000Z`,
+      new Date(Date.UTC(2026, 6, 11, 10, 0, number)).toISOString(),
     );
-  });
+  }).reverse();
 
   const windowed = newestThreadMessages(messages);
 
@@ -113,15 +268,24 @@ test("thread window keeps the newest 50 messages in ascending display order", ()
   assert.equal(windowed.at(-1)?.id, "message-60");
 });
 
-test("thread summaries select the canonical newest message independent of input order", () => {
-  const [thread] = summaries({
-    memberships: [{ conversation_id: "chat-1", hidden_at: null }],
-    messages: [
-      message("older", "chat-1", "2026-07-10T10:00:00.000Z"),
-      message("newer", "chat-1", "2026-07-10T10:05:00.000Z"),
-      message("middle", "chat-1", "2026-07-10T10:03:00.000Z"),
-    ],
+test("timestamp ordering compares instants rather than serialized strings", () => {
+  const earlier = message("earlier", "chat-1", "2026-07-11T10:00:00+02:00");
+  const later = message("later", "chat-1", "2026-07-11T08:30:00.000Z");
+
+  assert.deepEqual(
+    newestThreadMessages([earlier, later]).map((item) => item.id),
+    ["earlier", "later"],
+  );
+});
+
+test("canonical context key is independent of participant order", () => {
+  const [fromA] = summaries({ messages: [] });
+  const [fromB] = summaries({
+    userId: otherUserId,
+    otherId: currentUserId,
+    messages: [],
   });
 
-  assert.equal(thread?.last?.id, "newer");
+  assert.equal(fromA?.contextKey, "ride:ride-1:user-a:user-b");
+  assert.equal(fromA?.contextKey, fromB?.contextKey);
 });

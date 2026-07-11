@@ -7,6 +7,7 @@ import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react
 import { formatDistanceToNow } from "date-fns";
 import { createClient } from "@/lib/supabase/client";
 import { markNotificationsRead } from "@/app/messages/actions";
+import { loadVisibleNotificationIds } from "@/lib/messages";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
 
 const NOTIFICATION_SELECT =
@@ -98,39 +99,51 @@ export function NotificationBell({
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState(initial);
   const [unread, setUnread] = useState(initialUnread);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [markingAll, setMarkingAll] = useState(false);
   const initialKey = `${initialUnread}:${initial.map((n) => n.id).join(",")}`;
   const [syncedTo, setSyncedTo] = useState(initialKey);
   const ref = useRef<HTMLDivElement>(null);
 
   const refreshNotifications = useCallback(async () => {
     const supabase = createClient();
-    const [{ count }, notificationsResult] = await Promise.all([
-      supabase
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("recipient_id", userId)
-        .is("read_at", null),
-      supabase
-        .from("notifications")
-        .select(NOTIFICATION_SELECT)
-        .eq("recipient_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(6),
-    ]);
+    try {
+      const [unreadIds, notificationIds] = await Promise.all([
+        loadVisibleNotificationIds(supabase, null, true),
+        loadVisibleNotificationIds(supabase, 6, false),
+      ]);
+      const notificationsResult = notificationIds.length
+        ? await supabase
+            .from("notifications")
+            .select(NOTIFICATION_SELECT)
+            .eq("recipient_id", userId)
+            .in("id", notificationIds)
+            .order("created_at", { ascending: false })
+        : { data: [] as NotificationWithContext[], error: null };
 
-    let data = notificationsResult.data;
-    if (notificationsResult.error) {
-      const fallback = await supabase
-        .from("notifications")
-        .select(FALLBACK_NOTIFICATION_SELECT)
-        .eq("recipient_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(6);
-      data = fallback.data;
+      let data = notificationsResult.data;
+      if (notificationsResult.error) {
+        const fallback = await supabase
+          .from("notifications")
+          .select(FALLBACK_NOTIFICATION_SELECT)
+          .eq("recipient_id", userId)
+          .in("id", notificationIds)
+          .order("created_at", { ascending: false });
+        if (fallback.error) throw new Error("Could not load notifications.");
+        data = fallback.data;
+      }
+
+      setUnread(unreadIds.length);
+      setItems(
+        ((data ?? []) as NotificationWithContext[]).map((n) => ({
+          ...n,
+          request: n.request ?? null,
+        })),
+      );
+      setNotificationError(null);
+    } catch {
+      setNotificationError("Could not refresh notifications.");
     }
-
-    setUnread(count ?? 0);
-    setItems(((data ?? []) as NotificationWithContext[]).map((n) => ({ ...n, request: n.request ?? null })));
   }, [userId]);
 
   // Keep in sync when the server hands fresh data on navigation. This render-time
@@ -155,7 +168,6 @@ export function NotificationBell({
           filter: `recipient_id=eq.${userId}`,
         },
         () => {
-          setUnread((n) => n + 1);
           void refreshNotifications();
           router.refresh();
         },
@@ -198,10 +210,19 @@ export function NotificationBell({
   }, [open]);
 
   async function markAllRead() {
-    setUnread(0);
-    setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
-    await markNotificationsRead();
-    router.refresh();
+    setMarkingAll(true);
+    try {
+      await markNotificationsRead();
+      const readAt = new Date().toISOString();
+      setUnread(0);
+      setItems((prev) => prev.map((n) => ({ ...n, read_at: n.read_at ?? readAt })));
+      setNotificationError(null);
+      router.refresh();
+    } catch {
+      setNotificationError("Could not mark notifications read.");
+    } finally {
+      setMarkingAll(false);
+    }
   }
 
   async function markOneRead(id: string) {
@@ -209,15 +230,19 @@ export function NotificationBell({
     const target = items.find((n) => n.id === id);
     if (!target || target.read_at) return;
 
-    setUnread((n) => Math.max(0, n - 1));
-    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: readAt } : n)));
-
     const supabase = createClient();
-    await supabase
+    const { error } = await supabase
       .from("notifications")
       .update({ read_at: readAt })
       .eq("id", id)
       .eq("recipient_id", userId);
+    if (error) {
+      setNotificationError("Could not mark this notification read.");
+      return;
+    }
+    setUnread((n) => Math.max(0, n - 1));
+    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: readAt } : n)));
+    setNotificationError(null);
     router.refresh();
   }
 
@@ -246,11 +271,18 @@ export function NotificationBell({
             <span className="text-base font-extrabold text-ink">Notifications</span>
             <button
               onClick={markAllRead}
-              className="whitespace-nowrap text-[13px] font-bold text-brand-600 transition hover:text-brand-700"
+              disabled={markingAll}
+              className="whitespace-nowrap text-[13px] font-bold text-brand-600 transition hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Mark all read
+              {markingAll ? "Marking…" : "Mark all read"}
             </button>
           </div>
+
+          {notificationError && (
+            <p role="alert" className="border-b border-red-100 bg-red-50 px-[18px] py-2 text-xs text-red-700">
+              {notificationError}
+            </p>
+          )}
 
           <div className="max-h-[360px] overflow-y-auto">
             {items.length === 0 ? (
