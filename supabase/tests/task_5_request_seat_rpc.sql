@@ -49,6 +49,15 @@ values
   (:'other', '{"full_name":"Task 5 Other"}')
 on conflict (id) do nothing;
 
+insert into public.profile_contacts (user_id, phone, whatsapp)
+values
+  (:'driver', '+15550005001', '+15550005001'),
+  (:'rider', '+15550005002', '+15550005002'),
+  (:'other', '+15550005003', '+15550005003')
+on conflict (user_id) do update
+set phone = excluded.phone,
+    whatsapp = excluded.whatsapp;
+
 insert into public.rides (
   id, driver_id, origin_label, destination_label, depart_at,
   seats_total, seats_available, status
@@ -79,6 +88,7 @@ select public.task5_assert(
   'duplicate pending request is idempotent',
   public.request_seat(:'request_ride') = 'exists'
 );
+reset role;
 select public.task5_assert(
   'pending duplicate emits one notification',
   (
@@ -89,7 +99,6 @@ select public.task5_assert(
       and type = 'seat_requested'
   )
 );
-reset role;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'driver', false);
@@ -116,6 +125,7 @@ select public.task5_assert(
       and status = 'pending'
   )
 );
+reset role;
 select public.task5_assert(
   'declined re-request emits one more request notification',
   (
@@ -126,6 +136,8 @@ select public.task5_assert(
       and type = 'seat_requested'
   )
 );
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'rider', false);
 select public.task5_assert(
   'cancel pending succeeds',
   public.cancel_seat(:'request_ride', 'plans changed')
@@ -134,6 +146,7 @@ select public.task5_assert(
   'cancelled row can request fresh pending',
   public.request_seat(:'request_ride') = 'requested'
 );
+reset role;
 select public.task5_assert(
   'cancelled re-request emits one more request notification',
   (
@@ -144,7 +157,6 @@ select public.task5_assert(
       and type = 'seat_requested'
   )
 );
-reset role;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'other', false);
@@ -216,10 +228,11 @@ select dblink_connect('task5_confirm_2', format('dbname=%s', current_database())
 select dblink_exec('task5_confirm_1', 'begin');
 select dblink_exec('task5_confirm_1', 'set role authenticated');
 select dblink_exec('task5_confirm_1', format('set request.jwt.claim.sub = %L', :'driver'));
-select dblink_exec(
+select confirmed
+from dblink(
   'task5_confirm_1',
   format('select public.confirm_passenger(%L::uuid, %L::uuid)', :'rider', :'race_ride')
-);
+) as response(confirmed boolean);
 select dblink_exec('task5_confirm_2', 'set role authenticated');
 select dblink_exec('task5_confirm_2', format('set request.jwt.claim.sub = %L', :'driver'));
 select dblink_send_query(
