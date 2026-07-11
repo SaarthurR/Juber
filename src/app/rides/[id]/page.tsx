@@ -9,6 +9,7 @@ import { ShareButton } from "@/components/share-button";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { ContactModal } from "@/components/contact-modal";
 import { getContact } from "@/lib/contact";
+import { canReserveRide } from "@/lib/action-lifecycle";
 import {
   ReserveSeatButton,
   PassengerStatusButtons,
@@ -266,9 +267,9 @@ export default async function RideDetailPage({
             />
           ) : isDriver ? (
             <DriverPanel ride={ride} passengerRows={passengerRows} />
-          ) : cancelled ? (
-            <div className="rounded-lg bg-red-50 px-6 py-4 text-center text-base font-bold text-red-500">
-              This ride was cancelled
+          ) : terminal ? (
+            <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
+              {cancelled ? "This ride was cancelled" : "This ride is closed"}
             </div>
           ) : myJoin ? (
             <div>
@@ -280,7 +281,7 @@ export default async function RideDetailPage({
                 <CancelSeatButton rideId={ride.id} />
               )}
             </div>
-          ) : ride.seats_available > 0 ? (
+          ) : canReserveRide(ride.status, Boolean(myJoin), ride.seats_available) ? (
             <ReserveSeatButton rideId={ride.id} />
           ) : (
             <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-400">

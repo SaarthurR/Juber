@@ -1,11 +1,15 @@
 "use client";
 
+import { useActionState } from "react";
 import { requestSeat } from "@/app/rides/actions";
+import { InlineActionError } from "@/components/inline-action-error";
 import { PendingActionButton } from "@/components/pending-action-button";
 
 export function MReserveButton({ rideId }: { rideId: string }) {
+  const [state, formAction] = useActionState(requestSeat.bind(null, rideId), null);
+
   return (
-    <form action={requestSeat.bind(null, rideId)}>
+    <form action={formAction}>
       <PendingActionButton
         actionKey={`mobile-reserve-${rideId}`}
         pendingLabel="Reserving…"
@@ -13,6 +17,11 @@ export function MReserveButton({ rideId }: { rideId: string }) {
       >
         Reserve a seat
       </PendingActionButton>
+      <InlineActionError
+        id={`mobile-reserve-${rideId}-error`}
+        error={state?.error}
+        className="mt-2 text-center text-[13px] font-bold text-red-600"
+      />
     </form>
   );
 }

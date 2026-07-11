@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useScrollLock } from "@/lib/use-scroll-lock";
+import { actionErrorMessage } from "@/lib/action-lifecycle";
+import { InlineActionError } from "@/components/inline-action-error";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import {
   requestSeat,
@@ -15,8 +17,10 @@ import {
 import { openConversation } from "@/app/messages/actions";
 
 export function ReserveSeatButton({ rideId }: { rideId: string }) {
+  const [state, formAction] = useActionState(requestSeat.bind(null, rideId), null);
+
   return (
-    <form action={requestSeat.bind(null, rideId)}>
+    <form action={formAction}>
       <PendingActionButton
         actionKey={`reserve-${rideId}`}
         pendingLabel="Reserving…"
@@ -24,6 +28,11 @@ export function ReserveSeatButton({ rideId }: { rideId: string }) {
       >
         Reserve a seat
       </PendingActionButton>
+      <InlineActionError
+        id={`reserve-${rideId}-error`}
+        error={state?.error}
+        className="mt-2 text-center text-sm font-semibold text-red-600"
+      />
     </form>
   );
 }
@@ -35,10 +44,20 @@ export function PassengerStatusButtons({
   passengerId: string;
   rideId: string;
 }) {
+  const [confirmState, confirmAction] = useActionState(
+    setPassengerStatus.bind(null, passengerId, rideId, "confirmed"),
+    null,
+  );
+  const [declineState, declineAction] = useActionState(
+    setPassengerStatus.bind(null, passengerId, rideId, "declined"),
+    null,
+  );
+  const error = confirmState?.error ?? declineState?.error;
+
   return (
     <PendingActionGroup>
       <div className="flex gap-2">
-        <form action={setPassengerStatus.bind(null, passengerId, rideId, "confirmed")}>
+        <form action={confirmAction}>
           <PendingActionButton
             actionKey={`confirm-${passengerId}`}
             pendingLabel="…"
@@ -47,7 +66,7 @@ export function PassengerStatusButtons({
             Confirm
           </PendingActionButton>
         </form>
-        <form action={setPassengerStatus.bind(null, passengerId, rideId, "declined")}>
+        <form action={declineAction}>
           <PendingActionButton
             actionKey={`decline-${passengerId}`}
             pendingLabel="…"
@@ -57,6 +76,11 @@ export function PassengerStatusButtons({
           </PendingActionButton>
         </form>
       </div>
+      <InlineActionError
+        id={`passenger-${passengerId}-error`}
+        error={error}
+        className="mt-2 text-right text-xs font-semibold text-red-600"
+      />
     </PendingActionGroup>
   );
 }
@@ -66,8 +90,9 @@ export function CancelRequestButton({
   base,
 }: {
   requestId: string;
-  base?: "/rides" | "/m/rides";
+  base?: "/rides" | "/m";
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -78,11 +103,20 @@ export function CancelRequestButton({
       try {
         const formData = new FormData();
         if (base) formData.set("base", base);
-        await cancelRideRequest(requestId, formData);
-      } catch (e) {
-        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
-          setError(e.message);
+        const result = await cancelRideRequest(requestId, formData);
+        if ("error" in result) {
+          setError(result.error);
+          return;
         }
+        router.push(result.redirectTo);
+        router.refresh();
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't cancel this request. Please try again.",
+          ),
+        );
       }
     });
   }
@@ -114,7 +148,11 @@ export function CancelRequestButton({
             <p className="mt-2 text-sm text-stone-500">
               To change trip details, cancel this post and create a new one.
             </p>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <InlineActionError
+              id="cancel-request-error"
+              error={error}
+              className="mt-3 text-sm font-semibold text-red-600"
+            />
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -128,6 +166,7 @@ export function CancelRequestButton({
                 type="button"
                 onClick={submit}
                 disabled={pending}
+                aria-describedby={error ? "cancel-request-error" : undefined}
                 className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {pending ? "Cancelling..." : "Cancel request"}
@@ -147,7 +186,7 @@ export function CancelRideButton({
 }: {
   rideId: string;
   confirmedRiderCount: number;
-  base?: "/rides" | "/m/rides";
+  base?: "/rides" | "/m";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -170,15 +209,19 @@ export function CancelRideButton({
     startTransition(async () => {
       try {
         const result = await cancelRide(rideId, reason, base);
-        if (result?.error) {
+        if ("error" in result) {
           setError(result.error);
           return;
         }
-        router.push(result?.redirectTo ?? base);
+        router.push(result.redirectTo);
         router.refresh();
-      } catch (e) {
-        console.error("Cancel ride failed", e);
-        setError("We couldn't cancel this ride. Please try again.");
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't cancel this ride. Please try again.",
+          ),
+        );
       }
     });
   }
@@ -271,8 +314,9 @@ export function CloseRideButton({
   base,
 }: {
   rideId: string;
-  base?: "/rides" | "/m/rides";
+  base?: "/rides" | "/m";
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -289,11 +333,20 @@ export function CloseRideButton({
       try {
         const formData = new FormData();
         if (base) formData.set("base", base);
-        await closeRide(rideId, formData);
-      } catch (e) {
-        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
-          setError(e.message);
+        const result = await closeRide(rideId, formData);
+        if ("error" in result) {
+          setError(result.error);
+          return;
         }
+        router.push(result.redirectTo);
+        router.refresh();
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't close this ride. Please try again.",
+          ),
+        );
       }
     });
   }
@@ -323,7 +376,11 @@ export function CloseRideButton({
               This marks the ride completed and removes it from active listings. Chat history stays
               available for lost items and follow-up.
             </p>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <InlineActionError
+              id="close-ride-error"
+              error={error}
+              className="mt-3 text-sm font-semibold text-red-600"
+            />
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -337,6 +394,7 @@ export function CloseRideButton({
                 type="button"
                 onClick={submit}
                 disabled={pending}
+                aria-describedby={error ? "close-ride-error" : undefined}
                 className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {pending ? "Closing..." : "Close ride"}
@@ -356,7 +414,7 @@ export function DriverRideActions({
 }: {
   rideId: string;
   confirmedRiderCount: number;
-  base?: "/rides" | "/m/rides";
+  base?: "/rides" | "/m";
 }) {
   return (
     <div className="grid grid-cols-2 gap-2">
@@ -397,8 +455,9 @@ export function CancelSeatButton({
   base,
 }: {
   rideId: string;
-  base?: "/rides" | "/m/rides";
+  base?: "/rides" | "/m";
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -414,11 +473,19 @@ export function CancelSeatButton({
     startTransition(async () => {
       try {
         const result = await cancelSeat(rideId, message, base);
-        if (result?.error) setError(result.error);
-      } catch (e) {
-        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
-          setError("We couldn't cancel your seat. Please try again.");
+        if ("error" in result) {
+          setError(result.error);
+          return;
         }
+        router.push(result.redirectTo);
+        router.refresh();
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't cancel your seat. Please try again.",
+          ),
+        );
       }
     });
   }
@@ -466,11 +533,11 @@ export function CancelSeatButton({
               aria-describedby={error ? "cancel-seat-reason-error" : undefined}
               className="mt-1.5 w-full resize-none rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
-            {error && (
-              <p id="cancel-seat-reason-error" role="alert" className="mt-2 text-sm text-red-600">
-                {error}
-              </p>
-            )}
+            <InlineActionError
+              id="cancel-seat-reason-error"
+              error={error}
+              className="mt-2 text-sm font-semibold text-red-600"
+            />
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"

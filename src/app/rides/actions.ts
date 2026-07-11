@@ -6,19 +6,20 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { JCNC_LABEL } from "@/lib/constants";
-import { sendSms } from "@/lib/sms";
 import { dateOnlyToIso } from "@/lib/date-time";
+import { deferBestEffort } from "@/lib/action-lifecycle";
+import {
+  sendRideCancellationSms,
+  sendSeatCancellationSms,
+} from "@/lib/cancellation-sms";
 import {
   MESSAGE_BASE_TARGETS,
   RIDE_LIST_TARGETS,
   pickAllowed,
+  requestListDestination,
+  requestRevalidationTargets,
+  rideDetailDestination,
 } from "@/lib/route-targets";
-
-type CancellationContact = {
-  id: string;
-  full_name: string | null;
-  phone: string | null;
-};
 
 function revalidateMessageRoutes() {
   revalidatePath("/messages");
@@ -27,17 +28,22 @@ function revalidateMessageRoutes() {
   revalidatePath("/m/messages/[id]", "page");
 }
 
-function cancellationName(contact: CancellationContact | undefined, fallback: string) {
-  return contact?.full_name?.trim() || fallback;
+function revalidateRequestRoutes(requestId: string) {
+  for (const path of requestRevalidationTargets(requestId)) {
+    revalidatePath(path);
+  }
 }
 
-async function sendCancellationTexts(messages: Array<Parameters<typeof sendSms>[0]>) {
-  const results = await Promise.allSettled(messages.map(sendSms));
-  for (const result of results) {
-    if (result.status === "rejected") {
-      console.error("Cancellation SMS failed", result.reason);
-    }
-  }
+function logDeferredCancellationError(
+  kind: "ride" | "seat",
+  rideId: string,
+  error: unknown,
+) {
+  console.error("Deferred cancellation SMS failed", {
+    kind,
+    rideId,
+    error: error instanceof Error ? error.message : "Unknown error",
+  });
 }
 
 function str(v: FormDataEntryValue | null) {
@@ -75,6 +81,10 @@ function isoDate(v: FormDataEntryValue | null) {
 
 export type RideFormState = { error: string } | null;
 export type RequestFormState = { error: string } | null;
+export type RideActionState = { error: string } | null;
+export type RedirectActionResult =
+  | { success: true; redirectTo: string }
+  | { error: string };
 
 export async function postRide(
   _previousState: RideFormState,
@@ -198,23 +208,32 @@ export async function postRequest(
   redirect("/rides?tab=requests");
 }
 
-export async function cancelRideRequest(requestId: string, formData?: FormData) {
+export async function cancelRideRequest(
+  requestId: string,
+  formData?: FormData,
+): Promise<RedirectActionResult> {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
-  const base = pickAllowed(formData?.get("base")?.toString(), RIDE_LIST_TARGETS, "/rides");
+  const redirectTo = requestListDestination(formData?.get("base")?.toString());
 
-  const { error } = await supabase
+  const { data: cancelled, error } = await supabase
     .from("ride_requests")
     .update({ status: "cancelled" })
     .eq("id", requestId)
     .eq("rider_id", user.id)
-    .eq("status", "active");
+    .eq("status", "active")
+    .select("id")
+    .maybeSingle<{ id: string }>();
 
-  if (error) throw new Error(error.message);
-  revalidatePath("/rides");
-  revalidatePath(`/requests/${requestId}`);
-  redirect(`${base}?tab=requests`);
+  if (error) {
+    console.error("cancel ride request failed", { code: error.code, requestId });
+    return { error: "We couldn't cancel this request. Please try again." };
+  }
+  if (!cancelled) return { error: "This request is no longer active." };
+
+  revalidateRequestRoutes(requestId);
+  return { success: true, redirectTo };
 }
 
 export async function acceptRideRequest(requestId: string, formData?: FormData) {
@@ -250,27 +269,39 @@ export async function acceptRideRequest(requestId: string, formData?: FormData) 
     throw new Error(convoError?.message ?? "Could not start chat");
   }
 
-  revalidatePath("/rides");
-  revalidatePath(`/requests/${requestId}`);
+  revalidateRequestRoutes(requestId);
   revalidateMessageRoutes();
   redirect(`${base}/${conversationId}`);
 }
 
-export async function requestSeat(rideId: string) {
+export async function requestSeat(
+  rideId: string,
+  _previousState: RideActionState,
+  formData: FormData,
+): Promise<RideActionState> {
+  void formData;
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
   const { error } = await supabase.rpc("request_seat", { p_ride_id: rideId });
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
+
   revalidatePath(`/rides/${rideId}`);
+  revalidatePath(`/m/rides/${rideId}`);
+  revalidatePath("/rides");
+  revalidatePath("/m");
+  return null;
 }
 
 export async function setPassengerStatus(
   passengerId: string,
   rideId: string,
   status: "confirmed" | "declined",
-) {
+  _previousState: RideActionState,
+  formData: FormData,
+): Promise<RideActionState> {
+  void formData;
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
@@ -289,11 +320,11 @@ export async function setPassengerStatus(
       .maybeSingle<{ passenger_id: string; status: string }>(),
   ]);
   if (!ride || ride.driver_id !== user.id) {
-    throw new Error("Only the driver can update passenger requests.");
+    return { error: "Only the driver can update passenger requests." };
   }
-  if (passengerError) throw new Error(passengerError.message);
+  if (passengerError) return { error: passengerError.message };
   if (!passenger || passenger.status !== "pending") {
-    throw new Error("This seat request is no longer pending.");
+    return { error: "This seat request is no longer pending." };
   }
 
   if (status === "confirmed") {
@@ -301,8 +332,8 @@ export async function setPassengerStatus(
       p_passenger_id: passenger.passenger_id,
       p_ride_id: rideId,
     });
-    if (error) throw new Error(error.message);
-    if (!confirmed) throw new Error("Could not confirm this passenger.");
+    if (error) return { error: error.message };
+    if (!confirmed) return { error: "Could not confirm this passenger." };
   } else {
     const { data: declined, error } = await supabase
       .from("ride_passengers")
@@ -312,14 +343,23 @@ export async function setPassengerStatus(
       .eq("status", "pending")
       .select("id")
       .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!declined) throw new Error("This seat request is no longer pending.");
+    if (error) return { error: error.message };
+    if (!declined) return { error: "This seat request is no longer pending." };
   }
+
   revalidatePath(`/rides/${rideId}`);
+  revalidatePath(`/m/rides/${rideId}`);
+  revalidatePath("/rides");
+  revalidatePath("/m");
   revalidateMessageRoutes();
+  return null;
 }
 
-export async function cancelRide(rideId: string, reason: string, baseValue?: string) {
+export async function cancelRide(
+  rideId: string,
+  reason: string,
+  baseValue?: string,
+): Promise<RedirectActionResult> {
   const trimmed = (reason ?? "").trim();
   const base = pickAllowed(baseValue, RIDE_LIST_TARGETS, "/rides");
 
@@ -327,34 +367,7 @@ export async function cancelRide(rideId: string, reason: string, baseValue?: str
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const [{ data: ride }, { data: passengers }] = await Promise.all([
-    supabase
-      .from("rides")
-      .select("driver_id,origin_label,destination_label")
-      .eq("id", rideId)
-      .single<{
-        driver_id: string;
-        origin_label: string;
-        destination_label: string;
-      }>(),
-    supabase
-      .from("ride_passengers")
-      .select("passenger_id")
-      .eq("ride_id", rideId)
-      .eq("status", "confirmed"),
-  ]);
-  const passengerIds = passengers?.map((passenger) => passenger.passenger_id) ?? [];
-  if (passengerIds.length > 0 && !trimmed) {
-    return { error: "Please tell your riders why the ride is cancelled." };
-  }
-  // Older deployed versions of cancel_ride require a non-empty reason even
-  // when nobody is booked. Keep empty-ride cancellation compatible with them.
   const cancellationReason = trimmed || "Ride cancelled before anyone joined.";
-  const contactIds = [...new Set([user.id, ...passengerIds])];
-  const { data: contactsData } = contactIds.length
-    ? await supabase.rpc("contacts_for_booking", { p_user_ids: contactIds })
-    : { data: [] };
-  const contacts = (contactsData as CancellationContact[] | null) ?? [];
 
   const { data: cancelled, error } = await supabase.rpc("cancel_ride", {
     p_ride_id: rideId,
@@ -366,24 +379,30 @@ export async function cancelRide(rideId: string, reason: string, baseValue?: str
   }
   if (!cancelled) return { error: "Only the driver can cancel an active ride." };
 
-  if (ride?.driver_id === user.id) {
-    const contactsById = new Map(contacts?.map((contact) => [contact.id, contact]));
-    const driverName = cancellationName(contactsById.get(user.id), "Your driver");
-    const route = `${ride.origin_label} to ${ride.destination_label}`;
-    after(() => sendCancellationTexts(
-      passengerIds.map((passengerId) => ({
-        to: contactsById.get(passengerId)?.phone ?? null,
-        body: `${driverName} cancelled your ride from ${route}. Reason: ${trimmed}`,
-      })),
-    ));
-  }
+  deferBestEffort(
+    after,
+    () =>
+      sendRideCancellationSms({
+        rideId,
+        driverId: user.id,
+        reason: cancellationReason,
+      }),
+    (deferredError) =>
+      logDeferredCancellationError("ride", rideId, deferredError),
+  );
 
   revalidatePath("/rides");
+  revalidatePath("/m");
+  revalidatePath(`/rides/${rideId}`);
+  revalidatePath(`/m/rides/${rideId}`);
   revalidateMessageRoutes();
   return { success: true, redirectTo: base };
 }
 
-export async function closeRide(rideId: string, formData?: FormData) {
+export async function closeRide(
+  rideId: string,
+  formData?: FormData,
+): Promise<RedirectActionResult> {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
@@ -392,16 +411,25 @@ export async function closeRide(rideId: string, formData?: FormData) {
   const { data: closed, error } = await supabase.rpc("close_ride", {
     p_ride_id: rideId,
   });
-  if (error) throw new Error(error.message);
-  if (!closed) throw new Error("Only the driver can close an active ride.");
+  if (error) {
+    console.error("close_ride failed", { code: error.code, rideId });
+    return { error: "We couldn't close this ride. Please try again." };
+  }
+  if (!closed) return { error: "Only the driver can close an active ride." };
 
   revalidatePath("/rides");
+  revalidatePath("/m");
   revalidateMessageRoutes();
   revalidatePath(`/rides/${rideId}`);
-  redirect(base);
+  revalidatePath(`/m/rides/${rideId}`);
+  return { success: true, redirectTo: base };
 }
 
-export async function cancelSeat(rideId: string, message: string, baseValue?: string) {
+export async function cancelSeat(
+  rideId: string,
+  message: string,
+  baseValue?: string,
+): Promise<RedirectActionResult> {
   const trimmed = (message ?? "").trim();
   const base = pickAllowed(baseValue, RIDE_LIST_TARGETS, "/rides");
   if (!trimmed) {
@@ -411,20 +439,6 @@ export async function cancelSeat(rideId: string, message: string, baseValue?: st
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
-
-  const { data: ride } = await supabase
-    .from("rides")
-    .select("driver_id,origin_label,destination_label")
-    .eq("id", rideId)
-    .single<{
-      driver_id: string;
-      origin_label: string;
-      destination_label: string;
-    }>();
-  const { data: contactsData } = ride
-    ? await supabase.rpc("contacts_for_booking", { p_user_ids: [user.id, ride.driver_id] })
-    : { data: [] };
-  const contacts = (contactsData as CancellationContact[] | null) ?? [];
 
   const { data: cancelled, error } = await supabase.rpc("cancel_seat", {
     p_ride_id: rideId,
@@ -436,20 +450,22 @@ export async function cancelSeat(rideId: string, message: string, baseValue?: st
   }
   if (!cancelled) return { error: "You are not currently in this active ride." };
 
-  if (ride) {
-    const contactsById = new Map(contacts?.map((contact) => [contact.id, contact]));
-    const riderName = cancellationName(contactsById.get(user.id), "A rider");
-    const route = `${ride.origin_label} to ${ride.destination_label}`;
-    after(() => sendCancellationTexts([
-      {
-        to: contactsById.get(ride.driver_id)?.phone ?? null,
-        body: `${riderName} cancelled their seat for your ride from ${route}. Reason: ${trimmed}`,
-      },
-    ]));
-  }
+  deferBestEffort(
+    after,
+    () =>
+      sendSeatCancellationSms({
+        rideId,
+        riderId: user.id,
+        reason: trimmed,
+      }),
+    (deferredError) =>
+      logDeferredCancellationError("seat", rideId, deferredError),
+  );
 
   revalidatePath("/rides");
+  revalidatePath("/m");
   revalidatePath(`/rides/${rideId}`);
+  revalidatePath(`/m/rides/${rideId}`);
   revalidateMessageRoutes();
-  redirect(`${base}/${rideId}`);
+  return { success: true, redirectTo: rideDetailDestination(base, rideId) };
 }

@@ -8,6 +8,7 @@ import { SubHeader } from "@/components/mobile/sub-header";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { ContactSheet } from "@/components/mobile/contact-sheet";
 import { getContact } from "@/lib/contact";
+import { canReserveRide } from "@/lib/action-lifecycle";
 import { MReserveButton } from "@/components/mobile/m-reserve";
 import { ShareButton } from "@/components/share-button";
 import { GoogleSignInButton } from "@/components/auth-button";
@@ -235,7 +236,7 @@ export default async function MobileTripPage({
                 <DriverRideActions
                   rideId={ride.id}
                   confirmedRiderCount={confirmed.length}
-                  base="/m/rides"
+                  base="/m"
                 />
               </div>
             )}
@@ -263,9 +264,9 @@ export default async function MobileTripPage({
           <p className="py-2 text-center text-[13px] font-semibold text-muted-warm">
             You&apos;re the driver for this ride.
           </p>
-        ) : cancelled ? (
-          <div className="flex h-[54px] items-center justify-center rounded-[14px] bg-red-50 text-[15px] font-bold text-red-500">
-            This ride was cancelled
+        ) : terminal ? (
+          <div className="flex h-[54px] items-center justify-center rounded-[14px] bg-tint text-[15px] font-bold text-muted">
+            {cancelled ? "This ride was cancelled" : "This ride is closed"}
           </div>
         ) : myJoin ? (
           <div>
@@ -274,10 +275,10 @@ export default async function MobileTripPage({
             </div>
             {ride.status === "active" &&
               (myJoin.status === "pending" || myJoin.status === "confirmed") && (
-              <CancelSeatButton rideId={ride.id} base="/m/rides" />
+              <CancelSeatButton rideId={ride.id} base="/m" />
             )}
           </div>
-        ) : ride.seats_available > 0 ? (
+        ) : canReserveRide(ride.status, Boolean(myJoin), ride.seats_available) ? (
           <MReserveButton rideId={ride.id} />
         ) : (
           <div className="flex h-[54px] items-center justify-center rounded-[14px] bg-tint text-[15px] font-bold text-muted-warm">

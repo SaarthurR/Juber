@@ -129,7 +129,7 @@ export default async function MobileRequestDetailPage({
               <GoogleSignInButton className="flex w-full items-center justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition active:scale-[0.98]" />
             ) : isOwner ? (
               isActive ? (
-                <CancelRequestButton requestId={request.id} base="/m/rides" />
+                <CancelRequestButton requestId={request.id} base="/m" />
               ) : request.accepted_driver_id ? (
                 <BookedMessageButton otherUserId={request.accepted_driver_id} requestId={request.id} />
               ) : (
