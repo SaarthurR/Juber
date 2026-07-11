@@ -6,7 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { JCNC_LABEL } from "@/lib/constants";
 import { dateOnlyToIso } from "@/lib/date-time";
-import { authCallbackDestination } from "@/lib/route-targets";
+import {
+  authCallbackDestination,
+  authRevalidationPath,
+} from "@/lib/route-targets";
 import type { RequestFormState } from "@/app/rides/actions";
 
 function str(v: FormDataEntryValue | null) {
@@ -90,6 +93,7 @@ export async function updateProfileMobile(formData: FormData) {
     nextValues.length === 1 ? nextValues[0] : null,
     fallback,
   );
+  const revalidationPath = authRevalidationPath(destination, fallback);
 
   const phone = str(formData.get("phone"));
   const whatsapp = str(formData.get("whatsapp"));
@@ -133,6 +137,6 @@ export async function updateProfileMobile(formData: FormData) {
   if (error) throw new Error(error.message);
   revalidatePath("/profile");
   revalidatePath("/m/profile");
-  revalidatePath(destination);
+  revalidatePath(revalidationPath);
   redirect(destination);
 }

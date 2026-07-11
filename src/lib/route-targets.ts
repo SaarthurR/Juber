@@ -13,6 +13,7 @@ export const AUTH_CALLBACK_TARGETS = [
 ] as const;
 export const MESSAGE_BASE_TARGETS = ["/messages", "/m/messages"] as const;
 export const RIDE_LIST_TARGETS = ["/rides", "/m"] as const;
+export const DESKTOP_COOKIE = "force-desktop";
 
 const AUTH_ORIGIN = "https://juber.invalid";
 const UUID_SEGMENT =
@@ -52,8 +53,16 @@ export function authCallbackDestination(value: unknown, fallback = "/rides") {
     ?? "/rides";
 }
 
-export function authOnboardingDestination(isMobile: boolean, nextValue: unknown) {
-  const fallback = isMobile ? "/m" : "/rides";
+export function authOnboardingDestination(
+  nextValue: unknown,
+  {
+    fallback,
+    forceDesktop = false,
+  }: {
+    fallback: "/rides" | "/m";
+    forceDesktop?: boolean;
+  },
+) {
   const candidate = Array.isArray(nextValue)
     ? nextValue.length === 1
       ? nextValue[0]
@@ -61,8 +70,15 @@ export function authOnboardingDestination(isMobile: boolean, nextValue: unknown)
     : nextValue;
   const next = authCallbackDestination(candidate, fallback);
   const search = new URLSearchParams({ onboarding: "1", next });
-  const profilePath = isMobile ? "/m/profile/edit" : "/profile";
+  const isMobileDestination = next === "/m" || next.startsWith("/m/");
+  const profilePath =
+    isMobileDestination && !forceDesktop ? "/m/profile/edit" : "/profile";
   return `${profilePath}?${search.toString()}`;
+}
+
+export function authRevalidationPath(destination: unknown, fallback = "/rides") {
+  const canonicalDestination = authCallbackDestination(destination, fallback);
+  return new URL(canonicalDestination, AUTH_ORIGIN).pathname;
 }
 
 function normalizeAuthCallbackDestination(value: unknown) {

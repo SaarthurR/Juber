@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { DESKTOP_COOKIE } from "@/lib/route-targets";
 
 // Phones get the /m mobile system. Ride/profile details stay shared; event
 // details have a mobile-shell page so event browsing does not exit /m.
@@ -14,9 +15,6 @@ const MOBILE_ROUTE: Record<string, string> = {
 };
 
 const MOBILE_UA = /Mobi|Android|iPhone|iPod|Windows Phone|BlackBerry|webOS|Opera Mini|IEMobile/i;
-
-// Escape hatch: ?desktop=1 sets a cookie that opts a phone out of the redirect.
-const DESKTOP_COOKIE = "force-desktop";
 
 // Next.js 16 "proxy" convention (formerly middleware).
 export async function proxy(request: NextRequest) {

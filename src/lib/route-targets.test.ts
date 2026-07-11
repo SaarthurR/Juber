@@ -2,24 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import * as routeTargets from "./route-targets";
 import {
   AUTH_CALLBACK_TARGETS,
   MESSAGE_BASE_TARGETS,
   RIDE_LIST_TARGETS,
   authCallbackDestination,
+  authOnboardingDestination,
+  authRevalidationPath,
   mobileNotificationDestination,
   pickAllowed,
   requestListDestination,
   requestRevalidationTargets,
   rideDetailDestination,
 } from "./route-targets";
-
-const authOnboardingDestination = (
-  routeTargets as typeof routeTargets & {
-    authOnboardingDestination?: (mobile: boolean, next: unknown) => string;
-  }
-).authOnboardingDestination;
 
 test("pickAllowed returns fallback for disallowed values", () => {
   const allowed = ["/events"] as const;
@@ -228,57 +223,86 @@ test("sign-in without an explicit next includes the current safe query", () => {
 });
 
 test("first-time OAuth preserves event context through desktop and mobile onboarding", () => {
-  if (!authOnboardingDestination) return;
   const eventId = "123e4567-e89b-42d3-a456-426614174000";
 
   assert.equal(
-    authOnboardingDestination(false, `/rides/new?event_id=${eventId}`),
+    authOnboardingDestination(`/rides/new?event_id=${eventId}`, { fallback: "/rides" }),
     `/profile?onboarding=1&next=%2Frides%2Fnew%3Fevent_id%3D${eventId}`,
   );
   assert.equal(
-    authOnboardingDestination(false, `/requests/new?event_id=${eventId}`),
+    authOnboardingDestination(`/requests/new?event_id=${eventId}`, { fallback: "/rides" }),
     `/profile?onboarding=1&next=%2Frequests%2Fnew%3Fevent_id%3D${eventId}`,
   );
   assert.equal(
-    authOnboardingDestination(true, `/m/rides/new?event_id=${eventId}`),
+    authOnboardingDestination(`/m/rides/new?event_id=${eventId}`, { fallback: "/m" }),
     `/m/profile/edit?onboarding=1&next=%2Fm%2Frides%2Fnew%3Fevent_id%3D${eventId}`,
   );
   assert.equal(
-    authOnboardingDestination(true, `/m/requests/new?event_id=${eventId}`),
+    authOnboardingDestination(`/m/requests/new?event_id=${eventId}`, { fallback: "/m" }),
     `/m/profile/edit?onboarding=1&next=%2Fm%2Frequests%2Fnew%3Fevent_id%3D${eventId}`,
   );
 });
 
 test("first-time OAuth preserves the desktop rides tab through onboarding", () => {
-  if (!authOnboardingDestination) return;
   assert.equal(
-    authOnboardingDestination(false, "/rides?tab=requests"),
+    authOnboardingDestination("/rides?tab=requests", { fallback: "/rides" }),
     "/profile?onboarding=1&next=%2Frides%3Ftab%3Drequests",
   );
 });
 
 test("onboarding uses shell-safe fallbacks for missing, invalid, duplicate, and encoded next", () => {
-  if (!authOnboardingDestination) return;
   const eventId = "123e4567-e89b-42d3-a456-426614174000";
 
   assert.equal(
-    authOnboardingDestination(false, undefined),
+    authOnboardingDestination(undefined, { fallback: "/rides" }),
     "/profile?onboarding=1&next=%2Frides",
   );
   assert.equal(
-    authOnboardingDestination(true, "https://evil.test/m"),
+    authOnboardingDestination("https://evil.test/m", { fallback: "/m" }),
     "/m/profile/edit?onboarding=1&next=%2Fm",
   );
   assert.equal(
-    authOnboardingDestination(false, [
-      `/rides/new?event_id=${eventId}`,
-      "/admin",
-    ]),
+    authOnboardingDestination(
+      [`/rides/new?event_id=${eventId}`, "/admin"],
+      { fallback: "/rides" },
+    ),
     "/profile?onboarding=1&next=%2Frides",
   );
   assert.equal(
-    authOnboardingDestination(true, "/m/rides/new%5c..%5cadmin"),
+    authOnboardingDestination("/m/rides/new%5c..%5cadmin", { fallback: "/m" }),
     "/m/profile/edit?onboarding=1&next=%2Fm",
+  );
+});
+
+test("canonical destination selects onboarding shell across user agents", () => {
+  const eventId = "123e4567-e89b-42d3-a456-426614174000";
+
+  assert.equal(
+    authOnboardingDestination(`/rides/new?event_id=${eventId}`, { fallback: "/m" }),
+    `/profile?onboarding=1&next=%2Frides%2Fnew%3Fevent_id%3D${eventId}`,
+  );
+  assert.equal(
+    authOnboardingDestination(`/m/rides/new?event_id=${eventId}`, { fallback: "/rides" }),
+    `/m/profile/edit?onboarding=1&next=%2Fm%2Frides%2Fnew%3Fevent_id%3D${eventId}`,
+  );
+});
+
+test("desktop opt-out forces desktop onboarding and fallback", () => {
+  const eventId = "123e4567-e89b-42d3-a456-426614174000";
+
+  assert.equal(
+    authOnboardingDestination(undefined, {
+      fallback: "/rides",
+      forceDesktop: true,
+    }),
+    "/profile?onboarding=1&next=%2Frides",
+  );
+  assert.equal(
+    authOnboardingDestination(`/m/requests/new?event_id=${eventId}`, {
+      fallback: "/rides",
+      forceDesktop: true,
+    }),
+    `/profile?onboarding=1&next=%2Fm%2Frequests%2Fnew%3Fevent_id%3D${eventId}`,
   );
 });
 
@@ -299,11 +323,35 @@ test("callback and contact gate pass only sanitized next into the correct profil
   assert.match(callback, /searchParams\.getAll\("next"\)/);
   assert.match(callback, /authCallbackDestination/);
   assert.match(callback, /authOnboardingDestination/);
+  assert.match(callback, /request\.cookies\.get\(DESKTOP_COOKIE\)/);
+  assert.match(callback, /isMobileUa && !forceDesktop/);
   assert.match(gate, /window\.location\.pathname.*window\.location\.search/);
   assert.match(gate, /authCallbackDestination/);
   assert.match(gate, /new URLSearchParams/);
   assert.match(gate, /"\/m\/profile\/edit"/);
   assert.match(gate, /"\/profile"/);
+});
+
+test("safe revalidation helper returns only canonical pathnames", () => {
+  const eventId = "123e4567-e89b-42d3-a456-426614174000";
+
+  assert.equal(
+    authRevalidationPath(`/rides/new?event_id=${eventId}`),
+    "/rides/new",
+  );
+  assert.equal(
+    authRevalidationPath(`/m/requests/new?event_id=${eventId}`),
+    "/m/requests/new",
+  );
+  assert.equal(authRevalidationPath("/rides?tab=requests"), "/rides");
+  assert.equal(
+    authRevalidationPath("https://evil.test/admin", "/m/profile"),
+    "/m/profile",
+  );
+  assert.equal(
+    authRevalidationPath("/m/rides/new%5c..%5cadmin", "//evil.test"),
+    "/rides",
+  );
 });
 
 test("profile forms re-sanitize one next value and render a hidden handoff", () => {
@@ -340,7 +388,9 @@ test("profile actions preserve canonical next and keep normal edit fallbacks", (
     assert.match(action, /formData\.getAll\("next"\)/);
     assert.match(action, /nextValues\.length === 1/);
     assert.match(action, /authCallbackDestination/);
-    assert.match(action, /revalidatePath\(destination\)/);
+    assert.match(action, /authRevalidationPath\(destination, fallback\)/);
+    assert.match(action, /revalidatePath\(revalidationPath\)/);
+    assert.doesNotMatch(action, /revalidatePath\(destination\)/);
     assert.match(action, /redirect\(destination\)/);
     assert.match(action, /URLSearchParams/);
   }

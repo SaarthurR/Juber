@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
-import { authCallbackDestination } from "@/lib/route-targets";
+import {
+  authCallbackDestination,
+  authRevalidationPath,
+} from "@/lib/route-targets";
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -21,6 +24,7 @@ export async function updateProfile(formData: FormData) {
     nextValues.length === 1 ? nextValues[0] : null,
     fallback,
   );
+  const revalidationPath = authRevalidationPath(destination, fallback);
 
   const phone = str(formData.get("phone"));
   const whatsapp = str(formData.get("whatsapp"));
@@ -62,6 +66,6 @@ export async function updateProfile(formData: FormData) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/profile");
-  revalidatePath(destination);
+  revalidatePath(revalidationPath);
   redirect(destination);
 }

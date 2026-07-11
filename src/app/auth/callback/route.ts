@@ -1,21 +1,24 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
+  DESKTOP_COOKIE,
   authCallbackDestination,
   authOnboardingDestination,
 } from "@/lib/route-targets";
 
 // Handles the OAuth redirect from Supabase, exchanging the code for a session.
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const isMobile = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(
+  const isMobileUa = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(
     request.headers.get("user-agent") ?? "",
   );
+  const forceDesktop = request.cookies.get(DESKTOP_COOKIE)?.value === "1";
+  const fallback = isMobileUa && !forceDesktop ? "/m" : "/rides";
   const nextValues = searchParams.getAll("next");
   const next = authCallbackDestination(
     nextValues.length === 1 ? nextValues[0] : null,
-    isMobile ? "/m" : "/rides",
+    fallback,
   );
 
   if (code) {
@@ -30,7 +33,10 @@ export async function GET(request: Request) {
         p_profile_id: user?.id ?? "",
       });
       if (!contactReady) {
-        const onboardingPath = authOnboardingDestination(isMobile, next);
+        const onboardingPath = authOnboardingDestination(next, {
+          fallback,
+          forceDesktop,
+        });
         return NextResponse.redirect(`${origin}${onboardingPath}`);
       }
       return NextResponse.redirect(`${origin}${next}`);
