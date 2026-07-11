@@ -190,7 +190,7 @@ function BookedMessageButton({
         <input type="hidden" name="base" value="/m/messages" />
         <PendingActionButton
           actionKey={`mobile-message-request-${requestId}`}
-          pendingLabel="Opening..."
+          pendingLabel="Opening chat..."
           className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-white px-5 py-3 text-sm font-bold text-brand-700 transition active:scale-[0.98]"
         >
           <MessageCircle size={17} />

@@ -36,6 +36,28 @@ export function PendingActionGroup({ children }: { children: React.ReactNode }) 
   );
 }
 
+export function getPendingActionButtonView({
+  actionKey,
+  children,
+  pending,
+  pendingKey,
+  pendingLabel,
+}: {
+  actionKey: string;
+  children: React.ReactNode;
+  pending: boolean;
+  pendingKey: string | null;
+  pendingLabel: string;
+}) {
+  const lockedByOther = pendingKey !== null && pendingKey !== actionKey;
+  const isPending = pending || pendingKey === actionKey;
+  return {
+    disabled: lockedByOther || isPending,
+    label: isPending ? pendingLabel : children,
+    lockedByOther,
+  };
+}
+
 export function PendingActionButton({
   actionKey,
   formAction,
@@ -54,8 +76,13 @@ export function PendingActionButton({
   const group = useContext(PendingActionContext);
   const { pending } = useFormStatus();
   const pendingKey = group?.state.pendingKey ?? null;
-  const lockedByOther = pendingKey !== null && pendingKey !== actionKey;
-  const isPending = pending || pendingKey === actionKey;
+  const view = getPendingActionButtonView({
+    actionKey,
+    children,
+    pending,
+    pendingKey,
+    pendingLabel,
+  });
   const sawPending = useRef(false);
 
   useEffect(() => {
@@ -72,17 +99,17 @@ export function PendingActionButton({
       type="submit"
       formAction={formAction}
       onClick={(event) => {
-        if (lockedByOther) {
+        if (view.lockedByOther) {
           event.preventDefault();
           return;
         }
         group?.dispatch({ type: "start", key: actionKey });
         onClick?.(event);
       }}
-      disabled={lockedByOther || isPending}
+      disabled={view.disabled}
       className={className}
     >
-      {isPending ? pendingLabel : children}
+      {view.label}
     </button>
   );
 }

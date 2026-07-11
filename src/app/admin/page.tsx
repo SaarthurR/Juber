@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { FormField, SubmitButton } from "@/components/form-bits";
+import { FormField } from "@/components/form-bits";
+import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import {
   approveEventRequest,
   createEvent,
@@ -50,9 +51,13 @@ export default async function AdminPage() {
             </p>
           </div>
           <form action={importJcncEvents}>
-            <button className="rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-700 transition hover:bg-tint">
+            <PendingActionButton
+              actionKey="import-jcnc-events"
+              pendingLabel="Importing..."
+              className="rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-700 transition hover:bg-tint disabled:cursor-not-allowed disabled:opacity-60"
+            >
               Import JCNC events
-            </button>
+            </PendingActionButton>
           </form>
         </div>
 
@@ -102,23 +107,37 @@ export default async function AdminPage() {
                     )}
                   </div>
 
-                  <div className="flex shrink-0 flex-wrap gap-2 md:justify-end">
-                    <form action={approveEventRequest.bind(null, request.id)}>
-                      <button className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700">
-                        Approve
-                      </button>
-                    </form>
-                    <form action={rejectEventRequest.bind(null, request.id)}>
-                      <button className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-bold text-stone-600 transition hover:bg-stone-50">
-                        Reject
-                      </button>
-                    </form>
-                    <form action={deleteEventRequest.bind(null, request.id)}>
-                      <button className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-50">
-                        Delete
-                      </button>
-                    </form>
-                  </div>
+                  <PendingActionGroup>
+                    <div className="flex shrink-0 flex-wrap gap-2 md:justify-end">
+                      <form action={approveEventRequest.bind(null, request.id)}>
+                        <PendingActionButton
+                          actionKey={`approve-event-request-${request.id}`}
+                          pendingLabel="Approving..."
+                          className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Approve
+                        </PendingActionButton>
+                      </form>
+                      <form action={rejectEventRequest.bind(null, request.id)}>
+                        <PendingActionButton
+                          actionKey={`reject-event-request-${request.id}`}
+                          pendingLabel="Rejecting..."
+                          className="rounded-xl border border-stone-300 px-4 py-2.5 text-sm font-bold text-stone-600 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Reject
+                        </PendingActionButton>
+                      </form>
+                      <form action={deleteEventRequest.bind(null, request.id)}>
+                        <PendingActionButton
+                          actionKey={`delete-event-request-${request.id}`}
+                          pendingLabel="Deleting..."
+                          className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Delete
+                        </PendingActionButton>
+                      </form>
+                    </div>
+                  </PendingActionGroup>
                 </div>
               </div>
             ))}
@@ -142,7 +161,13 @@ export default async function AdminPage() {
               <FormField label="End date" name="end_date" type="date" />
             </div>
             <FormField label="Description" name="description" textarea />
-            <SubmitButton>Add event</SubmitButton>
+            <PendingActionButton
+              actionKey="add-event"
+              pendingLabel="Adding event..."
+              className="w-full rounded-xl bg-brand-600 px-5 py-4 font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Add event
+            </PendingActionButton>
           </form>
 
           <ul className="mt-5 space-y-2">
@@ -150,7 +175,13 @@ export default async function AdminPage() {
               <li key={e.id} className="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm">
                 <span>{e.name}</span>
                 <form action={deleteEvent.bind(null, e.id)}>
-                  <button className="text-red-600 hover:underline">Delete</button>
+                  <PendingActionButton
+                    actionKey={`delete-event-${e.id}`}
+                    pendingLabel="Deleting..."
+                    className="text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Delete
+                  </PendingActionButton>
                 </form>
               </li>
             ))}
@@ -192,7 +223,13 @@ export default async function AdminPage() {
                 ))}
               </select>
             </label>
-            <SubmitButton>Add location</SubmitButton>
+            <PendingActionButton
+              actionKey="add-location"
+              pendingLabel="Adding location..."
+              className="w-full rounded-xl bg-brand-600 px-5 py-4 font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Add location
+            </PendingActionButton>
           </form>
 
           <ul className="mt-5 space-y-2">
@@ -203,7 +240,13 @@ export default async function AdminPage() {
                   <span className="text-stone-400">({p.kind})</span>
                 </span>
                 <form action={deletePlace.bind(null, p.id)}>
-                  <button className="text-red-600 hover:underline">Delete</button>
+                  <PendingActionButton
+                    actionKey={`delete-place-${p.id}`}
+                    pendingLabel="Deleting..."
+                    className="text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Delete
+                  </PendingActionButton>
                 </form>
               </li>
             ))}

@@ -91,7 +91,7 @@ export default async function MobilePublicProfilePage({
               <input type="hidden" name="base" value="/m/messages" />
               <PendingActionButton
                 actionKey={`mobile-profile-message-${profile.id}`}
-                pendingLabel="Opening..."
+                pendingLabel="Opening chat..."
                 className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-3.5 text-[14px] font-bold text-white transition active:scale-[0.98]"
               >
                 <MessageCircle size={17} />

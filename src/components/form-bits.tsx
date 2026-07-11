@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
+import { PendingActionButton } from "@/components/pending-action-button";
 import type { EventRow, Place } from "@/lib/types";
 
 export function FormField({
@@ -100,15 +100,22 @@ export function PlacesDatalist({ places }: { places: Place[] }) {
   );
 }
 
-export function SubmitButton({ children }: { children: React.ReactNode }) {
-  const { pending } = useFormStatus();
+export function SubmitButton({
+  children,
+  actionKey = "submit",
+  pendingLabel = "Saving...",
+}: {
+  children: React.ReactNode;
+  actionKey?: string;
+  pendingLabel?: string;
+}) {
   return (
-    <button
-      type="submit"
-      disabled={pending}
+    <PendingActionButton
+      actionKey={actionKey}
+      pendingLabel={pendingLabel}
       className="w-full rounded-xl bg-brand-600 px-5 py-4 font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
     >
-      {pending ? "Saving…" : children}
-    </button>
+      {children}
+    </PendingActionButton>
   );
 }

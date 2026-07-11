@@ -5,6 +5,7 @@ import { Phone, MessageCircle, X } from "lucide-react";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { openConversation } from "@/app/messages/actions";
+import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 
 type Method = "phone" | "whatsapp" | "message" | null;
 
@@ -92,17 +93,21 @@ export function ContactSheet({
               preferred={preferredContact === "whatsapp"}
             />
           )}
-          <form action={openConversation.bind(null, driverId)}>
-            <input type="hidden" name="ride_id" value={rideId} />
-            <input type="hidden" name="base" value="/m/messages" />
-            <ContactRow
-              as="button"
-              icon={<MessageCircle size={17} className="text-brand-600" />}
-              label="In-app message"
-              value={`Message ${firstName} on Juber`}
-              preferred={preferredContact === "message"}
-            />
-          </form>
+          <PendingActionGroup>
+            <form action={openConversation.bind(null, driverId)}>
+              <input type="hidden" name="ride_id" value={rideId} />
+              <input type="hidden" name="base" value="/m/messages" />
+              <ContactRow
+                as="button"
+                actionKey={`mobile-contact-message-${rideId}-${driverId}`}
+                pendingLabel="Opening chat..."
+                icon={<MessageCircle size={17} className="text-brand-600" />}
+                label="In-app message"
+                value={`Message ${firstName} on Juber`}
+                preferred={preferredContact === "message"}
+              />
+            </form>
+          </PendingActionGroup>
         </div>
       </BottomSheet>
     </>
@@ -113,6 +118,8 @@ function ContactRow({
   href,
   external,
   as = "a",
+  actionKey,
+  pendingLabel,
   icon,
   label,
   value,
@@ -121,6 +128,8 @@ function ContactRow({
   href?: string;
   external?: boolean;
   as?: "a" | "button";
+  actionKey?: string;
+  pendingLabel?: string;
   icon: React.ReactNode;
   label: string;
   value: string;
@@ -154,6 +163,18 @@ function ContactRow({
   }`;
 
   if (as === "button") {
+    if (actionKey && pendingLabel) {
+      return (
+        <PendingActionButton
+          actionKey={actionKey}
+          pendingLabel={pendingLabel}
+          className={`${className} disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          {inner}
+        </PendingActionButton>
+      );
+    }
+
     return (
       <button type="submit" className={className}>
         {inner}

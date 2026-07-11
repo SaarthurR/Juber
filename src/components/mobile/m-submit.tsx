@@ -1,16 +1,23 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
+import { PendingActionButton } from "@/components/pending-action-button";
 
-export function MSubmitButton({ children }: { children: React.ReactNode }) {
-  const { pending } = useFormStatus();
+export function MSubmitButton({
+  children,
+  actionKey = "mobile-submit",
+  pendingLabel = "Saving...",
+}: {
+  children: React.ReactNode;
+  actionKey?: string;
+  pendingLabel?: string;
+}) {
   return (
-    <button
-      type="submit"
-      disabled={pending}
+    <PendingActionButton
+      actionKey={actionKey}
+      pendingLabel={pendingLabel}
       className="h-[54px] w-full rounded-[14px] bg-brand-600 text-[15px] font-bold text-white shadow-[0_14px_24px_-12px_rgba(166,83,41,0.7)] transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60"
     >
-      {pending ? "Saving…" : children}
-    </button>
+      {children}
+    </PendingActionButton>
   );
 }

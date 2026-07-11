@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Phone, MessageCircle } from "lucide-react";
 import { openConversation } from "@/app/messages/actions";
+import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 
 type ContactModalProps = {
   driverName: string;
@@ -104,23 +105,29 @@ export function ContactModal({
                 </a>
               )}
 
-              <form action={openConversation.bind(null, driverId)}>
-                <input type="hidden" name="ride_id" value={rideId} />
-                <button type="submit" className="flex w-full items-center gap-4 group">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50">
-                    <MessageCircle size={18} className="text-brand-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-semibold text-stone-900 group-hover:text-brand-600 transition">
-                      Message
-                      {preferredContact === "message" && (
-                        <span className="ml-2 text-[11px] font-medium text-emerald-600">preferred</span>
-                      )}
-                    </p>
-                    <p className="text-sm text-stone-500">Send {driverName} an in-app message</p>
-                  </div>
-                </button>
-              </form>
+              <PendingActionGroup>
+                <form action={openConversation.bind(null, driverId)}>
+                  <input type="hidden" name="ride_id" value={rideId} />
+                  <PendingActionButton
+                    actionKey={`contact-message-${rideId}-${driverId}`}
+                    pendingLabel="Opening chat..."
+                    className="group flex w-full items-center gap-4 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-50">
+                      <MessageCircle size={18} className="text-brand-600" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-sm font-semibold text-stone-900 transition group-hover:text-brand-600">
+                        Message
+                        {preferredContact === "message" && (
+                          <span className="ml-2 text-[11px] font-medium text-emerald-600">preferred</span>
+                        )}
+                      </p>
+                      <p className="text-sm text-stone-500">Send {driverName} an in-app message</p>
+                    </div>
+                  </PendingActionButton>
+                </form>
+              </PendingActionGroup>
             </div>
           </div>
         </div>

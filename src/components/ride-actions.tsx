@@ -29,7 +29,7 @@ export function ReserveSeatButton({
     <form action={formAction}>
       <PendingActionButton
         actionKey={`reserve-${rideId}`}
-        pendingLabel="Reserving…"
+        pendingLabel="Submitting..."
         className="w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {label}
@@ -66,7 +66,7 @@ export function PassengerStatusButtons({
         <form action={confirmAction}>
           <PendingActionButton
             actionKey={`confirm-${passengerId}`}
-            pendingLabel="…"
+            pendingLabel="Confirming..."
             className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Confirm
@@ -75,7 +75,7 @@ export function PassengerStatusButtons({
         <form action={declineAction}>
           <PendingActionButton
             actionKey={`decline-${passengerId}`}
-            pendingLabel="…"
+            pendingLabel="Declining..."
             className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-50 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Decline
@@ -447,7 +447,7 @@ export function LostItemMessageButton({
       {base && <input type="hidden" name="base" value={base} />}
       <PendingActionButton
         actionKey={`lost-item-${rideId}-${otherUserId}`}
-        pendingLabel="Opening..."
+        pendingLabel="Opening chat..."
         className="flex w-full items-center justify-center rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-bold text-stone-700 transition hover:bg-stone-50 active:scale-[0.98]"
       >
         {label}

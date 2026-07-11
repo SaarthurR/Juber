@@ -6,6 +6,7 @@ import { updateProfile } from "@/app/profile/actions";
 import { FormField, SubmitButton } from "@/components/form-bits";
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { authCallbackDestination } from "@/lib/route-targets";
+import { PendingActionButton } from "@/components/pending-action-button";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +42,13 @@ export default async function EditProfilePage({
 
   return (
     <div className="mx-auto flex max-w-4xl flex-wrap-reverse gap-12 px-4 py-10 sm:px-6">
-      <form action={updateProfile} className="min-w-[300px] max-w-[560px] flex-[2] space-y-8">
-        {nextValues.length === 1 && <input type="hidden" name="next" value={safeNext} />}
-        <div>
-          <h1 className="text-[30px] font-extrabold tracking-tight text-ink">Edit profile</h1>
-          <div className="mt-5 h-px bg-[#efece6]" />
-        </div>
+      <div className="min-w-[300px] max-w-[560px] flex-[2]">
+        <form action={updateProfile} className="space-y-8">
+          {nextValues.length === 1 && <input type="hidden" name="next" value={safeNext} />}
+          <div>
+            <h1 className="text-[30px] font-extrabold tracking-tight text-ink">Edit profile</h1>
+            <div className="mt-5 h-px bg-[#efece6]" />
+          </div>
 
         {(sp.onboarding === "1" || sp.contact_required === "1") && (
           <div className="rounded-xl border border-brand-200 bg-tint px-4 py-3 text-sm font-semibold text-brand-700">
@@ -134,18 +136,19 @@ export default async function EditProfilePage({
           <FormField label="" name="bio" textarea defaultValue={profile?.bio ?? ""} placeholder="A short intro for other riders" />
         </div>
 
-        <SubmitButton>Save changes</SubmitButton>
+          <SubmitButton actionKey="profile-save" pendingLabel="Saving...">Save changes</SubmitButton>
+        </form>
 
-        <div className="border-t border-[#efece6] pt-5 text-center">
-          <button
-            formAction="/auth/signout"
-            formMethod="post"
-            className="text-sm text-stone-400 transition hover:text-red-500"
+        <form action="/auth/signout" method="post" className="mt-8 border-t border-[#efece6] pt-5 text-center">
+          <PendingActionButton
+            actionKey="profile-signout"
+            pendingLabel="Signing out..."
+            className="text-sm text-stone-400 transition hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Sign out
-          </button>
-        </div>
-      </form>
+          </PendingActionButton>
+        </form>
+      </div>
 
       {/* Avatar column */}
       <div className="flex min-w-[200px] flex-1 flex-col items-center pt-2 sm:pt-14">

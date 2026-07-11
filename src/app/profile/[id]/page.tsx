@@ -8,6 +8,7 @@ import { RideCard, RequestCard } from "@/components/ride-card";
 import { openConversation } from "@/app/messages/actions";
 import { getContact } from "@/lib/contact";
 import { getProfileContactContext } from "@/lib/profile-contact";
+import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import type { Profile, RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -208,12 +209,18 @@ export default async function PublicProfilePage({
             <Pencil size={15} /> Edit profile
           </Link>
         ) : user && messagingRideId ? (
-          <form action={openConversation.bind(null, profile.id)} className="mt-3.5">
-            <input type="hidden" name="ride_id" value={messagingRideId} />
-            <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700">
-              <MessageCircle size={15} /> Message {profile.full_name?.split(" ")[0] ?? "member"}
-            </button>
-          </form>
+          <PendingActionGroup>
+            <form action={openConversation.bind(null, profile.id)} className="mt-3.5">
+              <input type="hidden" name="ride_id" value={messagingRideId} />
+              <PendingActionButton
+                actionKey={`profile-message-${profile.id}`}
+                pendingLabel="Opening chat..."
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <MessageCircle size={15} /> Message {profile.full_name?.split(" ")[0] ?? "member"}
+              </PendingActionButton>
+            </form>
+          </PendingActionGroup>
         ) : user ? (
           <Link
             href="/rides"

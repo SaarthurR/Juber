@@ -1,11 +1,18 @@
 "use client";
 
+import { useEffect, useReducer } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { RideCard, RequestCard } from "@/components/ride-card";
 import { RideFilters } from "@/components/ride-filters";
+import {
+  createRidesTabHref,
+  getRidesTabFromSearch,
+  ridesTabReducer,
+  type RidesTab,
+} from "@/lib/rides-tab-state";
 import type { RideRequestWithRider, RideWithDriver } from "@/lib/types";
 
 export function RidesView({
@@ -20,18 +27,33 @@ export function RidesView({
   signedIn: boolean;
 }) {
   const params = useSearchParams();
-  const showRequests = params.get("tab") === "requests";
+  const paramsString = params.toString();
+  const pathname = usePathname();
+  const [tabState, dispatchTab] = useReducer(ridesTabReducer, {
+    visibleTab: getRidesTabFromSearch(paramsString),
+  });
+  const showRequests = tabState.visibleTab === "requests";
   const hasFilters = Boolean(
     params.get("from") || params.get("to") || params.get("date") || params.get("trip"),
   );
 
-  function setTab(tab: "carpools" | "requests") {
-    const next = new URLSearchParams(params.toString());
-    if (tab === "requests") next.set("tab", "requests");
-    else next.delete("tab");
+  useEffect(() => {
+    dispatchTab({ type: "sync", search: paramsString });
+  }, [paramsString]);
 
-    const query = next.toString();
-    window.history.pushState(null, "", query ? `/rides?${query}` : "/rides");
+  useEffect(() => {
+    function syncFromHistory() {
+      dispatchTab({ type: "sync", search: window.location.search });
+    }
+
+    window.addEventListener("popstate", syncFromHistory);
+    return () => window.removeEventListener("popstate", syncFromHistory);
+  }, []);
+
+  function setTab(tab: RidesTab) {
+    dispatchTab({ type: "select", tab });
+    const href = createRidesTabHref(pathname || "/rides", window.location.search, tab);
+    window.history.pushState({ ridesTab: tab }, "", href);
   }
 
   return (
@@ -45,12 +67,14 @@ export function RidesView({
           <TabButton
             active={!showRequests}
             label="Carpools"
+            controls="rides-carpools-panel"
             onClick={() => setTab("carpools")}
           />
           <TabButton
             active={showRequests}
             label="Ride requests"
             badge={requestCount}
+            controls="rides-requests-panel"
             onClick={() => setTab("requests")}
           />
         </div>
@@ -83,16 +107,25 @@ export function RidesView({
         </div>
       )}
 
-      <div className="mt-5 grid gap-4">
-        {showRequests
-          ? requests.length
-            ? requests.map((request) => (
-                <RequestCard key={request.id} request={request} />
-              ))
-            : <Empty kind="requests" signedIn={signedIn} hasFilters={hasFilters} />
-          : rides.length
-            ? rides.map((ride) => <RideCard key={ride.id} ride={ride} />)
-            : <Empty kind="rides" signedIn={signedIn} hasFilters={hasFilters} />}
+      <div
+        id={showRequests ? "rides-requests-panel" : "rides-carpools-panel"}
+        role="tabpanel"
+        aria-label={showRequests ? "Ride requests" : "Carpools"}
+        className="mt-5 grid gap-4"
+      >
+        {showRequests ? (
+          requests.length ? (
+            requests.map((request) => (
+              <RequestCard key={request.id} request={request} />
+            ))
+          ) : (
+            <Empty kind="requests" signedIn={signedIn} hasFilters={hasFilters} />
+          )
+        ) : rides.length ? (
+          rides.map((ride) => <RideCard key={ride.id} ride={ride} />)
+        ) : (
+          <Empty kind="rides" signedIn={signedIn} hasFilters={hasFilters} />
+        )}
       </div>
     </>
   );
@@ -102,11 +135,13 @@ function TabButton({
   active,
   label,
   badge,
+  controls,
   onClick,
 }: {
   active: boolean;
   label: string;
   badge?: number;
+  controls: string;
   onClick: () => void;
 }) {
   return (
@@ -114,6 +149,7 @@ function TabButton({
       type="button"
       role="tab"
       aria-selected={active}
+      aria-controls={controls}
       onClick={onClick}
       className={`flex items-center justify-center gap-2 rounded-lg px-[18px] py-2 text-sm font-bold transition ${
         active
