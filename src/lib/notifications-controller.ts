@@ -9,10 +9,17 @@ export type NotificationSnapshot = {
 
 export type NotificationBulkStatus = "idle" | "pending" | "success" | "error";
 
+export type NotificationRowContext = {
+  id: string;
+  title: string;
+  destination: string;
+};
+
 export type NotificationWriteOperation =
   | {
       kind: "row";
       id: string;
+      context: NotificationRowContext;
       operationId: number;
       startedRevision: number;
     }
@@ -34,6 +41,7 @@ export type NotificationControllerState = {
   bulkStatusMessage: string | null;
   rowErrorId: string | null;
   rowError: string | null;
+  rowErrorContext: NotificationRowContext | null;
 };
 
 export type NotificationControllerAction =
@@ -41,7 +49,12 @@ export type NotificationControllerAction =
   | { type: "close" }
   | { type: "reconcile"; snapshot: NotificationSnapshot }
   | { type: "reconcile-failed"; error: string }
-  | { type: "mark-one-start"; id: string; operationId: number }
+  | {
+      type: "mark-one-start";
+      id: string;
+      operationId: number;
+      context: NotificationRowContext;
+    }
   | { type: "mark-one-success"; id: string; operationId: number; readAt: string }
   | { type: "mark-one-failed"; id: string; operationId: number; error: string }
   | { type: "mark-all-start"; operationId: number }
@@ -63,6 +76,7 @@ export function createNotificationControllerState(
     bulkStatusMessage: null,
     rowErrorId: null,
     rowError: null,
+    rowErrorContext: null,
   };
 }
 
@@ -79,6 +93,7 @@ export function notificationControllerReducer(
       if (action.snapshot.error) {
         return failClosedState(state, action.snapshot.error);
       }
+      const rowError = reconcileRowError(state, action.snapshot);
       return {
         ...state,
         items: action.snapshot.items,
@@ -89,8 +104,9 @@ export function notificationControllerReducer(
         bulkStatus: "idle",
         bulkError: null,
         bulkStatusMessage: null,
-        rowErrorId: null,
-        rowError: null,
+        rowErrorId: rowError?.context.id ?? null,
+        rowError: rowError?.error ?? null,
+        rowErrorContext: rowError?.context ?? null,
       };
     }
     case "reconcile-failed":
@@ -102,6 +118,7 @@ export function notificationControllerReducer(
         operation: {
           kind: "row",
           id: action.id,
+          context: action.context,
           operationId: action.operationId,
           startedRevision: state.authoritativeRevision,
         },
@@ -110,6 +127,7 @@ export function notificationControllerReducer(
         bulkStatusMessage: null,
         rowErrorId: null,
         rowError: null,
+        rowErrorContext: null,
       };
     case "mark-one-success": {
       if (!matchesRowOperation(state.operation, action.id, action.operationId)) {
@@ -129,6 +147,7 @@ export function notificationControllerReducer(
         operation: null,
         rowErrorId: null,
         rowError: null,
+        rowErrorContext: null,
       };
     }
     case "mark-one-failed":
@@ -140,6 +159,7 @@ export function notificationControllerReducer(
         operation: null,
         rowErrorId: action.id,
         rowError: action.error,
+        rowErrorContext: state.operation.context,
       };
     case "mark-all-start":
       if (state.operation) return state;
@@ -155,6 +175,7 @@ export function notificationControllerReducer(
         bulkStatusMessage: null,
         rowErrorId: null,
         rowError: null,
+        rowErrorContext: null,
       };
     case "mark-all-success":
       if (!matchesBulkOperation(state.operation, action.operationId)) {
@@ -176,6 +197,7 @@ export function notificationControllerReducer(
         bulkStatusMessage: "All notifications marked read.",
         rowErrorId: null,
         rowError: null,
+        rowErrorContext: null,
       };
     case "mark-all-failed":
       if (!matchesBulkOperation(state.operation, action.operationId)) {
@@ -200,14 +222,19 @@ function failClosedState(
     items: [],
     unread: 0,
     loadError: error,
-    authoritativeRevision: state.authoritativeRevision + 1,
-    operation: null,
-    bulkStatus: "idle",
-    bulkError: null,
-    bulkStatusMessage: null,
-    rowErrorId: null,
-    rowError: null,
   };
+}
+
+function reconcileRowError(
+  state: NotificationControllerState,
+  snapshot: NotificationSnapshot,
+): { context: NotificationRowContext; error: string } | null {
+  const context = state.rowErrorContext;
+  const error = state.rowError;
+  if (!context || !error) return null;
+  return notificationIsStillUnread(context.id, snapshot)
+    ? { context, error }
+    : null;
 }
 
 function reconcileOperation(
@@ -216,12 +243,17 @@ function reconcileOperation(
 ): NotificationWriteOperation | null {
   if (!operation) return null;
   if (operation.kind === "bulk") return snapshot.unread === 0 ? null : operation;
-  const row = snapshot.items.find((item) => item.id === operation.id);
-  if (row) return row.read_at !== null ? null : operation;
+  return notificationIsStillUnread(operation.id, snapshot) ? operation : null;
+}
+
+function notificationIsStillUnread(
+  id: string,
+  snapshot: NotificationSnapshot,
+): boolean {
+  const row = snapshot.items.find((item) => item.id === id);
+  if (row) return row.read_at === null;
   const completeUnreadIds = snapshot.unreadIds;
-  return completeUnreadIds && !completeUnreadIds.includes(operation.id)
-    ? null
-    : operation;
+  return completeUnreadIds ? completeUnreadIds.includes(id) : true;
 }
 
 function matchesRowOperation(
@@ -258,6 +290,17 @@ export function notificationRowPending(
   id: string,
 ): boolean {
   return state.operation?.kind === "row" && state.operation.id === id;
+}
+
+export function notificationEvictedRowRetry(
+  state: NotificationControllerState,
+): { context: NotificationRowContext; error: string } | null {
+  const context = state.rowErrorContext;
+  const error = state.rowError;
+  if (!context || !error) return null;
+  return state.items.some((item) => item.id === context.id)
+    ? null
+    : { context, error };
 }
 
 export function notificationControllerKey(snapshot: NotificationSnapshot): string {

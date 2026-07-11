@@ -9,6 +9,7 @@ import { MAvatar } from "@/components/mobile/m-avatar";
 import {
   NotificationBulkReadControl,
   NotificationBulkReadFeedback,
+  NotificationEvictedRowRetry,
   NotificationRowActions,
 } from "@/components/notification-controls";
 import { markNotificationRead, markNotificationsRead } from "@/app/messages/actions";
@@ -24,11 +25,13 @@ import {
   notificationCancellationReason,
   notificationControllerKey,
   notificationControllerReducer,
+  notificationEvictedRowRetry,
   notificationRowPending,
   notificationTitle,
   notificationWriteErrorMessage,
   notificationWritePending,
   subscribeToNotificationChanges,
+  type NotificationRowContext,
   type NotificationSnapshot,
 } from "@/lib/notifications-controller";
 import { mobileNotificationDestination } from "@/lib/route-targets";
@@ -227,37 +230,47 @@ function MNotificationBellController({
     }
   }
 
-  async function markOneAndNavigate(n: NotificationWithContext, href: string) {
+  async function markOneAndNavigate(
+    context: NotificationRowContext,
+    alreadyRead: boolean,
+  ) {
     if (notificationWritePending(state)) return;
-    if (n.read_at) {
+    if (alreadyRead) {
       dispatch({ type: "close" });
-      router.push(href);
+      router.push(context.destination);
       return;
     }
     const operationId = ++operationSequence.current;
-    dispatch({ type: "mark-one-start", id: n.id, operationId });
+    dispatch({
+      type: "mark-one-start",
+      id: context.id,
+      operationId,
+      context,
+    });
     try {
-      await markNotificationRead(n.id);
+      await markNotificationRead(context.id);
       if (!active.current) return;
       dispatch({
         type: "mark-one-success",
-        id: n.id,
+        id: context.id,
         operationId,
         readAt: new Date().toISOString(),
       });
       dispatch({ type: "close" });
-      router.push(href);
+      router.push(context.destination);
       router.refresh();
     } catch {
       if (!active.current) return;
       dispatch({
         type: "mark-one-failed",
-        id: n.id,
+        id: context.id,
         operationId,
         error: notificationWriteErrorMessage("row"),
       });
     }
   }
+
+  const evictedRetry = notificationEvictedRowRetry(state);
 
   return (
     <>
@@ -298,6 +311,16 @@ function MNotificationBellController({
             {state.loadError}
           </p>
         ) : null}
+        {evictedRetry ? (
+          <NotificationEvictedRowRetry
+            title={evictedRetry.context.title}
+            error={evictedRetry.error}
+            pending={notificationWritePending(state)}
+            onRetry={() =>
+              void markOneAndNavigate(evictedRetry.context, false)
+            }
+          />
+        ) : null}
 
         {state.items.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-warm">You&apos;re all caught up.</p>
@@ -310,7 +333,16 @@ function MNotificationBellController({
                 pending={notificationRowPending(state, n.id)}
                 disabled={notificationWritePending(state)}
                 error={state.rowErrorId === n.id ? state.rowError : null}
-                onNavigate={(href) => void markOneAndNavigate(n, href)}
+                onNavigate={(href) =>
+                  void markOneAndNavigate(
+                    {
+                      id: n.id,
+                      title: notificationTitle(n),
+                      destination: href,
+                    },
+                    n.read_at !== null,
+                  )
+                }
               />
             ))}
           </ul>

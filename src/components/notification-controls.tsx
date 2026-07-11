@@ -102,3 +102,34 @@ export function NotificationRowActions({
     </>
   );
 }
+
+export function NotificationEvictedRowRetry({
+  title,
+  error,
+  pending,
+  onRetry,
+}: {
+  title: string;
+  error: string;
+  pending: boolean;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700"
+    >
+      <span>{error}</span>
+      <button
+        type="button"
+        onClick={onRetry}
+        disabled={pending}
+        aria-busy={pending || undefined}
+        aria-label={`Retry marking ${title} read`}
+        className="shrink-0 rounded-full bg-white px-3 py-1 font-bold text-red-700 disabled:cursor-wait disabled:opacity-60"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}

@@ -17,6 +17,7 @@ import {
   notificationBulkControlStatus,
   notificationControllerKey,
   notificationControllerReducer,
+  notificationTitle,
   notificationWriteErrorMessage,
   notificationWritePending,
   subscribeToNotificationChanges,
@@ -305,13 +306,22 @@ function NotificationBellController({
     }
   }
 
-  async function markOneRead(id: string) {
+  async function markOneRead(id: string, destination: string) {
     if (notificationWritePending(state)) return;
     const target = state.items.find((n) => n.id === id);
     if (!target || target.read_at) return;
 
     const operationId = ++operationSequence.current;
-    dispatch({ type: "mark-one-start", id, operationId });
+    dispatch({
+      type: "mark-one-start",
+      id,
+      operationId,
+      context: {
+        id,
+        title: notificationTitle(target),
+        destination,
+      },
+    });
     const readAt = new Date().toISOString();
     const supabase = createClient();
     const { error } = await supabase
@@ -421,7 +431,7 @@ function NotificationBellController({
                     prefetch
                     onClick={() => {
                       dispatch({ type: "close" });
-                      void markOneRead(n.id);
+                      void markOneRead(n.id, href);
                     }}
                     className="block"
                   >
