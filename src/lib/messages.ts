@@ -365,6 +365,24 @@ export function replaceThreadSummary(
   ]);
 }
 
+export function mergeFullThreadSnapshot(
+  previous: ThreadSummary[],
+  full: ThreadSummary[],
+  startedVersions: ReadonlyMap<string, number>,
+  currentVersions: ReadonlyMap<string, number>,
+): ThreadSummary[] {
+  const previousById = new Map(previous.map((thread) => [thread.id, thread]));
+  const fullById = new Map(full.map((thread) => [thread.id, thread]));
+  const ids = new Set([...previousById.keys(), ...fullById.keys()]);
+  const merged = [...ids].flatMap((id) => {
+    const targetedAdvanced =
+      (currentVersions.get(id) ?? 0) > (startedVersions.get(id) ?? 0);
+    const thread = targetedAdvanced ? previousById.get(id) : fullById.get(id);
+    return thread ? [thread] : [];
+  });
+  return sortThreadSummaries(merged);
+}
+
 export function isCurrentCatchUp(started: number, current: number): boolean {
   return started === current;
 }
@@ -397,6 +415,30 @@ export function archiveRefreshDelay(
 ): number | null {
   if (!departAt || archiveState !== "active") return null;
   return Math.max(0, timestampEpoch(departAt) - timestampEpoch(now));
+}
+
+export function lifecycleRefreshTarget(
+  kind: ThreadContext["kind"],
+  id: string,
+): { table: "rides" | "ride_requests"; filter: string } | null {
+  if (kind === "ride") return { table: "rides", filter: `id=eq.${id}` };
+  if (kind === "request") {
+    return { table: "ride_requests", filter: `id=eq.${id}` };
+  }
+  return null;
+}
+
+export function archiveTimeoutChunk(
+  remaining: number,
+  maxDelay = 2_147_483_647,
+): { delay: number; refreshAtEnd: boolean } {
+  if (remaining > maxDelay) {
+    return { delay: maxDelay, refreshAtEnd: false };
+  }
+  return {
+    delay: Math.min(Math.max(0, remaining) + 50, maxDelay),
+    refreshAtEnd: true,
+  };
 }
 
 export function messageMatchesRetry(

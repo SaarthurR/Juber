@@ -11,9 +11,12 @@ import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import {
   archiveRefreshDelay,
+  archiveTimeoutChunk,
   isCurrentCatchUp,
+  lifecycleRefreshTarget,
   mergeMessageWindow,
 } from "@/lib/messages";
+import type { ThreadContext } from "@/lib/messages";
 import type { Message, Profile } from "@/lib/types";
 
 type ProfileBase = "/profile" | "/m/profile";
@@ -34,6 +37,8 @@ export function MessageThread({
   archiveState,
   hiddenAt,
   departAt,
+  contextKind,
+  contextId,
 }: {
   conversationId: string;
   currentUserId: string;
@@ -45,6 +50,8 @@ export function MessageThread({
   archiveState: "active" | "archived";
   hiddenAt: string | null;
   departAt: string | null;
+  contextKind: ThreadContext["kind"];
+  contextId: string;
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -107,7 +114,7 @@ export function MessageThread({
       mergeIncoming((data as Message[] | null) ?? []);
       setSyncError(null);
     }
-    const channel = supabase
+    let channel = supabase
       .channel(`messages:${conversationId}`)
       .on(
         "postgres_changes",
@@ -134,13 +141,26 @@ export function MessageThread({
           const msg = payload.new as Message;
           mergeIncoming([msg]);
         },
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          void catchUp();
-          router.refresh();
-        }
-      });
+      );
+    const lifecycleTarget = lifecycleRefreshTarget(contextKind, contextId);
+    if (lifecycleTarget) {
+      channel = channel.on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: lifecycleTarget.table,
+          filter: lifecycleTarget.filter,
+        },
+        () => router.refresh(),
+      );
+    }
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        void catchUp();
+        router.refresh();
+      }
+    });
 
     function onVisible() {
       if (document.visibilityState === "visible") {
@@ -155,19 +175,33 @@ export function MessageThread({
       document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
-  }, [conversationId, hiddenAt, router]);
+  }, [contextId, contextKind, conversationId, hiddenAt, router]);
 
   useEffect(() => {
-    const delay = archiveRefreshDelay(
-      departAt,
-      archiveState,
-      new Date().toISOString(),
-    );
-    if (delay === null) return;
-    const timeout = window.setTimeout(() => {
-      router.refresh();
-    }, Math.min(delay + 50, 2_147_483_647));
-    return () => window.clearTimeout(timeout);
+    let cancelled = false;
+    let timeout: number | undefined;
+    function schedule() {
+      const remaining = archiveRefreshDelay(
+        departAt,
+        archiveState,
+        new Date().toISOString(),
+      );
+      if (cancelled || remaining === null) return;
+      const chunk = archiveTimeoutChunk(remaining);
+      timeout = window.setTimeout(() => {
+        if (cancelled) return;
+        if (chunk.refreshAtEnd) {
+          router.refresh();
+        } else {
+          schedule();
+        }
+      }, chunk.delay);
+    }
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timeout !== undefined) window.clearTimeout(timeout);
+    };
   }, [archiveState, departAt, router]);
 
   // Mark inbound messages read. Realtime pushes mutate `messages` frequently, so

@@ -52,6 +52,8 @@ export default async function ThreadPage({
       archiveState={thread.archiveState}
       hiddenAt={thread.hiddenAt}
       departAt={thread.context.kind === "missing" ? null : thread.context.departAt}
+      contextKind={thread.context.kind}
+      contextId={thread.context.id}
     />
   );
 }

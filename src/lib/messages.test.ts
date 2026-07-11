@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  archiveTimeoutChunk,
   buildThreadSummaries,
   failClosedNotificationState,
   isCurrentCatchUp,
+  lifecycleRefreshTarget,
   loadVisibleNotificationIds,
+  mergeFullThreadSnapshot,
   mergeMessageWindow,
   messageMatchesRetry,
   newestThreadMessages,
@@ -409,4 +412,63 @@ test("notification detail failure clears stale state", () => {
   assert.deepEqual(result.items, []);
   assert.equal(result.unread, 0);
   assert.equal(result.error, "Could not refresh notifications.");
+});
+
+test("full and per-conversation refreshes converge in either response order", () => {
+  const [a0] = summaries({ conversationId: "a", messages: [], unread: 0 });
+  const [b0] = summaries({ conversationId: "b", messages: [], unread: 0 });
+  const [a1] = summaries({
+    conversationId: "a",
+    messages: [message("a-new", "a", "2026-07-11T10:01:00.000Z")],
+    unread: 1,
+  });
+  const [b1] = summaries({
+    conversationId: "b",
+    messages: [message("b-new", "b", "2026-07-11T10:02:00.000Z")],
+    unread: 1,
+  });
+  const started = new Map([["a", 0], ["b", 0]]);
+  const current = new Map([["a", 1], ["b", 1]]);
+
+  for (const order of [[a1, b1], [b1, a1]]) {
+    let targeted = [a0, b0];
+    for (const summary of order) {
+      targeted = replaceThreadSummary(targeted, summary);
+    }
+    const result = mergeFullThreadSnapshot(targeted, [a0, b0], started, current);
+    const byId = new Map(result.map((thread) => [thread.id, thread]));
+    assert.equal(byId.get("a")?.last?.id, "a-new");
+    assert.equal(byId.get("b")?.last?.id, "b-new");
+    assert.equal(byId.get("a")?.unread, 1);
+    assert.equal(byId.get("b")?.unread, 1);
+  }
+});
+
+test("lifecycle refresh target selects only the thread context table", () => {
+  assert.deepEqual(lifecycleRefreshTarget("ride", "ride-1"), {
+    table: "rides",
+    filter: "id=eq.ride-1",
+  });
+  assert.deepEqual(lifecycleRefreshTarget("request", "request-1"), {
+    table: "ride_requests",
+    filter: "id=eq.request-1",
+  });
+  assert.equal(lifecycleRefreshTarget("missing", "missing-1"), null);
+});
+
+test("archive timer chunks long delays until the real boundary", () => {
+  const max = 1_000;
+
+  assert.deepEqual(archiveTimeoutChunk(2_100, max), {
+    delay: 1_000,
+    refreshAtEnd: false,
+  });
+  assert.deepEqual(archiveTimeoutChunk(1_100, max), {
+    delay: 1_000,
+    refreshAtEnd: false,
+  });
+  assert.deepEqual(archiveTimeoutChunk(100, max), {
+    delay: 150,
+    refreshAtEnd: true,
+  });
 });

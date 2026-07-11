@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import type { Message } from "@/lib/types";
 import {
   loadThreadSummaries,
+  mergeFullThreadSnapshot,
   nextArchiveRefreshDelay,
   replaceThreadSummary,
   type ThreadSummary,
@@ -62,10 +63,18 @@ export function MessagesList({
 
   const refreshThreads = useCallback(async () => {
     const version = ++fullRefreshVersion.current;
+    const startedVersions = new Map(threadRefreshVersions.current);
     try {
       const next = await loadThreadSummaries(createClient(), userId);
       if (version !== fullRefreshVersion.current) return;
-      setThreads(next);
+      setThreads((previous) =>
+        mergeFullThreadSnapshot(
+          previous,
+          next,
+          startedVersions,
+          threadRefreshVersions.current,
+        ),
+      );
       setLoadError(null);
     } catch {
       if (version !== fullRefreshVersion.current) return;
@@ -75,7 +84,6 @@ export function MessagesList({
 
   const refreshThread = useCallback(async (conversationId: string) => {
     const version = (threadRefreshVersions.current.get(conversationId) ?? 0) + 1;
-    const fullVersion = fullRefreshVersion.current;
     threadRefreshVersions.current.set(conversationId, version);
     try {
       const [nextThread] = await loadThreadSummaries(
@@ -83,10 +91,7 @@ export function MessagesList({
         userId,
         conversationId,
       );
-      if (
-        fullVersion !== fullRefreshVersion.current ||
-        threadRefreshVersions.current.get(conversationId) !== version
-      ) {
+      if (threadRefreshVersions.current.get(conversationId) !== version) {
         return;
       }
       setThreads((prev) => {
@@ -103,7 +108,6 @@ export function MessagesList({
   useEffect(() => {
     const supabase = createClient();
     function refreshExactThread(conversationId: string) {
-      fullRefreshVersion.current += 1;
       void refreshThread(conversationId);
     }
     const channel = supabase
