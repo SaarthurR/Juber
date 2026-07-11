@@ -6,7 +6,7 @@ import { updateProfile } from "@/app/profile/actions";
 import { FormField, SubmitButton } from "@/components/form-bits";
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { authCallbackDestination } from "@/lib/route-targets";
-import { PendingActionButton } from "@/components/pending-action-button";
+import { SignOutForm } from "@/components/sign-out-form";
 
 export const dynamic = "force-dynamic";
 
@@ -139,15 +139,7 @@ export default async function EditProfilePage({
           <SubmitButton actionKey="profile-save" pendingLabel="Saving...">Save changes</SubmitButton>
         </form>
 
-        <form action="/auth/signout" method="post" className="mt-8 border-t border-[#efece6] pt-5 text-center">
-          <PendingActionButton
-            actionKey="profile-signout"
-            pendingLabel="Signing out..."
-            className="text-sm text-stone-400 transition hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Sign out
-          </PendingActionButton>
-        </form>
+        <SignOutForm variant="desktop" />
       </div>
 
       {/* Avatar column */}

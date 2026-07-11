@@ -58,6 +58,48 @@ export function getPendingActionButtonView({
   };
 }
 
+export function getPendingActionClickDecision({
+  defaultPrevented,
+  formIsValid,
+  lockedByOther,
+}: {
+  defaultPrevented: boolean;
+  formIsValid: boolean;
+  lockedByOther: boolean;
+}) {
+  if (lockedByOther) {
+    return { preventDefault: true, start: false };
+  }
+  return {
+    preventDefault: false,
+    start: !defaultPrevented && formIsValid,
+  };
+}
+
+export function PendingActionButtonPresentation({
+  view,
+  formAction,
+  onClick,
+  className,
+}: {
+  view: ReturnType<typeof getPendingActionButtonView>;
+  formAction?: React.ComponentProps<"button">["formAction"];
+  onClick?: React.MouseEventHandler<HTMLButtonElement>;
+  className: string;
+}) {
+  return (
+    <button
+      type="submit"
+      formAction={formAction}
+      onClick={onClick}
+      disabled={view.disabled}
+      className={className}
+    >
+      {view.label}
+    </button>
+  );
+}
+
 export function PendingActionButton({
   actionKey,
   formAction,
@@ -95,21 +137,30 @@ export function PendingActionButton({
   }, [actionKey, group, pending, pendingKey]);
 
   return (
-    <button
-      type="submit"
+    <PendingActionButtonPresentation
+      view={view}
       formAction={formAction}
       onClick={(event) => {
         if (view.lockedByOther) {
-          event.preventDefault();
+          const decision = getPendingActionClickDecision({
+            defaultPrevented: event.defaultPrevented,
+            formIsValid: true,
+            lockedByOther: true,
+          });
+          if (decision.preventDefault) event.preventDefault();
           return;
         }
-        group?.dispatch({ type: "start", key: actionKey });
+
         onClick?.(event);
+        const decision = getPendingActionClickDecision({
+          defaultPrevented: event.defaultPrevented,
+          formIsValid: event.currentTarget.form?.checkValidity() ?? true,
+          lockedByOther: false,
+        });
+        if (decision.preventDefault) event.preventDefault();
+        if (decision.start) group?.dispatch({ type: "start", key: actionKey });
       }}
-      disabled={view.disabled}
       className={className}
-    >
-      {view.label}
-    </button>
+    />
   );
 }

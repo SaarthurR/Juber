@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { RideCard, RequestCard } from "@/components/ride-card";
 import { RideFilters } from "@/components/ride-filters";
+import { RidesTabList, RidesTabPanels } from "@/components/rides-tabs";
 import {
   createRidesTabHref,
   getRidesTabFromSearch,
@@ -32,7 +33,6 @@ export function RidesView({
   const [tabState, dispatchTab] = useReducer(ridesTabReducer, {
     visibleTab: getRidesTabFromSearch(paramsString),
   });
-  const showRequests = tabState.visibleTab === "requests";
   const hasFilters = Boolean(
     params.get("from") || params.get("to") || params.get("date") || params.get("trip"),
   );
@@ -56,28 +56,25 @@ export function RidesView({
     window.history.pushState({ ridesTab: tab }, "", href);
   }
 
+  const carpoolsPanel = rides.length ? (
+    rides.map((ride) => <RideCard key={ride.id} ride={ride} />)
+  ) : (
+    <Empty kind="rides" signedIn={signedIn} hasFilters={hasFilters} />
+  );
+  const requestsPanel = requests.length ? (
+    requests.map((request) => <RequestCard key={request.id} request={request} />)
+  ) : (
+    <Empty kind="requests" signedIn={signedIn} hasFilters={hasFilters} />
+  );
+
   return (
     <>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-        <div
-          className="inline-flex gap-1 rounded-xl bg-[#f1e6d6] p-1.5"
-          role="tablist"
-          aria-label="Ride listings"
-        >
-          <TabButton
-            active={!showRequests}
-            label="Carpools"
-            controls="rides-carpools-panel"
-            onClick={() => setTab("carpools")}
-          />
-          <TabButton
-            active={showRequests}
-            label="Ride requests"
-            badge={requestCount}
-            controls="rides-requests-panel"
-            onClick={() => setTab("requests")}
-          />
-        </div>
+        <RidesTabList
+          activeTab={tabState.visibleTab}
+          requestCount={requestCount}
+          onSelect={setTab}
+        />
 
         {signedIn ? (
           <Link
@@ -107,67 +104,12 @@ export function RidesView({
         </div>
       )}
 
-      <div
-        id={showRequests ? "rides-requests-panel" : "rides-carpools-panel"}
-        role="tabpanel"
-        aria-label={showRequests ? "Ride requests" : "Carpools"}
-        className="mt-5 grid gap-4"
-      >
-        {showRequests ? (
-          requests.length ? (
-            requests.map((request) => (
-              <RequestCard key={request.id} request={request} />
-            ))
-          ) : (
-            <Empty kind="requests" signedIn={signedIn} hasFilters={hasFilters} />
-          )
-        ) : rides.length ? (
-          rides.map((ride) => <RideCard key={ride.id} ride={ride} />)
-        ) : (
-          <Empty kind="rides" signedIn={signedIn} hasFilters={hasFilters} />
-        )}
-      </div>
+      <RidesTabPanels
+        activeTab={tabState.visibleTab}
+        carpools={carpoolsPanel}
+        requests={requestsPanel}
+      />
     </>
-  );
-}
-
-function TabButton({
-  active,
-  label,
-  badge,
-  controls,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  badge?: number;
-  controls: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      aria-controls={controls}
-      onClick={onClick}
-      className={`flex items-center justify-center gap-2 rounded-lg px-[18px] py-2 text-sm font-bold transition ${
-        active
-          ? "bg-brand-600 text-white"
-          : "text-[#a8927a] hover:text-brand-700"
-      }`}
-    >
-      {label}
-      {badge !== undefined && badge > 0 && (
-        <span
-          className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
-            active ? "bg-white/25 text-white" : "bg-brand-600 text-white"
-          }`}
-        >
-          {badge}
-        </span>
-      )}
-    </button>
   );
 }
 

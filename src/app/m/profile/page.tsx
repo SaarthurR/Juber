@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Phone, MessageCircle, Pencil, LogOut } from "lucide-react";
+import { Phone, MessageCircle, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getContact } from "@/lib/contact";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { ProfileTabs } from "@/components/mobile/profile-tabs";
 import { GoogleSignInButton } from "@/components/auth-button";
-import { PendingActionButton } from "@/components/pending-action-button";
+import { SignOutForm } from "@/components/sign-out-form";
 import type { RideWithDriver } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -76,16 +76,7 @@ export default async function MobileProfilePage() {
             <Pencil size={15} strokeWidth={2.2} />
             Edit profile
           </Link>
-          <form action="/auth/signout" method="post">
-            <PendingActionButton
-              actionKey="mobile-profile-signout"
-              pendingLabel="Signing out..."
-              className="flex h-[46px] min-w-[46px] items-center justify-center rounded-[13px] bg-tint px-3 text-brand-700 transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span className="sr-only">Sign out</span>
-              <LogOut size={18} strokeWidth={2.2} />
-            </PendingActionButton>
-          </form>
+          <SignOutForm variant="mobile" />
         </div>
       </header>
 
