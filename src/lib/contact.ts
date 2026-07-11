@@ -27,6 +27,10 @@ export async function hasContact(
   userId: string | null | undefined,
 ): Promise<boolean> {
   if (!userId) return false;
-  const { data } = await supabase.rpc("profile_has_contact", { p_profile_id: userId });
+  const { data, error } = await supabase.rpc("profile_has_contact", { p_profile_id: userId });
+  if (error) {
+    console.error("profile_has_contact failed", { code: error.code, userId });
+    return true;
+  }
   return Boolean(data);
 }
