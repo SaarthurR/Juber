@@ -80,7 +80,7 @@ export async function Navbar() {
 
           {user ? (
             <>
-              <MessagesNavLink userId={user.id} initialUnread={unread} />
+              <MessagesNavLink initialUnread={unread} />
               <span className="ml-0.5">
                 <NotificationBell
                   initial={notifications}

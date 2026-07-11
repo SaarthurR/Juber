@@ -97,6 +97,7 @@ export default async function MobileHomePage({
               <MNotificationBell
                 notifications={notif.items}
                 unreadCount={notif.unread}
+                userId={user.id}
                 initialError={notif.error}
               />
               <Link href="/m/profile" prefetch aria-label="Your profile" className="active:scale-95">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { markNotificationsRead } from "@/app/messages/actions";
 
@@ -13,23 +13,33 @@ export function NotificationsMarkRead({ hasUnread }: { hasUnread: boolean }) {
   const done = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
+  const markRead = useCallback(async () => {
+    done.current = true;
+    setError(null);
+    try {
+      await markNotificationsRead();
+      router.refresh();
+    } catch {
+      done.current = false;
+      setError("Could not mark notifications read.");
+    }
+  }, [router]);
+
   useEffect(() => {
     if (!hasUnread || done.current) return;
-    done.current = true;
-    (async () => {
-      try {
-        await markNotificationsRead();
-        router.refresh();
-      } catch {
-        done.current = false;
-        setError("Could not mark notifications read.");
-      }
-    })();
-  }, [hasUnread, router]);
+    void markRead();
+  }, [hasUnread, markRead]);
 
   return error ? (
-    <p role="alert" className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
-      {error}
-    </p>
+    <div role="alert" className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+      <span>{error}</span>
+      <button
+        type="button"
+        onClick={() => void markRead()}
+        className="rounded-full bg-white px-3 py-1 text-xs font-bold text-red-700"
+      >
+        Retry
+      </button>
+    </div>
   ) : null;
 }

@@ -192,6 +192,19 @@ export function NotificationBell({
           router.refresh();
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${userId}`,
+        },
+        () => {
+          void refreshNotifications();
+          router.refresh();
+        },
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -199,15 +212,11 @@ export function NotificationBell({
   }, [userId, router, refreshNotifications]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      void refreshNotifications();
-    }, 10000);
     function onVisible() {
       if (document.visibilityState === "visible") void refreshNotifications();
     }
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [refreshNotifications]);

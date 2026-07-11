@@ -1,20 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { loadVisibleNotificationIds } from "@/lib/messages";
 
 /**
  * Messages nav item with a combined unread badge for notifications and chats.
  */
 export function MessagesNavLink({
-  userId,
   initialUnread,
 }: {
-  userId: string;
   initialUnread: number;
 }) {
   const pathname = usePathname();
@@ -25,36 +21,6 @@ export function MessagesNavLink({
     setSyncedTo(initialUnread);
     setUnread(initialUnread);
   }
-
-  const refreshUnread = useCallback(async () => {
-    try {
-      const result = await loadVisibleNotificationIds(createClient(), null, true);
-      setUnread(result.error ? 0 : result.ids.length);
-    } catch {
-      setUnread(0);
-    }
-  }, []);
-
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`nav-unread:${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
-        () => void refreshUnread(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
-        () => void refreshUnread(),
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId, refreshUnread]);
 
   const active = pathname.startsWith("/messages");
   const visibleUnread = unread;

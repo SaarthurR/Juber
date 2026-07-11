@@ -62,6 +62,25 @@ export async function markNotificationsRead() {
   revalidateMessageRoutes();
 }
 
+/** Marks exactly one current-user notification as read. */
+export async function markNotificationRead(notificationId: string) {
+  const supabase = await createClient();
+  const user = await getAuthUser(supabase);
+  if (!user) return;
+
+  const { data, error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", notificationId)
+    .eq("recipient_id", user.id)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Could not mark notification read.");
+
+  revalidateMessageRoutes();
+}
+
 export async function sendMessage(conversationId: string, formData: FormData) {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
