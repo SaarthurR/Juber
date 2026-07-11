@@ -2,6 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { APP_TAGLINE } from "@/lib/constants";
+
+export function FooterTagline() {
+  return (
+    <p className="mt-2 max-w-[220px] text-sm leading-relaxed text-sand-text">
+      {APP_TAGLINE}
+    </p>
+  );
+}
 
 /**
  * Wraps the desktop chrome (top navbar + footer) so it can be hidden on the

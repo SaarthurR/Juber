@@ -9,8 +9,6 @@ export type PendingAction =
   | { type: "start"; key: string }
   | { type: "finish"; key: string };
 
-const initialState: PendingActionState = { pendingKey: null };
-
 export function pendingActionReducer(
   state: PendingActionState,
   action: PendingAction,
@@ -26,8 +24,16 @@ const PendingActionContext = createContext<{
   dispatch: React.Dispatch<PendingAction>;
 } | null>(null);
 
-export function PendingActionGroup({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(pendingActionReducer, initialState);
+export function PendingActionGroup({
+  children,
+  initialPendingKey = null,
+}: {
+  children: React.ReactNode;
+  initialPendingKey?: string | null;
+}) {
+  const [state, dispatch] = useReducer(pendingActionReducer, {
+    pendingKey: initialPendingKey,
+  });
 
   return (
     <PendingActionContext.Provider value={{ state, dispatch }}>

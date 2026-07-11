@@ -4,9 +4,13 @@ import { test } from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
+import * as BottomNavModule from "@/components/mobile/bottom-nav";
+import * as ContactSheetModule from "@/components/mobile/contact-sheet";
 import * as LandingAuthGateModule from "@/components/landing-auth-gate";
+import * as SiteChromeModule from "@/components/site-chrome";
 import { RideCard, RequestCard } from "@/components/ride-card";
 import { Segmented } from "@/components/mobile/segmented";
+import { PendingActionGroup } from "@/components/pending-action-button";
 import { DesktopDialog } from "@/components/ui/desktop-dialog";
 import {
   contrastRatio,
@@ -28,6 +32,31 @@ const authGateExports = LandingAuthGateModule as unknown as {
   }) => boolean;
   landingAuthNextPath?: (href: string | null, pathname: string) => string;
 };
+
+const bottomNavExports = BottomNavModule as unknown as {
+  BottomNavView?: React.ComponentType<{ pathname: string }>;
+};
+
+const contactSheetExports = ContactSheetModule as unknown as {
+  ContactSheetContent?: React.ComponentType<{
+    driverId: string;
+    driverFullName: string | null;
+    rideId: string;
+    phone: string | null;
+    whatsapp: string | null;
+    preferredContact: "phone" | "whatsapp" | "message" | null;
+    defaultOpen?: boolean;
+  }>;
+};
+
+const siteChromeExports = SiteChromeModule as unknown as {
+  FooterTagline?: React.ComponentType;
+};
+
+const PendingGroupWithInitialState = PendingActionGroup as React.ComponentType<{
+  children?: React.ReactNode;
+  initialPendingKey?: string | null;
+}>;
 
 const profile = {
   id: "person-1",
@@ -96,6 +125,7 @@ test("focus cycle helper wraps Tab and Shift+Tab within a layer", () => {
 test("dismissal helper blocks backdrop and Escape while pending", () => {
   assert.equal(shouldDismissLayer({ pending: true, reason: "escape" }), false);
   assert.equal(shouldDismissLayer({ pending: true, reason: "backdrop" }), false);
+  assert.equal(shouldDismissLayer({ pending: true, reason: "close-button" }), false);
   assert.equal(shouldDismissLayer({ pending: false, reason: "escape" }), true);
   assert.equal(shouldDismissLayer({ pending: false, reason: "close-button" }), true);
 });
@@ -188,6 +218,37 @@ test("production auth-gate decision lets rendered legal controls navigate", () =
   assert.equal(shouldIntercept({ hasAction: false, authAllowed: false }), false);
 });
 
+test("bottom navigation exposes Profile browsing while keeping actions gated", () => {
+  const BottomNavView = bottomNavExports.BottomNavView;
+  const shouldIntercept = authGateExports.shouldInterceptAuthAction;
+  assert.equal(typeof BottomNavView, "function");
+  assert.equal(typeof shouldIntercept, "function");
+  if (!BottomNavView || !shouldIntercept) return;
+
+  const html = renderToStaticMarkup(
+    React.createElement(BottomNavView, { pathname: "/m" }),
+  );
+  const profileLink = html.match(/<a [^>]*href="\/m\/profile"[^>]*>/)?.[0] ?? "";
+  const postLink = html.match(/<a [^>]*href="\/m\/rides\/new"[^>]*>/)?.[0] ?? "";
+
+  assert.match(profileLink, /data-auth-allowed="true"/);
+  assert.equal(
+    shouldIntercept({
+      hasAction: true,
+      authAllowed: profileLink.includes('data-auth-allowed="true"'),
+    }),
+    false,
+  );
+  assert.doesNotMatch(postLink, /data-auth-allowed/);
+  assert.equal(
+    shouldIntercept({
+      hasAction: true,
+      authAllowed: postLink.includes('data-auth-allowed="true"'),
+    }),
+    true,
+  );
+});
+
 test("landing auth next-path helper preserves the attempted destination", () => {
   const resolveNextPath = authGateExports.landingAuthNextPath;
   assert.equal(typeof resolveNextPath, "function");
@@ -208,6 +269,37 @@ test("dialog and sheet callers pass pending dismissal guards", () => {
   assert.match(contactSheet, /dismissDisabled=\{pendingActionOpen\}/);
 });
 
+test("contact sheet action and dismissal guard share one pending provider", () => {
+  const ContactSheetContent = contactSheetExports.ContactSheetContent;
+  assert.equal(typeof ContactSheetContent, "function");
+  if (!ContactSheetContent) return;
+
+  const driverId = "driver-1";
+  const rideId = "ride-1";
+  const actionKey = `mobile-contact-message-${rideId}-${driverId}`;
+  const html = renderToStaticMarkup(
+    React.createElement(
+      PendingGroupWithInitialState,
+      { initialPendingKey: actionKey },
+      React.createElement(ContactSheetContent, {
+        driverId,
+        driverFullName: "Ari Shah",
+        rideId,
+        phone: null,
+        whatsapp: null,
+        preferredContact: "message",
+        defaultOpen: true,
+      }),
+    ),
+  );
+  const closeButton =
+    html.match(/<button [^>]*aria-label="Close contact sheet"[^>]*>/)?.[0] ?? "";
+
+  assert.match(closeButton, /disabled/);
+  assert.match(html, /Opening chat\.\.\./);
+  assert.doesNotMatch(html, />In-app message<\/button>/);
+});
+
 test("verified foreground/background color pairs meet AA contrast", () => {
   const pairs = [
     ["muted on cream", "#57534e", "#fbf7f0", 4.5],
@@ -217,6 +309,7 @@ test("verified foreground/background color pairs meet AA contrast", () => {
     ["inactive mobile tab on seg track", "#6f5b48", "#f1e4d2", 4.5],
     ["ride-card warm text on white", "#6f5b48", "#ffffff", 6],
     ["footer links on cream", "#6f5b48", "#fbf7f0", 5.5],
+    ["footer tagline on cream", "#6f5b48", "#fbf7f0", 5.5],
     ["footer brand link on cream", "#a65329", "#fbf7f0", 5],
   ] as const;
 
@@ -226,6 +319,17 @@ test("verified foreground/background color pairs meet AA contrast", () => {
       `${label} should meet its contrast target`,
     );
   }
+});
+
+test("footer tagline renders the measured warm token on cream", () => {
+  const FooterTagline = siteChromeExports.FooterTagline;
+  assert.equal(typeof FooterTagline, "function");
+  if (!FooterTagline) return;
+
+  const html = renderToStaticMarkup(React.createElement(FooterTagline));
+
+  assert.match(html, /text-sand-text/);
+  assert.ok(contrastRatio("#6f5b48", "#fbf7f0") >= 5.5);
 });
 
 test("segmented control renders the verified inactive token on its real track", () => {

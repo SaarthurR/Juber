@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
-import { SiteChrome } from "@/components/site-chrome";
+import { FooterTagline, SiteChrome } from "@/components/site-chrome";
 import { TempleLogo } from "@/components/temple-logo";
 import { ContactRequiredGate } from "@/components/contact-required-gate";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
@@ -67,9 +67,7 @@ export default async function RootLayout({
                   <TempleLogo size={18} className="text-brand-600" />
                   {APP_NAME}
                 </Link>
-                <p className="mt-2 max-w-[220px] text-sm text-stone-500 leading-relaxed">
-                  {APP_TAGLINE}
-                </p>
+                <FooterTagline />
               </div>
 
               <div className="flex gap-12 text-sm">

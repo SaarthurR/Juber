@@ -53,13 +53,14 @@ export function ContactSheet({
   );
 }
 
-function ContactSheetContent({
+export function ContactSheetContent({
   driverId,
   driverFullName,
   rideId,
   phone,
   whatsapp,
   preferredContact,
+  defaultOpen = false,
 }: {
   driverId: string;
   driverFullName: string | null;
@@ -67,8 +68,9 @@ function ContactSheetContent({
   phone: string | null;
   whatsapp: string | null;
   preferredContact: Method;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const pendingActionOpen = usePendingActionOpen();
   const firstName = driverFullName?.split(" ")[0] ?? "the driver";
   const whatsappHref = whatsapp ? `https://wa.me/${whatsapp.replace(/[^\d]/g, "")}` : null;
@@ -121,21 +123,19 @@ function ContactSheetContent({
               preferred={preferredContact === "whatsapp"}
             />
           )}
-          <PendingActionGroup>
-            <form action={openConversation.bind(null, driverId)}>
-              <input type="hidden" name="ride_id" value={rideId} />
-              <input type="hidden" name="base" value="/m/messages" />
-              <ContactRow
-                as="button"
-                actionKey={`mobile-contact-message-${rideId}-${driverId}`}
-                pendingLabel="Opening chat..."
-                icon={<MessageCircle size={17} className="text-brand-600" />}
-                label="In-app message"
-                value={`Message ${firstName} on Juber`}
-                preferred={preferredContact === "message"}
-              />
-            </form>
-          </PendingActionGroup>
+          <form action={openConversation.bind(null, driverId)}>
+            <input type="hidden" name="ride_id" value={rideId} />
+            <input type="hidden" name="base" value="/m/messages" />
+            <ContactRow
+              as="button"
+              actionKey={`mobile-contact-message-${rideId}-${driverId}`}
+              pendingLabel="Opening chat..."
+              icon={<MessageCircle size={17} className="text-brand-600" />}
+              label="In-app message"
+              value={`Message ${firstName} on Juber`}
+              preferred={preferredContact === "message"}
+            />
+          </form>
         </div>
       </BottomSheet>
     </>
