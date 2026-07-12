@@ -1,5 +1,5 @@
 import Image from "next/image";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { Navbar } from "@/components/navbar";
 import { NotificationsProvider } from "@/components/notifications-provider";
 import { RouteProgress } from "@/components/route-progress";
@@ -96,12 +96,13 @@ export default async function DesktopLayout({ children }: { children: React.Reac
 
   return (
     <NotificationsProvider userId={user?.id ?? null} initial={notificationSnapshot}>
-      <div className="desktop-shell contents">
-        <Navbar user={user} profile={profile} />
-        <RouteProgress />
-        <main className="flex-1">{children}</main>
-        <DesktopFooter />
-      </div>
+      <RouteProgress>
+        <div className="desktop-shell contents">
+          <Navbar user={user} profile={profile} />
+          <main className="flex-1">{children}</main>
+          <DesktopFooter />
+        </div>
+      </RouteProgress>
     </NotificationsProvider>
   );
 }

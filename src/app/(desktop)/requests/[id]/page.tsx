@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { format } from "date-fns";
 import { ArrowLeft, CheckCircle2, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";

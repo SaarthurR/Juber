@@ -5,9 +5,11 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { markNotificationsRead } from "@/app/messages/actions";
@@ -16,8 +18,8 @@ import {
   loadVisibleNotificationIds,
 } from "@/lib/messages";
 import {
+  createNotificationRefreshGate,
   createNotificationControllerState,
-  isCurrentNotificationRefresh,
   notificationControllerReducer,
   notificationTitle,
   notificationWriteErrorMessage,
@@ -64,27 +66,36 @@ export function NotificationsProvider({
     initialSnapshot,
     createNotificationControllerState,
   );
-  const refreshGeneration = useRef(0);
+  const identity = useMemo(
+    () => ({ userId, snapshot: initialSnapshot }),
+    [initialSnapshot, userId],
+  );
+  const [refreshGate] = useState(
+    () => createNotificationRefreshGate<typeof identity>(),
+  );
   const operationSequence = useRef(0);
-  const active = useRef(true);
+  const currentIdentity = useRef({ userId, identity });
+  const refreshNotificationsRef = useRef<() => Promise<void>>(async () => undefined);
 
-  useEffect(() => {
-    dispatch({ type: "reconcile", snapshot: initialSnapshot });
-  }, [initialSnapshot]);
+  useLayoutEffect(() => {
+    currentIdentity.current = { userId, identity };
+    refreshGate.begin(identity);
+    operationSequence.current = 0;
+    dispatch({ type: "reset", snapshot: initialSnapshot });
+    return () => {
+      refreshGate.invalidate(identity);
+    };
+  }, [identity, initialSnapshot, refreshGate, userId]);
 
   const refreshNotifications = useCallback(async () => {
     if (!userId) return;
-    const generation = ++refreshGeneration.current;
+    const ticket = refreshGate.start(identity);
+    if (!ticket) return;
+    const currentTicket = ticket;
     const supabase = createClient();
     function failClosed(message: string) {
       const failed = failClosedNotificationState<NotificationWithContext>(message);
-      if (
-        isCurrentNotificationRefresh(
-          generation,
-          refreshGeneration.current,
-          active.current,
-        )
-      ) {
+      if (refreshGate.isCurrent(currentTicket)) {
         dispatch({ type: "reconcile-failed", error: failed.error });
       }
     }
@@ -93,15 +104,7 @@ export function NotificationsProvider({
         loadVisibleNotificationIds(supabase, null, true),
         loadVisibleNotificationIds(supabase, 6, false),
       ]);
-      if (
-        !isCurrentNotificationRefresh(
-          generation,
-          refreshGeneration.current,
-          active.current,
-        )
-      ) {
-        return;
-      }
+      if (!refreshGate.isCurrent(currentTicket)) return;
       if (unreadResult.error || notificationResult.error) {
         failClosed(
           unreadResult.error ?? notificationResult.error ?? "Could not refresh notifications.",
@@ -118,15 +121,7 @@ export function NotificationsProvider({
             .in("id", notificationIds)
             .order("created_at", { ascending: false })
         : { data: [] as NotificationWithContext[], error: null };
-      if (
-        !isCurrentNotificationRefresh(
-          generation,
-          refreshGeneration.current,
-          active.current,
-        )
-      ) {
-        return;
-      }
+      if (!refreshGate.isCurrent(currentTicket)) return;
 
       let data = notificationsResult.data;
       if (notificationsResult.error) {
@@ -139,15 +134,7 @@ export function NotificationsProvider({
         if (fallback.error) throw new Error("Could not load notifications.");
         data = fallback.data;
       }
-      if (
-        !isCurrentNotificationRefresh(
-          generation,
-          refreshGeneration.current,
-          active.current,
-        )
-      ) {
-        return;
-      }
+      if (!refreshGate.isCurrent(currentTicket)) return;
       dispatch({
         type: "reconcile",
         snapshot: {
@@ -163,58 +150,70 @@ export function NotificationsProvider({
     } catch {
       failClosed("Could not refresh notifications.");
     }
-  }, [userId]);
+  }, [identity, refreshGate, userId]);
 
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-      refreshGeneration.current += 1;
-    };
-  }, []);
+  useLayoutEffect(() => {
+    refreshNotificationsRef.current = refreshNotifications;
+  }, [refreshNotifications]);
 
   useEffect(() => {
     if (!userId) return undefined;
+    const channelUserId = userId;
     const supabase = createClient();
     return subscribeToNotificationChanges(supabase, "bell", userId, () => {
-      void refreshNotifications();
+      const current = currentIdentity.current;
+      if (
+        current.userId !== channelUserId
+        || !refreshGate.isActive(current.identity)
+      ) {
+        return;
+      }
+      void refreshNotificationsRef.current();
     });
-  }, [userId, refreshNotifications]);
+  }, [refreshGate, userId]);
 
   useEffect(() => {
     function onVisible() {
-      if (document.visibilityState === "visible") void refreshNotifications();
+      if (document.visibilityState === "visible") {
+        void refreshNotificationsRef.current();
+      }
     }
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [refreshNotifications]);
+  }, []);
 
   const markAllRead = useCallback(async () => {
-    if (state.unread === 0 || state.operation) return;
+    if (
+      !refreshGate.isActive(identity)
+      || state.unread === 0
+      || state.operation
+    ) {
+      return;
+    }
     const operationId = ++operationSequence.current;
     dispatch({ type: "mark-all-start", operationId });
     try {
       await markNotificationsRead();
-      if (!active.current) return;
+      if (!refreshGate.isActive(identity)) return;
       dispatch({
         type: "mark-all-success",
         operationId,
         readAt: new Date().toISOString(),
       });
     } catch {
-      if (!active.current) return;
+      if (!refreshGate.isActive(identity)) return;
       dispatch({
         type: "mark-all-failed",
         operationId,
         error: notificationWriteErrorMessage("bulk"),
       });
     }
-  }, [state.operation, state.unread]);
+  }, [identity, refreshGate, state.operation, state.unread]);
 
   const markOneRead = useCallback(async (id: string, destination: string) => {
-    if (!userId || state.operation) return;
+    if (!userId || !refreshGate.isActive(identity) || state.operation) return;
     const target = state.items.find((notification) => notification.id === id);
     if (!target || target.read_at) return;
 
@@ -236,7 +235,7 @@ export function NotificationsProvider({
       .update({ read_at: readAt })
       .eq("id", id)
       .eq("recipient_id", userId);
-    if (!active.current) return;
+    if (!refreshGate.isActive(identity)) return;
     if (error) {
       dispatch({
         type: "mark-one-failed",
@@ -247,7 +246,7 @@ export function NotificationsProvider({
       return;
     }
     dispatch({ type: "mark-one-success", id, operationId, readAt });
-  }, [state.items, state.operation, userId]);
+  }, [identity, refreshGate, state.items, state.operation, userId]);
 
   const value = useMemo(
     () => ({

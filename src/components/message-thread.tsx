@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";

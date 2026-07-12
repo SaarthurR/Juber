@@ -4,6 +4,23 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { NotificationWithContext } from "../lib/types";
 
+type RefreshTicket<TIdentity> = {
+  identity: TIdentity;
+  generation: number;
+};
+
+type NotificationRefreshGate<TIdentity> = {
+  begin(identity: TIdentity): void;
+  invalidate(identity: TIdentity): void;
+  start(identity: TIdentity): RefreshTicket<TIdentity> | null;
+  isCurrent(ticket: RefreshTicket<TIdentity>): boolean;
+  isActive(identity: TIdentity): boolean;
+};
+
+type NotificationControllerRuntime = {
+  createNotificationRefreshGate?: <TIdentity>() => NotificationRefreshGate<TIdentity>;
+};
+
 async function loadController() {
   return import("../lib/notifications-controller").catch(() => null);
 }
@@ -348,6 +365,79 @@ test("refresh generation rejects older or cancelled authoritative responses", as
   assert.equal(controller.isCurrentNotificationRefresh(2, 2, true), true);
   assert.equal(controller.isCurrentNotificationRefresh(1, 2, true), false);
   assert.equal(controller.isCurrentNotificationRefresh(2, 2, false), false);
+});
+
+test("refresh gate rejects stale user completions and prior-session events", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+  const runtime = controller as typeof controller & NotificationControllerRuntime;
+  assert.equal(
+    typeof runtime.createNotificationRefreshGate,
+    "function",
+    "production refresh gate must exist",
+  );
+  if (!runtime.createNotificationRefreshGate) return;
+
+  const gate = runtime.createNotificationRefreshGate<object>();
+  const userA = { userId: "user-a", snapshot: 1 };
+  const userB = { userId: "user-b", snapshot: 1 };
+  gate.begin(userA);
+  const refreshA = gate.start(userA);
+  assert.ok(refreshA);
+
+  gate.begin(userB);
+  assert.equal(gate.isCurrent(refreshA), false);
+  assert.equal(gate.start(userA), null, "late user A event must not start refresh work");
+  const refreshB = gate.start(userB);
+  assert.ok(refreshB);
+  assert.equal(gate.isCurrent(refreshB), true);
+
+  const userBNextSnapshot = { userId: "user-b", snapshot: 2 };
+  gate.begin(userBNextSnapshot);
+  assert.equal(gate.isCurrent(refreshB), false);
+  assert.equal(
+    gate.start(userB),
+    null,
+    "prior authoritative snapshot must not start refresh work",
+  );
+  const refreshedSnapshotB = gate.start(userBNextSnapshot);
+  assert.ok(refreshedSnapshotB);
+  assert.equal(gate.isCurrent(refreshedSnapshotB), true);
+
+  gate.invalidate(userBNextSnapshot);
+  assert.equal(gate.isCurrent(refreshedSnapshotB), false);
+  assert.equal(gate.isActive(userBNextSnapshot), false);
+});
+
+test("authoritative identity reset replaces prior-user controller state", async () => {
+  const controller = await loadController();
+  assert.ok(controller, "notification controller must exist");
+  if (!controller) return;
+
+  const userA = controller.notificationControllerReducer(
+    controller.createNotificationControllerState({
+      items: [notification("user-a")],
+      unread: 1,
+      error: null,
+    }),
+    { type: "open" },
+  );
+  const userBSnapshot = {
+    items: [notification("user-b", { recipient_id: "user-b" })],
+    unread: 1,
+    unreadIds: ["user-b"],
+    error: null,
+  };
+  const reset = controller.notificationControllerReducer(
+    userA,
+    { type: "reset", snapshot: userBSnapshot } as never,
+  );
+
+  assert.deepEqual(
+    reset,
+    controller.createNotificationControllerState(userBSnapshot),
+  );
 });
 
 test("desktop full-list read owner starts once and can retry after failure", async () => {

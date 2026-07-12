@@ -46,6 +46,7 @@ export type NotificationControllerState = {
 };
 
 export type NotificationControllerAction =
+  | { type: "reset"; snapshot: NotificationSnapshot }
   | { type: "open" }
   | { type: "close" }
   | { type: "reconcile"; snapshot: NotificationSnapshot }
@@ -87,6 +88,8 @@ export function notificationControllerReducer(
   action: NotificationControllerAction,
 ): NotificationControllerState {
   switch (action.type) {
+    case "reset":
+      return createNotificationControllerState(action.snapshot);
     case "open":
       return { ...state, open: true };
     case "close":
@@ -426,6 +429,50 @@ export function isCurrentNotificationRefresh(
   active: boolean,
 ): boolean {
   return active && startedGeneration === currentGeneration;
+}
+
+export type NotificationRefreshTicket<TIdentity> = {
+  identity: TIdentity;
+  generation: number;
+};
+
+export type NotificationRefreshGate<TIdentity> = {
+  begin(identity: TIdentity): void;
+  invalidate(identity: TIdentity): void;
+  start(identity: TIdentity): NotificationRefreshTicket<TIdentity> | null;
+  isCurrent(ticket: NotificationRefreshTicket<TIdentity>): boolean;
+  isActive(identity: TIdentity): boolean;
+};
+
+export function createNotificationRefreshGate<TIdentity>(): NotificationRefreshGate<TIdentity> {
+  let activeIdentity: TIdentity | undefined;
+  let generation = 0;
+
+  return {
+    begin(identity) {
+      activeIdentity = identity;
+      generation += 1;
+    },
+    invalidate(identity) {
+      if (!Object.is(activeIdentity, identity)) return;
+      activeIdentity = undefined;
+      generation += 1;
+    },
+    start(identity) {
+      if (!Object.is(activeIdentity, identity)) return null;
+      generation += 1;
+      return { identity, generation };
+    },
+    isCurrent(ticket) {
+      return (
+        Object.is(activeIdentity, ticket.identity)
+        && generation === ticket.generation
+      );
+    },
+    isActive(identity) {
+      return Object.is(activeIdentity, identity);
+    },
+  };
 }
 
 export function shouldStartNotificationMarkRead(

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { format } from "date-fns";
 import { ArrowLeftRight, CalendarDays, ChevronRight, CircleDollarSign, Users } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";

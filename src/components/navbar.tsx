@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import type { AuthUser } from "@/lib/auth";
 import { APP_NAME } from "@/lib/constants";
 import { Avatar } from "@/components/ui/avatar";

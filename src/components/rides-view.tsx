@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useReducer } from "react";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth-button";

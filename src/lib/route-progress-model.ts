@@ -15,6 +15,10 @@ export type NavigationEventLike = {
   altKey: boolean;
 };
 
+export type RouteProgressNavigateEvent = {
+  preventDefault: () => void;
+};
+
 export type RouteProgressState = {
   status: "idle" | "active" | "settling";
   targetKey: string | null;
@@ -65,6 +69,30 @@ export function routeKey(url: Pick<URL, "pathname" | "search">): string {
   return `${url.pathname}${url.search}`;
 }
 
+export function completeRouteProgressNavigation(
+  {
+    targetKey,
+    onNavigate,
+    start,
+  }: {
+    targetKey: string | null;
+    onNavigate?: (event: RouteProgressNavigateEvent) => void;
+    start: (targetKey: string) => void;
+  },
+  frameworkEvent: RouteProgressNavigateEvent,
+): boolean {
+  let canceled = false;
+  onNavigate?.({
+    preventDefault() {
+      canceled = true;
+      frameworkEvent.preventDefault();
+    },
+  });
+  if (canceled || !targetKey) return false;
+  start(targetKey);
+  return true;
+}
+
 export function shouldTrackNavigation(
   anchor: AnchorLike,
   event: NavigationEventLike,
@@ -83,7 +111,7 @@ export function shouldTrackNavigation(
   if (anchor.download) return { track: false, targetKey: null };
 
   const target = anchor.target?.toLowerCase();
-  if (target === "_blank" || target === "_top") {
+  if (target && target !== "_self") {
     return { track: false, targetKey: null };
   }
 

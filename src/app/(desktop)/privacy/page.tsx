@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { APP_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";

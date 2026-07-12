@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {

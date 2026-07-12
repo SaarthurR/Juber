@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCheck, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";

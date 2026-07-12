@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 import { useNotifications } from "@/components/notifications-provider";

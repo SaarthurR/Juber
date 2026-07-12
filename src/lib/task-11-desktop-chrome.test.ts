@@ -23,7 +23,7 @@ test("desktop route group owns desktop chrome while /m stays structurally outsid
   assert.match(rootLayout, /ContactRequiredGate/);
   assert.match(desktopLayout, /<Navbar user=\{user\} profile=\{profile\} \/>/);
   assert.match(desktopLayout, /<NotificationsProvider/);
-  assert.match(desktopLayout, /<RouteProgress \/>/);
+  assert.match(desktopLayout, /<RouteProgress>[\s\S]*<\/RouteProgress>/);
   assert.match(desktopLayout, /<main className="flex-1">\{children\}<\/main>/);
   assert.doesNotMatch(desktopLayout, /key=\{pathname\}|SiteChrome|PageLoading/);
   assert.doesNotMatch(mobileLayout, /Navbar|NotificationsProvider|RouteProgress|SiteChrome/);
@@ -93,6 +93,18 @@ test("desktop notifications have one provider channel and no common router refre
   assert.match(provider, /subscribeToNotificationChanges\([\s\S]*"bell"/);
   assert.equal((provider.match(/return subscribeToNotificationChanges/g) ?? []).length, 1);
   assert.match(provider, /document\.visibilityState === "visible"/);
+  assert.match(provider, /createNotificationRefreshGate/);
+  assert.match(provider, /\.invalidate\(/);
+  const subscriptionStart = provider.indexOf("return subscribeToNotificationChanges");
+  const subscriptionEnd = provider.indexOf(
+    "}, [refreshGate, userId]);",
+    subscriptionStart,
+  );
+  assert.ok(subscriptionStart >= 0);
+  assert.ok(
+    subscriptionEnd > subscriptionStart,
+    "desktop channel effect must only reconnect when userId changes",
+  );
   assert.doesNotMatch(provider, /router\.refresh|setInterval/);
   assert.doesNotMatch(bell, /subscribeToNotificationChanges|router\.refresh|useRouter|loadVisibleNotificationIds/);
   assert.match(bell, /useNotifications\(\)/);

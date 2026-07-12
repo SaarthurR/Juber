@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { usePathname } from "next/navigation";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { DesktopDialog } from "@/components/ui/desktop-dialog";
