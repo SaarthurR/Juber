@@ -9,6 +9,7 @@ import {
 } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  ROUTE_PROGRESS_UNPAIRED_URL_MS,
   ROUTE_PROGRESS_WATCHDOG_MS,
   createRouteProgressState,
   routeKey,
@@ -36,6 +37,20 @@ export function RouteProgress({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     dispatch({ type: "url", currentKey });
   }, [currentKey]);
+
+  useEffect(() => {
+    if (state.pendingUrlKey === null) return undefined;
+    const pendingUrlKey = state.pendingUrlKey;
+    const revision = state.pendingUrlRevision;
+    const timeout = window.setTimeout(() => {
+      dispatch({
+        type: "commit-unpaired-url",
+        currentKey: pendingUrlKey,
+        revision,
+      });
+    }, ROUTE_PROGRESS_UNPAIRED_URL_MS);
+    return () => window.clearTimeout(timeout);
+  }, [state.pendingUrlKey, state.pendingUrlRevision]);
 
   useEffect(() => {
     if (state.status !== "active") return undefined;

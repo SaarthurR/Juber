@@ -161,6 +161,10 @@ test("RouteProgress integrates through Next Link onNavigate, not document captur
     progress,
     /function onPopState\(\)[\s\S]*routeKey\(new URL\(window\.location\.href\)\)[\s\S]*type: "popstate", currentKey/,
   );
+  assert.match(
+    progress,
+    /state\.pendingUrlKey[\s\S]*setTimeout[\s\S]*type: "commit-unpaired-url"/,
+  );
   assert.match(authGate, /event\.preventDefault\(\);[\s\S]*event\.stopPropagation\(\)/);
 
   const linkClickHandler = nextLink.indexOf("onClick (e)");
@@ -181,61 +185,127 @@ test("RouteProgress integrates through Next Link onNavigate, not document captur
   assert.ok(routerDispatch > onNavigate);
 });
 
-test("hash-only popstate and repeated same-key events remain idle", () => {
+test("hash-only events stay idle in pop→url and url→pop order", () => {
   const initial = createRouteProgressState("/rides?tab=requests");
-  const hashOnly = routeProgressReducer(initial, {
-    type: "popstate",
-    currentKey: "/rides?tab=requests",
-  });
-  const repeated = routeProgressReducer(hashOnly, {
-    type: "popstate",
-    currentKey: "/rides?tab=requests",
-  });
+  const popThenUrl = routeProgressReducer(
+    routeProgressReducer(initial, {
+      type: "popstate",
+      currentKey: "/rides?tab=requests",
+    }),
+    {
+      type: "url",
+      currentKey: "/rides?tab=requests",
+    },
+  );
+  const urlThenPop = routeProgressReducer(
+    routeProgressReducer(initial, {
+      type: "url",
+      currentKey: "/rides?tab=requests",
+    }),
+    {
+      type: "popstate",
+      currentKey: "/rides?tab=requests",
+    },
+  );
 
-  assert.equal(initial.completedKey, "/rides?tab=requests");
-  assert.strictEqual(hashOnly, initial);
-  assert.strictEqual(repeated, initial);
-  assert.equal(repeated.status, "idle");
+  assert.equal(initial.pendingUrlKey, null);
+  assert.strictEqual(popThenUrl, initial);
+  assert.strictEqual(urlThenPop, initial);
+  assert.equal(urlThenPop.status, "idle");
 });
 
-test("path and query popstate start once and complete into the new key", () => {
+test("pop→url history starts then settles exactly once", () => {
   const initial = createRouteProgressState("/rides?tab=requests");
-  const pathStarted = routeProgressReducer(initial, {
+  const started = routeProgressReducer(initial, {
     type: "popstate",
     currentKey: "/events",
   });
-  const repeatedPath = routeProgressReducer(pathStarted, {
+  const duplicate = routeProgressReducer(started, {
     type: "popstate",
     currentKey: "/events",
   });
-  const pathCompleted = routeProgressReducer(repeatedPath, {
+  const completed = routeProgressReducer(duplicate, {
     type: "url",
     currentKey: "/events",
   });
-  const pathIdle = routeProgressReducer(pathCompleted, { type: "settled" });
-  const queryStarted = routeProgressReducer(pathIdle, {
+  const postCompletionDuplicate = routeProgressReducer(completed, {
     type: "popstate",
-    currentKey: "/events?page=2",
+    currentKey: "/events",
   });
-  const queryCompleted = routeProgressReducer(queryStarted, {
+
+  assert.equal(started.status, "active");
+  assert.equal(started.targetKey, "/events");
+  assert.strictEqual(duplicate, started);
+  assert.equal(completed.status, "settling");
+  assert.equal(completed.completedKey, "/events");
+  assert.equal(completed.pendingUrlKey, null);
+  assert.strictEqual(postCompletionDuplicate, completed);
+});
+
+test("url→pop history pairs the pending URL and settles exactly once", () => {
+  const initial = createRouteProgressState("/rides?tab=requests");
+  const pending = routeProgressReducer(initial, {
     type: "url",
     currentKey: "/events?page=2",
   });
-  const repeatedCompleted = routeProgressReducer(queryCompleted, {
+  const duplicateUrl = routeProgressReducer(pending, {
+    type: "url",
+    currentKey: "/events?page=2",
+  });
+  const paired = routeProgressReducer(duplicateUrl, {
+    type: "popstate",
+    currentKey: "/events?page=2",
+  });
+  const staleExpiry = routeProgressReducer(paired, {
+    type: "commit-unpaired-url",
+    currentKey: "/events?page=2",
+    revision: pending.pendingUrlRevision,
+  });
+  const duplicatePop = routeProgressReducer(staleExpiry, {
     type: "popstate",
     currentKey: "/events?page=2",
   });
 
-  assert.equal(pathStarted.status, "active");
-  assert.equal(pathStarted.targetKey, "/events");
-  assert.strictEqual(repeatedPath, pathStarted);
-  assert.equal(pathCompleted.status, "settling");
-  assert.equal(pathCompleted.completedKey, "/events");
-  assert.equal(queryStarted.status, "active");
-  assert.equal(queryStarted.targetKey, "/events?page=2");
-  assert.equal(queryCompleted.status, "settling");
-  assert.equal(queryCompleted.completedKey, "/events?page=2");
-  assert.strictEqual(repeatedCompleted, queryCompleted);
+  assert.equal(pending.status, "idle");
+  assert.equal(pending.completedKey, "/rides?tab=requests");
+  assert.equal(pending.pendingUrlKey, "/events?page=2");
+  assert.ok(pending.pendingUrlRevision > initial.pendingUrlRevision);
+  assert.strictEqual(duplicateUrl, pending);
+  assert.equal(paired.status, "settling");
+  assert.equal(paired.targetKey, "/events?page=2");
+  assert.equal(paired.completedKey, "/events?page=2");
+  assert.equal(paired.pendingUrlKey, null);
+  assert.strictEqual(staleExpiry, paired);
+  assert.strictEqual(duplicatePop, paired);
+});
+
+test("unpaired imperative URL commits quietly when its pending window expires", () => {
+  const initial = createRouteProgressState("/rides");
+  const pending = routeProgressReducer(initial, {
+    type: "url",
+    currentKey: "/profile",
+  });
+  const staleCommit = routeProgressReducer(pending, {
+    type: "commit-unpaired-url",
+    currentKey: "/profile",
+    revision: pending.pendingUrlRevision - 1,
+  });
+  const committed = routeProgressReducer(staleCommit, {
+    type: "commit-unpaired-url",
+    currentKey: "/profile",
+    revision: pending.pendingUrlRevision,
+  });
+  const duplicatePop = routeProgressReducer(committed, {
+    type: "popstate",
+    currentKey: "/profile",
+  });
+
+  assert.equal(pending.status, "idle");
+  assert.strictEqual(staleCommit, pending);
+  assert.equal(committed.status, "idle");
+  assert.equal(committed.completedKey, "/profile");
+  assert.equal(committed.pendingUrlKey, null);
+  assert.strictEqual(duplicatePop, committed);
 });
 
 test("route progress state completes by target URL, supersedes, and resets", () => {

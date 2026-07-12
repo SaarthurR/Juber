@@ -1,4 +1,5 @@
 export const ROUTE_PROGRESS_WATCHDOG_MS = 10_000;
+export const ROUTE_PROGRESS_UNPAIRED_URL_MS = 0;
 
 export type AnchorLike = {
   href: string;
@@ -23,12 +24,19 @@ export type RouteProgressState = {
   status: "idle" | "active" | "settling";
   targetKey: string | null;
   completedKey: string | null;
+  pendingUrlKey: string | null;
+  pendingUrlRevision: number;
 };
 
 export type RouteProgressAction =
   | { type: "start"; targetKey: string }
   | { type: "popstate"; currentKey: string }
   | { type: "url"; currentKey: string }
+  | {
+      type: "commit-unpaired-url";
+      currentKey: string;
+      revision: number;
+    }
   | { type: "settled" }
   | { type: "watchdog" }
   | { type: "reset" };
@@ -40,6 +48,8 @@ export function createRouteProgressState(
     status: "idle",
     targetKey: null,
     completedKey: initialKey,
+    pendingUrlKey: null,
+    pendingUrlRevision: 0,
   };
 }
 
@@ -56,14 +66,26 @@ export function routeProgressReducer(
         ...state,
         status: "active",
         targetKey: action.targetKey,
+        pendingUrlKey: null,
       };
     case "popstate":
+      if (action.currentKey === state.completedKey) {
+        return state.pendingUrlKey === null
+          ? state
+          : { ...state, pendingUrlKey: null };
+      }
+      if (action.currentKey === state.pendingUrlKey) {
+        return {
+          ...state,
+          status: "settling",
+          targetKey: action.currentKey,
+          completedKey: action.currentKey,
+          pendingUrlKey: null,
+        };
+      }
       if (
-        action.currentKey === state.completedKey
-        || (
-          state.status === "active"
-          && state.targetKey === action.currentKey
-        )
+        state.status === "active"
+        && state.targetKey === action.currentKey
       ) {
         return state;
       }
@@ -71,13 +93,9 @@ export function routeProgressReducer(
         ...state,
         status: "active",
         targetKey: action.currentKey,
+        pendingUrlKey: null,
       };
     case "url":
-      if (state.status === "idle") {
-        return state.completedKey === action.currentKey
-          ? state
-          : { ...state, completedKey: action.currentKey };
-      }
       if (
         state.status === "active"
         && state.targetKey === action.currentKey
@@ -86,17 +104,57 @@ export function routeProgressReducer(
           ...state,
           status: "settling",
           completedKey: action.currentKey,
+          pendingUrlKey: null,
         };
       }
-      return state;
+      if (state.status === "active") return state;
+      if (action.currentKey === state.completedKey) {
+        return state.pendingUrlKey === null
+          ? state
+          : { ...state, pendingUrlKey: null };
+      }
+      if (action.currentKey === state.pendingUrlKey) return state;
+      return {
+        ...state,
+        pendingUrlKey: action.currentKey,
+        pendingUrlRevision: state.pendingUrlRevision + 1,
+      };
+    case "commit-unpaired-url":
+      if (
+        action.currentKey !== state.pendingUrlKey
+        || action.revision !== state.pendingUrlRevision
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        status: "idle",
+        targetKey: null,
+        completedKey: action.currentKey,
+        pendingUrlKey: null,
+      };
     case "settled":
-    case "watchdog":
-    case "reset":
       if (state.status === "idle" && state.targetKey === null) return state;
       return {
         ...state,
         status: "idle",
         targetKey: null,
+      };
+    case "watchdog":
+    case "reset":
+      if (
+        state.status === "idle"
+        && state.targetKey === null
+        && state.pendingUrlKey === null
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        status: "idle",
+        targetKey: null,
+        completedKey: state.pendingUrlKey ?? state.completedKey,
+        pendingUrlKey: null,
       };
   }
 }
