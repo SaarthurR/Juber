@@ -9,7 +9,7 @@ export default async function MobileLayout({ children }: { children: React.React
   const { user } = await getCurrentUser();
   const content = (
     <div className="mobile-shell relative mx-auto min-h-screen w-full max-w-[440px] bg-cream sm:border-x sm:border-border">
-      {children}
+      <main>{children}</main>
       <BottomNav />
     </div>
   );
