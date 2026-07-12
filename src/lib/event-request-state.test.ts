@@ -34,10 +34,31 @@ test("buildEventRequestPayload trims values and preserves requester identity", (
       venue_label: "JCNC",
       start_date: "2026-08-20",
       end_date: null,
+      source_url: null,
       expected_traffic: "high",
       requested_by: "user-1",
     },
   });
+});
+
+test("buildEventRequestPayload rejects invalid source URLs", () => {
+  const formData = new FormData();
+  formData.set("name", "Paryushan");
+  formData.set("source_url", "javascript:alert(1)");
+
+  assert.deepEqual(buildEventRequestPayload(formData, "user-1"), {
+    state: eventRequestError("Please enter a valid http or https URL."),
+    payload: null,
+  });
+});
+
+test("buildEventRequestPayload accepts https source URLs", () => {
+  const formData = new FormData();
+  formData.set("name", "Paryushan");
+  formData.set("source_url", "https://jcnc.org/events/paryushan");
+
+  const result = buildEventRequestPayload(formData, "user-1");
+  assert.equal(result.payload?.source_url, "https://jcnc.org/events/paryushan");
 });
 
 test("eventRequestSuccess asks the client to reset the form", () => {

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { hasContact } from "@/lib/contact-readiness";
+import { contactSetupDestination } from "@/lib/route-targets";
 import { RequestForm } from "@/components/request-form";
 import type { EventRow, Place } from "@/lib/types";
 
@@ -18,6 +20,11 @@ export default async function NewRequestPage({
   if (!user) redirect("/");
 
   const supabase = await createClient();
+  if (!(await hasContact(supabase, user.id))) {
+    const attempted = eventId ? `/requests/new?event_id=${eventId}` : "/requests/new";
+    redirect(contactSetupDestination(attempted));
+  }
+
   const [{ data: places }, { data: events }] = await Promise.all([
     supabase.from("places").select("*").eq("active", true),
     supabase

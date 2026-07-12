@@ -1,15 +1,15 @@
 import { notFound } from "next/navigation";
 import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { format } from "date-fns";
-import { ArrowLeft, CheckCircle2, MessageCircle } from "lucide-react";
+import { ArrowLeft, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { Avatar } from "@/components/ui/avatar";
 import { RouteTrack } from "@/components/route-track";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { openConversation } from "@/app/messages/actions";
-import { acceptRideRequest } from "@/app/rides/actions";
-import { CancelRequestButton } from "@/components/ride-actions";
+import { CancelRequestButton, AcceptRequestButton } from "@/components/ride-actions";
+import { ReportTargetButton } from "@/components/report-target-button";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import type { EventRow, Profile, RideRequest } from "@/lib/types";
 import { throwReadError } from "@/lib/supabase/read-error";
@@ -60,22 +60,27 @@ export default async function RequestDetailPage({
       : format(new Date(request.depart_at), "EEE, MMM d, h:mm a");
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center gap-3">
-        <Link
-          href="/rides?tab=requests"
-          aria-label="Back to ride requests"
-          className="text-stone-500 transition hover:text-stone-800"
-        >
-          <ArrowLeft size={24} />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-ink">
-            Ride request details
-          </h1>
-          <p className="text-sm text-stone-500">
-            {request.origin_label} &nbsp;-&gt;&nbsp; {request.destination_label}
-          </p>
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/rides?tab=requests"
+            aria-label="Back to ride requests"
+            className="text-stone-500 transition hover:text-stone-800"
+          >
+            <ArrowLeft size={24} />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-ink">
+              Ride request details
+            </h1>
+            <p className="text-sm text-stone-500">
+              {request.origin_label} &nbsp;-&gt;&nbsp; {request.destination_label}
+            </p>
+          </div>
         </div>
+        {user && !isOwner && (
+          <ReportTargetButton targetType="ride_request" targetId={request.id} variant="desktop" />
+        )}
       </div>
 
       {request.status !== "active" && (
@@ -224,18 +229,7 @@ function OwnerActions({
 }
 
 function ResponderActions({ requestId }: { requestId: string }) {
-  return (
-    <form action={acceptRideRequest.bind(null, requestId)}>
-      <PendingActionButton
-        actionKey={`accept-request-${requestId}`}
-        pendingLabel="Accepting..."
-        className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98]"
-      >
-        <CheckCircle2 size={17} />
-        Accept request
-      </PendingActionButton>
-    </form>
-  );
+  return <AcceptRequestButton requestId={requestId} />;
 }
 
 function BookedMessageButton({

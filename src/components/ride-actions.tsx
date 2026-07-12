@@ -2,44 +2,42 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { CheckCircle2 } from "lucide-react";
 import { actionErrorMessage } from "@/lib/action-lifecycle";
 import { InlineActionError } from "@/components/inline-action-error";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import { DesktopDialog } from "@/components/ui/desktop-dialog";
 import {
-  requestSeat,
   setPassengerStatus,
   cancelRide,
   closeRide,
   cancelSeat,
   cancelRideRequest,
+  acceptRideRequest,
 } from "@/app/rides/actions";
 import { openConversation } from "@/app/messages/actions";
 
+import { ReserveSeatForm } from "@/components/reserve-seat-form";
+
 export function ReserveSeatButton({
   rideId,
+  seatsAvailable,
+  savedHome,
   label = "Reserve a seat",
 }: {
   rideId: string;
+  seatsAvailable: number;
+  savedHome: string | null;
   label?: string;
 }) {
-  const [state, formAction] = useActionState(requestSeat.bind(null, rideId), null);
-
   return (
-    <form action={formAction}>
-      <PendingActionButton
-        actionKey={`reserve-${rideId}`}
-        pendingLabel="Submitting..."
-        className="w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        {label}
-      </PendingActionButton>
-      <InlineActionError
-        id={`reserve-${rideId}-error`}
-        error={state?.error}
-        className="mt-2 text-center text-sm font-semibold text-red-600"
-      />
-    </form>
+    <ReserveSeatForm
+      rideId={rideId}
+      seatsAvailable={seatsAvailable}
+      savedHome={savedHome}
+      label={label}
+      variant="desktop"
+    />
   );
 }
 
@@ -58,7 +56,9 @@ export function PassengerStatusButtons({
     setPassengerStatus.bind(null, passengerId, rideId, "declined"),
     null,
   );
-  const error = confirmState?.error ?? declineState?.error;
+  const error =
+    (confirmState && "error" in confirmState ? confirmState.error : undefined) ??
+    (declineState && "error" in declineState ? declineState.error : undefined);
 
   return (
     <PendingActionGroup>
@@ -88,6 +88,76 @@ export function PassengerStatusButtons({
         className="mt-2 text-right text-xs font-semibold text-red-600"
       />
     </PendingActionGroup>
+  );
+}
+
+export function AcceptRequestButton({
+  requestId,
+  base,
+  actionKeyPrefix = "accept-request",
+}: {
+  requestId: string;
+  base?: "/messages" | "/m/messages";
+  actionKeyPrefix?: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [setupPath, setSetupPath] = useState<string | null>(null);
+
+  function submit() {
+    setError(null);
+    setSetupPath(null);
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set("request_id", requestId);
+        if (base) formData.set("base", base);
+        const result = await acceptRideRequest(requestId, formData);
+        if ("error" in result) {
+          setError(result.error);
+          setSetupPath(result.setupPath ?? null);
+          return;
+        }
+        setSetupPath(null);
+        router.push(result.redirectTo);
+        router.refresh();
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't accept this request. Please try again.",
+          ),
+        );
+      }
+    });
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={pending}
+        className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <CheckCircle2 size={17} />
+        {pending ? "Accepting..." : "Accept request"}
+      </button>
+      <InlineActionError
+        id={`${actionKeyPrefix}-${requestId}-error`}
+        error={error}
+        className="mt-2 text-center text-sm font-semibold text-red-600"
+      />
+      {setupPath && (
+        <a
+          href={setupPath}
+          className="mt-1 inline-flex min-h-11 w-full items-center justify-center text-sm font-semibold text-brand-600 underline-offset-2 hover:underline"
+        >
+          Finish contact info in profile
+        </a>
+      )}
+    </div>
   );
 }
 

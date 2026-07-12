@@ -1,3 +1,6 @@
+import { mobileNotificationHref } from "@/lib/notification-href";
+import type { EventRow, NotificationType } from "@/lib/types";
+
 export const AUTH_CALLBACK_TARGETS = [
   "/rides",
   "/rides/new",
@@ -99,6 +102,34 @@ export function authOnboardingDestination(
   return `${profilePath}?${search.toString()}`;
 }
 
+/** Redirect target when a write action needs contact info before continuing. */
+export function contactSetupDestination(
+  attemptedPath: unknown,
+  { mobile = false }: { mobile?: boolean } = {},
+) {
+  const fallback = mobile ? "/m" : "/rides";
+  const next = authCallbackDestination(attemptedPath, fallback);
+  const search = new URLSearchParams({ contact_required: "1", next });
+  const profilePath = mobile ? "/m/profile/edit" : "/profile";
+  return `${profilePath}?${search.toString()}`;
+}
+
+export function contactActionReturnPath(
+  formData: FormData | undefined,
+  fallback: string,
+) {
+  const returnTo = formData?.get("return_to")?.toString();
+  if (returnTo) return authCallbackDestination(returnTo, fallback);
+
+  const rideId = formData?.get("ride_id")?.toString();
+  const requestId = formData?.get("request_id")?.toString();
+  const base = formData?.get("base")?.toString() ?? "";
+  const mobile = base.startsWith("/m") || fallback.startsWith("/m");
+  if (rideId) return mobile ? `/m/rides/${rideId}` : `/rides/${rideId}`;
+  if (requestId) return mobile ? `/m/requests/${requestId}` : `/requests/${requestId}`;
+  return authCallbackDestination(base || fallback, fallback);
+}
+
 export function authRevalidationPath(destination: unknown, fallback = "/rides") {
   const canonicalDestination = authCallbackDestination(destination, fallback);
   return new URL(canonicalDestination, AUTH_ORIGIN).pathname;
@@ -166,13 +197,23 @@ export function mobileNotificationDestination({
   ride_id,
   request_id,
   conversation_id,
+  event_id,
+  type,
+  event,
 }: {
   ride_id?: string | null;
   request_id?: string | null;
   conversation_id?: string | null;
+  event_id?: string | null;
+  type?: NotificationType;
+  event?: Pick<EventRow, "slug"> | null;
 }) {
-  if (ride_id) return `/m/rides/${ride_id}`;
-  if (request_id) return `/m/requests/${request_id}`;
-  if (conversation_id) return `/m/messages/${conversation_id}`;
-  return null;
+  return mobileNotificationHref({
+    ride_id: ride_id ?? null,
+    request_id: request_id ?? null,
+    conversation_id: conversation_id ?? null,
+    event_id: event_id ?? null,
+    type: type ?? "seat_requested",
+    event: event ?? null,
+  });
 }

@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { postRequest } from "@/app/rides/actions";
 import { JCNC_LABEL } from "@/lib/constants";
+import { COARSE_LABEL_HINT } from "@/lib/coarse-label";
 import { FormField, PlacesDatalist, EventSelect, SubmitButton } from "@/components/form-bits";
 import type { EventRow, Place } from "@/lib/types";
 
@@ -30,7 +31,7 @@ export function RequestForm({
         label="Pick-up neighborhood"
         name="origin_label"
         required
-        hint="Where should a driver collect you?"
+        hint={`${COARSE_LABEL_HINT} Where should a driver collect you?`}
         placeholder="San Jose, Fremont, Sunnyvale..."
         list="places"
       />
@@ -39,6 +40,7 @@ export function RequestForm({
         name="destination_label"
         required
         defaultValue={JCNC_LABEL}
+        hint="City or neighborhood, not a street address."
         list="places"
       />
 

@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
-import { ContactRequiredGate } from "@/components/contact-required-gate";
+import { ModerationBannedGate } from "@/components/moderation-banned-gate";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
-import { getCurrentUser } from "@/lib/auth";
+import { getAuthUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { hasContact } from "@/lib/contact";
+import { loadModerationSnapshot } from "@/lib/moderation-server";
 
 const jakarta = Plus_Jakarta_Sans({
   variable: "--font-jakarta",
@@ -33,12 +33,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { user } = await getCurrentUser();
-  let contactRequired = false;
-  if (user) {
-    const supabase = await createClient();
-    contactRequired = !(await hasContact(supabase, user.id));
-  }
+  const supabase = await createClient();
+  const user = await getAuthUser(supabase);
+  const moderation = user ? await loadModerationSnapshot() : null;
 
   return (
     <html
@@ -47,9 +44,9 @@ export default async function RootLayout({
       data-scroll-behavior="smooth"
     >
       <body className="flex min-h-full flex-col">
-        <ContactRequiredGate required={contactRequired}>
+        <ModerationBannedGate banned={Boolean(moderation?.banned)}>
           {children}
-        </ContactRequiredGate>
+        </ModerationBannedGate>
       </body>
     </html>
   );

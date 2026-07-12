@@ -11,9 +11,11 @@ export function FormField({
   defaultValue,
   placeholder,
   min,
+  maxLength,
   list,
   textarea,
   hint,
+  ariaDescribedBy,
 }: {
   label: string;
   name: string;
@@ -22,9 +24,11 @@ export function FormField({
   defaultValue?: string;
   placeholder?: string;
   min?: number | string;
+  maxLength?: number;
   list?: string;
   textarea?: boolean;
   hint?: string;
+  ariaDescribedBy?: string;
 }) {
   const cls =
     "w-full rounded-xl border border-[#e2ddd5] px-3.5 py-3 text-[15px] outline-none placeholder:text-[#a8a29e] focus:border-brand-600 focus:ring-2 focus:ring-brand-100";
@@ -40,6 +44,8 @@ export function FormField({
           placeholder={placeholder}
           rows={3}
           defaultValue={defaultValue}
+          maxLength={maxLength}
+          aria-describedby={ariaDescribedBy}
           className={cls}
         />
       ) : (
@@ -50,7 +56,9 @@ export function FormField({
           defaultValue={defaultValue}
           placeholder={placeholder}
           min={min}
+          maxLength={maxLength}
           list={list}
+          aria-describedby={ariaDescribedBy}
           className={cls}
         />
       )}

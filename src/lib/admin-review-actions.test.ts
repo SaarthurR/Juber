@@ -235,6 +235,36 @@ test("approval maps a concurrent loser directly to already-approved info", async
   assert.deepEqual(revalidated, ["/admin", "/events", "/m/events"]);
 });
 
+test("rejection calls only v2 and maps the fresh reject outcome", async () => {
+  const calls: string[] = [];
+  const revalidated: string[] = [];
+  const actions = createAdminReviewActions({
+    requireAdmin: async () => ({
+      supabase: approvalClient(
+        {
+          data: { outcome: "rejected", event_id: null },
+          error: null,
+        },
+        calls,
+      ),
+    }),
+    revalidatePath: (path) => revalidated.push(path),
+  });
+
+  const state = await actions.rejectEventRequest("request-1", {
+    ...ADMIN_ACTION_INITIAL,
+    resetKey: 2,
+  });
+
+  assert.deepEqual(calls, ["rpc:reject_event_request_v2:request-1"]);
+  assert.deepEqual(state, {
+    status: "success",
+    message: "Request rejected.",
+    resetKey: 3,
+  });
+  assert.deepEqual(revalidated, ["/admin", "/events", "/m/events"]);
+});
+
 for (const outcome of [
   {
     value: "already_rejected",

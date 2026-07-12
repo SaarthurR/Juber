@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { markNotificationsRead } from "@/app/messages/actions";
 import {
@@ -20,8 +21,10 @@ import {
 import {
   createNotificationRefreshGate,
   createNotificationControllerState,
+  createSurfaceRefreshDebouncer,
   notificationControllerReducer,
   notificationTitle,
+  notificationTriggersSurfaceRefresh,
   notificationWriteErrorMessage,
   type NotificationControllerAction,
   type NotificationControllerState,
@@ -61,6 +64,7 @@ export function NotificationsProvider({
   children: React.ReactNode;
 }) {
   const initialSnapshot = initial ?? emptySnapshot;
+  const router = useRouter();
   const [state, dispatch] = useReducer(
     notificationControllerReducer,
     initialSnapshot,
@@ -76,6 +80,7 @@ export function NotificationsProvider({
   const operationSequence = useRef(0);
   const currentIdentity = useRef({ userId, identity });
   const refreshNotificationsRef = useRef<() => Promise<void>>(async () => undefined);
+  const surfaceRefreshRef = useRef(createSurfaceRefreshDebouncer(() => router.refresh()));
 
   useLayoutEffect(() => {
     currentIdentity.current = { userId, identity };
@@ -157,10 +162,18 @@ export function NotificationsProvider({
   }, [refreshNotifications]);
 
   useEffect(() => {
+    surfaceRefreshRef.current.cancel();
+    surfaceRefreshRef.current = createSurfaceRefreshDebouncer(() => router.refresh());
+    return () => {
+      surfaceRefreshRef.current.cancel();
+    };
+  }, [router, userId]);
+
+  useEffect(() => {
     if (!userId) return undefined;
     const channelUserId = userId;
     const supabase = createClient();
-    return subscribeToNotificationChanges(supabase, "bell", userId, () => {
+    return subscribeToNotificationChanges(supabase, "bell", userId, ({ type }) => {
       const current = currentIdentity.current;
       if (
         current.userId !== channelUserId
@@ -168,7 +181,17 @@ export function NotificationsProvider({
       ) {
         return;
       }
-      void refreshNotificationsRef.current();
+      void refreshNotificationsRef.current().then(() => {
+        if (
+          current.userId !== channelUserId
+          || !refreshGate.isActive(current.identity)
+        ) {
+          return;
+        }
+        if (notificationTriggersSurfaceRefresh(type)) {
+          surfaceRefreshRef.current.schedule();
+        }
+      });
     });
   }, [refreshGate, userId]);
 

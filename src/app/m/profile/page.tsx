@@ -9,6 +9,7 @@ import { GoogleSignInButton } from "@/components/auth-button";
 import { PublicLegalLinks } from "@/components/landing-auth-gate";
 import { SignOutForm } from "@/components/sign-out-form";
 import type { RideWithDriver } from "@/lib/types";
+import { RIDE_WITH_JOIN, RIDE_NESTED_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
 import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
@@ -40,13 +41,13 @@ export default async function MobileProfilePage() {
   const [postedResult, joinedResult] = await Promise.all([
     supabase
       .from("rides")
-      .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+      .select(RIDE_WITH_JOIN)
       .eq("driver_id", user.id)
       .order("depart_at", { ascending: false }),
     supabase
       .from("ride_passengers")
       .select(
-        "ride:rides!ride_passengers_ride_id_fkey(*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug))",
+        `ride:rides!ride_passengers_ride_id_fkey(${RIDE_NESTED_JOIN})`,
       )
       .eq("passenger_id", user.id)
       .eq("status", "confirmed"),
@@ -56,7 +57,7 @@ export default async function MobileProfilePage() {
   const postedData = postedResult.data;
   const joinedData = joinedResult.data;
 
-  const posted = (postedData as RideWithDriver[]) ?? [];
+  const posted = asRideWithDriverRows(postedData);
   const joined = ((joinedData as JoinedRideRow[] | null) ?? [])
     .map((r) => r.ride)
     .filter((r): r is RideWithDriver => Boolean(r));
@@ -75,14 +76,22 @@ export default async function MobileProfilePage() {
         </h1>
         {metaLine && <p className="mt-0.5 text-[13px] text-muted-warm">{metaLine}</p>}
 
-        <div className="mt-4 flex items-center gap-2.5">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
           <Link
             href="/m/profile/edit"
-            className="flex items-center gap-2 rounded-[13px] border-[1.5px] border-brand-600 px-5 py-2.5 text-[13px] font-bold text-brand-600 transition active:scale-95"
+            className="flex h-11 items-center gap-2 rounded-[13px] border-[1.5px] border-brand-600 px-5 text-[13px] font-bold text-brand-600 transition active:scale-95"
           >
             <Pencil size={15} strokeWidth={2.2} />
             Edit profile
           </Link>
+          {profile?.is_admin && (
+            <Link
+              href="/m/admin"
+              className="flex h-11 items-center rounded-[13px] border border-brand-200 bg-white px-4 text-[13px] font-bold text-brand-700 transition active:scale-95"
+            >
+              Admin
+            </Link>
+          )}
           <SignOutForm variant="mobile" />
         </div>
       </header>

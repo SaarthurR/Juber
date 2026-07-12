@@ -2,9 +2,36 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   isApproveEventRequestV2Result,
+  isRejectEventRequestV2Result,
   interpretRejectEventRequest,
   rejectOutcomeToAdminState,
+  rejectV2OutcomeToAdminState,
 } from "./admin-approval";
+
+test("reject v2 result guard accepts the exact RPC outcomes", () => {
+  for (const outcome of [
+    "rejected",
+    "already_rejected",
+    "already_approved",
+    "missing",
+  ]) {
+    assert.equal(
+      isRejectEventRequestV2Result({
+        outcome,
+        event_id: outcome === "already_approved" ? "event-1" : null,
+      }),
+      true,
+    );
+  }
+});
+
+test("reject v2 outcome helper preserves reset semantics", () => {
+  assert.deepEqual(rejectV2OutcomeToAdminState("rejected", { resetKey: 2 }), {
+    status: "success",
+    message: "Request rejected.",
+    resetKey: 3,
+  });
+});
 
 test("approve v2 result guard accepts the exact RPC outcomes", () => {
   for (const outcome of [

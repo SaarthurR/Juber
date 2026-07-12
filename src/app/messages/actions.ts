@@ -4,9 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
-import { MESSAGE_BASE_TARGETS, pickAllowed } from "@/lib/route-targets";
+import { MESSAGE_BASE_TARGETS, contactActionReturnPath, contactSetupDestination, pickAllowed } from "@/lib/route-targets";
 import { messageMatchesRetry } from "@/lib/messages";
+import { CONTACT_SETUP_MESSAGE } from "@/lib/contact-setup";
+import { hasContact } from "@/lib/contact-readiness";
 import { requireNotificationWriteAuthentication } from "@/lib/notifications-controller";
+import { mapRateLimitError } from "@/lib/rate-limit";
 import type { Message } from "@/lib/types";
 
 function revalidateMessageRoutes() {
@@ -26,6 +29,12 @@ export async function openConversation(otherUserId: string, formData?: FormData)
   if (!user) redirect("/");
   const base = pickAllowed(formData?.get("base")?.toString(), MESSAGE_BASE_TARGETS, "/messages");
   if (user.id === otherUserId) redirect(base);
+
+  if (!(await hasContact(supabase, user.id))) {
+    const returnPath = contactActionReturnPath(formData, base);
+    const mobile = returnPath.startsWith("/m");
+    redirect(contactSetupDestination(returnPath, { mobile }));
+  }
 
   const rideId = formData?.get("ride_id")?.toString() || null;
   const requestId = formData?.get("request_id")?.toString() || null;
@@ -85,6 +94,19 @@ export async function sendMessage(conversationId: string, formData: FormData) {
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
+  if (!(await hasContact(supabase, user.id))) {
+    const returnPath = contactActionReturnPath(
+      formData,
+      `/messages/${conversationId}`,
+    );
+    const mobile = returnPath.startsWith("/m");
+    return {
+      message: null,
+      error: CONTACT_SETUP_MESSAGE,
+      setupPath: contactSetupDestination(returnPath, { mobile }),
+    };
+  }
+
   const body = (formData.get("body") ?? "").toString().trim();
   if (!body) return { message: null, error: "Write a message before sending." };
   const clientMessageId = (formData.get("client_message_id") ?? "").toString();
@@ -123,6 +145,8 @@ export async function sendMessage(conversationId: string, formData: FormData) {
     }
   }
   if (error || !data) {
+    const rateMsg = mapRateLimitError(error);
+    if (rateMsg) return { message: null, error: rateMsg };
     console.error("send message failed", { code: error?.code, conversationId });
     return { message: null, error: "Could not send this message. Please try again." };
   }

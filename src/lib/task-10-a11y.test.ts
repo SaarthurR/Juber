@@ -73,8 +73,6 @@ const ride: RideWithDriver = {
   driver_id: profile.id,
   origin_label: "Fremont",
   destination_label: "JCNC",
-  pickup_location: null,
-  dropoff_location: null,
   depart_at: "2026-08-01T09:00:00.000Z",
   round_trip: false,
   return_depart_at: null,
@@ -235,6 +233,11 @@ test("bottom navigation applies the auth gate contract to all five controls", ()
     const openingTag =
       html.match(new RegExp(`<a [^>]*href="${control.href}"[^>]*>`))?.[0] ?? "";
     assert.notEqual(openingTag, "", `${control.label} should render its destination`);
+    if (control.label === "Post") {
+      assert.match(openingTag, /h-\[58px\] w-\[58px\]/);
+    } else {
+      assert.match(openingTag, /min-h-14/);
+    }
     assert.equal(
       shouldIntercept({
         hasAction: true,
@@ -345,6 +348,90 @@ test("segmented control renders the verified inactive token on its real track", 
   assert.match(html, /text-sand-text/);
 });
 
+test("mobile home branding link and segmented tabs meet the 44px floor", () => {
+  const mobileHome = readFileSync("src/app/m/page.tsx", "utf8");
+  const segmentedSource = readFileSync("src/components/mobile/segmented.tsx", "utf8");
+  const homeBoard = readFileSync("src/components/mobile/home-board.tsx", "utf8");
+  const profileTabs = readFileSync("src/components/mobile/profile-tabs.tsx", "utf8");
+
+  assert.match(
+    mobileHome,
+    /<Link href="\/m" className="inline-flex min-h-11 items-center gap-1\.5">/,
+  );
+  assert.match(segmentedSource, /role="tab"[\s\S]*min-h-11/);
+  assert.match(homeBoard, /from "@\/components\/mobile\/segmented"/);
+  assert.match(profileTabs, /from "@\/components\/mobile\/segmented"/);
+
+  const html = renderToStaticMarkup(
+    React.createElement(Segmented, {
+      ariaLabel: "Ride listings",
+      options: [
+        { value: "carpools", label: "Carpools" },
+        { value: "requests", label: "Ride requests" },
+      ],
+      value: "carpools",
+      onChange: () => {},
+    }),
+  );
+  const tabs = html.match(/<button [^>]*role="tab"[^>]*>/g) ?? [];
+  assert.equal(tabs.length, 2);
+  for (const tab of tabs) {
+    assert.match(tab, /min-h-11/);
+  }
+});
+
+test("mobile chrome controls and shared route owners meet the 44px floor", () => {
+  const mobileHome = readFileSync("src/app/m/page.tsx", "utf8");
+  const notificationBell = readFileSync(
+    "src/components/mobile/notifications-sheet.tsx",
+    "utf8",
+  );
+  const subHeader = readFileSync("src/components/mobile/sub-header.tsx", "utf8");
+  const backButton = readFileSync("src/components/mobile/back-button.tsx", "utf8");
+  const mobileRide = readFileSync("src/app/m/rides/[id]/page.tsx", "utf8");
+  const mobileLayout = readFileSync("src/app/m/layout.tsx", "utf8");
+
+  assert.match(
+    mobileHome,
+    /aria-label="Your messages"[\s\S]*?className="flex h-11 w-11 items-center justify-center rounded-full/,
+  );
+  assert.match(
+    mobileHome,
+    /aria-label="Your profile"[\s\S]*?className="inline-flex h-11 w-11 items-center justify-center active:scale-95"/,
+  );
+  assert.match(
+    notificationBell,
+    /aria-label="Notifications"[\s\S]*?className="relative flex h-11 w-11 items-center justify-center rounded-full/,
+  );
+  assert.match(
+    backButton,
+    /aria-label="Back"[\s\S]*?className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl/,
+  );
+  assert.match(subHeader, /<BackButton[\s\S]*allowAnonymousBrowse=\{allowAnonymousBack\}/);
+  assert.match(
+    mobileRide,
+    /h-11 w-11[\s\S]*\[&>button\]:h-full \[&>button\]:w-full[\s\S]*<ShareButton/,
+  );
+  assert.match(mobileLayout, /<BottomNav \/>/);
+
+  for (const owner of [
+    "src/app/m/events/[slug]/page.tsx",
+    "src/app/m/messages/page.tsx",
+    "src/app/m/profile/[id]/page.tsx",
+    "src/app/m/profile/edit/page.tsx",
+    "src/app/m/requests/[id]/page.tsx",
+    "src/app/m/requests/page.tsx",
+    "src/app/m/rides/[id]/page.tsx",
+    "src/app/m/rides/new/page.tsx",
+    "src/components/mobile/request-form.tsx",
+  ]) {
+    assert.match(readFileSync(owner, "utf8"), /<SubHeader/);
+  }
+
+  const newRequestPage = readFileSync("src/app/m/requests/new/page.tsx", "utf8");
+  assert.match(newRequestPage, /<MobileRequestForm/);
+});
+
 test("ride and request cards render no Lighthouse-failed text colors", () => {
   const html = renderToStaticMarkup(
     React.createElement(
@@ -381,4 +468,21 @@ test("mobile confirmed passenger profile links expose accessible names", () => {
     goingSection,
     /aria-label=\{`View \$\{p\.passenger\?\.full_name \?\? "confirmed passenger"\}'s profile`\}/,
   );
+});
+
+test("flagged touch targets meet the 44px floor", () => {
+  const stepper = readFileSync("src/components/mobile/stepper.tsx", "utf8");
+  const homeBoard = readFileSync("src/components/mobile/home-board.tsx", "utf8");
+  const rideFilters = readFileSync("src/components/ride-filters.tsx", "utf8");
+  const mobileHome = readFileSync("src/app/m/page.tsx", "utf8");
+
+  assert.match(stepper, /h-11 w-11/);
+  assert.match(homeBoard, /aria-label="Swap from and to"[\s\S]*h-11 w-11/);
+  assert.match(homeBoard, /aria-label="Clear date and show rides on all dates"[\s\S]*h-11 w-11/);
+  assert.match(homeBoard, /aria-label="Clear trip type"[\s\S]*min-h-11/);
+  assert.match(homeBoard, /function TripToggle[\s\S]*min-h-11/);
+  assert.match(rideFilters, /aria-label="Swap from and to"[\s\S]*h-11 w-11/);
+  assert.match(rideFilters, /aria-label="Clear date and show rides on all dates"[\s\S]*h-11 w-11/);
+  assert.match(rideFilters, /aria-label="Clear trip type"[\s\S]*min-h-11/);
+  assert.match(mobileHome, /GoogleSignInButton[\s\S]*min-h-11/);
 });

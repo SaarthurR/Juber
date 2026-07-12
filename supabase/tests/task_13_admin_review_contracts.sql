@@ -179,7 +179,14 @@ select dblink_exec(
 select dblink_send_query(
   'task13_second',
   format(
-    'select public.approve_event_request_v2(%L::uuid)',
+    $sql$
+      select jsonb_build_object(
+        'outcome',
+        'legacy',
+        'event_id',
+        public.approve_event_request(%L::uuid)
+      )
+    $sql$,
     :'pending_request'
   )
 );
@@ -203,11 +210,12 @@ select pg_temp.task13_assert(
   )
 );
 select pg_temp.task13_assert(
-  'one caller observes the prior approval',
+  'the legacy caller observes the same canonical approval',
   (
     select count(*) = 1
     from task13_results
-    where payload ->> 'outcome' = 'already_approved'
+    where payload ->> 'outcome' = 'legacy'
+      and payload ->> 'event_id' is not null
   )
 );
 select pg_temp.task13_assert(
@@ -236,6 +244,20 @@ select pg_temp.task13_assert(
       and approved_event_id is not null
       and reviewed_by in (:'admin_one'::uuid, :'admin_two'::uuid)
       and reviewed_at is not null
+  )
+);
+select pg_temp.task13_assert(
+  'mixed old/new approval creates exactly one notification',
+  (
+    select count(*) = 1
+    from public.notifications
+    where recipient_id = :'non_admin'::uuid
+      and type = 'event_request_approved'
+      and event_id = (
+        select (payload ->> 'event_id')::uuid
+        from task13_results
+        where payload ->> 'outcome' = 'approved'
+      )
   )
 );
 

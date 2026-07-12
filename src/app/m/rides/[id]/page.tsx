@@ -8,9 +8,19 @@ import { SubHeader } from "@/components/mobile/sub-header";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { ContactSheet } from "@/components/mobile/contact-sheet";
 import { getContact } from "@/lib/contact";
+import { getHomeAddress } from "@/lib/home-address";
+import { getRideMeetup } from "@/lib/meetup";
+import { confirmedSeatTotal, partyTotal, passengerDisplayName } from "@/lib/booking";
+import { RIDE_WITH_JOIN } from "@/lib/rides-query";
 import { canReserveRide } from "@/lib/action-lifecycle";
+import {
+  MeetupLocations,
+  PassengerPickupNote,
+  resolveMeetupLabels,
+} from "@/components/meetup-locations";
 import { MReserveButton } from "@/components/mobile/m-reserve";
 import { ShareButton } from "@/components/share-button";
+import { ReportTargetButton } from "@/components/report-target-button";
 import { GoogleSignInButton } from "@/components/auth-button";
 import {
   PassengerStatusButtons,
@@ -35,35 +45,56 @@ export default async function MobileTripPage({
   const { user } = await getCurrentUser();
   const supabase = await createClient();
 
-  const { data: ride, error: rideError } = await supabase
-    .from("rides")
-    .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
-    .eq("id", id)
-    .maybeSingle<Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }>();
+  const [{ data: ride, error: rideError }, { data: passengers, error: passengersError }] =
+    await Promise.all([
+      supabase
+        .from("rides")
+        .select(RIDE_WITH_JOIN)
+        .eq("id", id)
+        .maybeSingle<
+          Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }
+        >(),
+      supabase
+        .from("ride_passengers")
+        .select("*, passenger:profiles!ride_passengers_passenger_id_fkey(*)")
+        .eq("ride_id", id),
+    ]);
 
   throwReadError(rideError, "ride");
   if (!ride) notFound();
-
-  const { data: passengers, error: passengersError } = await supabase
-    .from("ride_passengers")
-    .select("*, passenger:profiles!ride_passengers_passenger_id_fkey(*)")
-    .eq("ride_id", id);
   throwReadError(passengersError, "ride passengers");
 
   const passengerRows = (passengers as PassengerRow[]) ?? [];
   const isDriver = user?.id === ride.driver_id;
   const myJoin = passengerRows.find((p) => p.passenger_id === user?.id);
+  const confirmed = passengerRows.filter((p) => p.status === "confirmed");
+  const confirmedCount = Math.max(
+    confirmedSeatTotal(passengerRows),
+    ride.seats_total - ride.seats_available,
+  );
+  const emptySlots = Math.max(0, ride.seats_total - confirmedCount);
+  const meetupPromise = user ? getRideMeetup(supabase, id) : Promise.resolve([]);
+  const homePromise =
+    user && !isDriver ? getHomeAddress(supabase) : Promise.resolve(null);
+  const [meetupRows, savedHome] = await Promise.all([meetupPromise, homePromise]);
+  const meetup = resolveMeetupLabels({
+    coarsePickup: ride.origin_label,
+    coarseDropoff: ride.destination_label,
+    meetupRows,
+    userId: user?.id,
+    isDriver,
+  });
   const driverContact =
     user && !isDriver && ride.status === "active" && myJoin?.status === "confirmed"
       ? await getContact(supabase, ride.driver_id)
       : { phone: null, whatsapp: null };
-  const confirmed = passengerRows.filter((p) => p.status === "confirmed");
-  const confirmedCount = Math.max(confirmed.length, ride.seats_total - ride.seats_available);
-  const emptySlots = Math.max(0, ride.seats_total - confirmed.length);
+  const meetupByPassenger = new Map(
+    meetupRows
+      .filter((row) => row.passenger_id)
+      .map((row) => [row.passenger_id as string, row]),
+  );
 
   const price = ride.gas_contribution ? `$${Number(ride.gas_contribution).toFixed(0)}` : "Free";
-  const pickupLocation = ride.pickup_location || ride.origin_label;
-  const dropoffLocation = ride.dropoff_location || ride.destination_label;
   const cancelled = ride.status === "cancelled";
   const completed = ride.status === "completed";
   const terminal = cancelled || completed;
@@ -84,7 +115,16 @@ export default async function MobileTripPage({
         right={
           <>
             <span className="text-[19px] font-extrabold text-brand-600">{price}</span>
-            <span className="flex h-[38px] w-[38px] items-center justify-center rounded-[11px] bg-tint text-brand-700">
+            {user && !isDriver && (
+              <ReportTargetButton
+                targetType="ride"
+                targetId={ride.id}
+                label="Report ride"
+                variant="mobile"
+                tone="subtle"
+              />
+            )}
+            <span className="flex h-11 w-11 items-center justify-center rounded-[11px] bg-tint text-brand-700 [&>button]:flex [&>button]:h-full [&>button]:w-full [&>button]:items-center [&>button]:justify-center">
               <ShareButton title={`${ride.origin_label} → ${ride.destination_label}`} />
             </span>
           </>
@@ -103,27 +143,13 @@ export default async function MobileTripPage({
           <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-gold-light">
             {formatRideDateTime(ride.depart_at, "EEEE, MMM d · h:mm a")}
           </p>
-          <div className="mt-4 flex gap-4">
-            <div className="flex flex-col items-center py-1">
-              <span className="h-3 w-3 rounded-full border-2 border-white" />
-              <span className="my-1 w-0.5 flex-1 bg-[#4B4540]" />
-              <span className="h-3 w-3 rounded-full bg-white" />
-            </div>
-            <div className="flex flex-1 flex-col gap-4">
-              <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">
-                  Pick up
-                </p>
-                <p className="text-[15px] font-bold">{pickupLocation}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-white/45">
-                  Drop off
-                </p>
-                <p className="text-[15px] font-bold">{dropoffLocation}</p>
-              </div>
-            </div>
-          </div>
+          <MeetupLocations
+            pickupLabel={meetup.pickupLabel}
+            dropoffLabel={meetup.dropoffLabel}
+            pickupMapsUrl={meetup.pickupMapsUrl}
+            dropoffMapsUrl={meetup.dropoffMapsUrl}
+            variant="mobile"
+          />
           {ride.round_trip && (
             <div className="mt-4 rounded-[16px] bg-white/10 p-3.5">
               <div className="flex items-center gap-2 text-[13px] font-extrabold">
@@ -230,9 +256,16 @@ export default async function MobileTripPage({
                     <li key={p.id} className="flex items-center justify-between gap-2">
                       <Link href={`/m/profile/${p.passenger_id}`} className="flex min-w-0 items-center gap-2.5">
                         <MAvatar src={p.passenger?.avatar_url} name={p.passenger?.full_name} seed={p.passenger_id} size={34} />
-                        <span className="truncate text-[13px] font-semibold text-ink">
-                          {p.passenger?.full_name ?? "Member"}
-                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold text-ink">
+                            {passengerDisplayName(p.passenger?.full_name, p.guest_count ?? 0)}
+                          </p>
+                          {meetupByPassenger.get(p.passenger_id)?.pickup_note && (
+                            <p className="mt-0.5 truncate text-[11px] text-muted-warm">
+                              Pickup: {meetupByPassenger.get(p.passenger_id)?.pickup_note}
+                            </p>
+                          )}
+                        </div>
                       </Link>
                       {ride.status === "active" && (
                         <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
@@ -245,7 +278,7 @@ export default async function MobileTripPage({
               <div className="mt-4 border-t border-border-soft pt-4">
                 <DriverRideActions
                   rideId={ride.id}
-                  confirmedRiderCount={confirmed.length}
+                  confirmedRiderCount={confirmedCount}
                   base="/m"
                 />
               </div>
@@ -283,8 +316,20 @@ export default async function MobileTripPage({
           <div>
             <div className="flex h-[48px] items-center justify-center rounded-[14px] bg-tint text-[14px] font-bold capitalize text-brand-700">
               Seat {myJoin.status}
+              {partyTotal(myJoin.guest_count ?? 0) > 1
+                ? ` · Party of ${partyTotal(myJoin.guest_count ?? 0)}`
+                : ""}
             </div>
-            {myJoin.status === "confirmed" && (
+            {meetup.selfPickupNote && meetup.selfPickupMapsUrl && (
+              <div className="mt-2 text-center">
+                <PassengerPickupNote
+                  note={meetup.selfPickupNote}
+                  mapsUrl={meetup.selfPickupMapsUrl}
+                  variant="mobile"
+                />
+              </div>
+            )}
+            {myJoin.status === "confirmed" && !meetup.selfPickupNote && (
               <p className="mt-2 text-center text-[12px] leading-relaxed text-muted-warm">
                 Use in-app chat to confirm pickup details with {driverFirst}.
               </p>
@@ -297,6 +342,8 @@ export default async function MobileTripPage({
         ) : canReserveRide(ride.status, myJoin?.status, ride.seats_available) ? (
           <MReserveButton
             rideId={ride.id}
+            seatsAvailable={ride.seats_available}
+            savedHome={savedHome}
             label={myJoin ? "Request a seat again" : undefined}
           />
         ) : (

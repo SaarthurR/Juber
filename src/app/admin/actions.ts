@@ -10,11 +10,7 @@ import {
   adminActionSuccess,
   type AdminActionState,
 } from "@/lib/admin-action-state";
-import {
-  interpretRejectEventRequest,
-  rejectOutcomeToAdminState,
-  type EventRequestReviewStatus,
-} from "@/lib/admin-approval";
+import { parseEventSourceUrl } from "@/lib/event-url";
 import { actionErrorMessage } from "@/lib/action-lifecycle";
 import {
   createAdminReviewActions,
@@ -73,18 +69,6 @@ const adminReviewActions = createAdminReviewActions({
   actionErrorMessage,
 });
 
-async function readEventRequestStatus(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  requestId: string,
-): Promise<EventRequestReviewStatus | null> {
-  const { data } = await supabase
-    .from("event_requests")
-    .select("status")
-    .eq("id", requestId)
-    .maybeSingle();
-  return (data?.status as EventRequestReviewStatus | undefined) ?? null;
-}
-
 export async function createEvent(
   previousState: AdminActionState,
   formData: FormData,
@@ -95,6 +79,11 @@ export async function createEvent(
     if (!name) return adminActionError("Please add an event name.");
 
     const slug = `${slugify(name)}-${Math.random().toString(36).slice(2, 6)}`;
+    const sourceUrl = parseEventSourceUrl(formData.get("source_url"));
+    if (formData.get("source_url")?.toString().trim() && !sourceUrl) {
+      return adminActionError("Please enter a valid http or https URL.");
+    }
+
     const { error } = await supabase.from("events").insert({
       name,
       slug,
@@ -102,6 +91,7 @@ export async function createEvent(
       venue_label: str(formData.get("venue_label")),
       start_date: str(formData.get("start_date")),
       end_date: str(formData.get("end_date")),
+      source_url: sourceUrl,
       created_by: user.id,
     });
     if (error) return adminActionError(error.message);
@@ -162,39 +152,7 @@ export async function rejectEventRequest(
   requestId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
-  try {
-    const { supabase, user } = await requireAdmin();
-    const beforeStatus = await readEventRequestStatus(supabase, requestId);
-
-    const { data, error } = await supabase
-      .from("event_requests")
-      .update({
-        status: "rejected",
-        reviewed_by: user.id,
-        reviewed_at: new Date().toISOString(),
-      })
-      .eq("id", requestId)
-      .eq("status", "pending")
-      .select("id")
-      .maybeSingle();
-
-    const afterStatus = await readEventRequestStatus(supabase, requestId);
-    const outcome = interpretRejectEventRequest({
-      beforeStatus,
-      updated: Boolean(data),
-      afterStatus,
-      updateError: error?.message ?? null,
-    });
-    const nextState = rejectOutcomeToAdminState(outcome, previousState);
-
-    if (outcome.kind === "rejected") {
-      revalidatePath("/admin");
-    }
-
-    return { ...nextState, resetKey: nextState.resetKey };
-  } catch (error) {
-    return adminActionError(actionErrorMessage(error, "Could not reject request."));
-  }
+  return adminReviewActions.rejectEventRequest(requestId, previousState);
 }
 
 export async function deleteEventRequest(

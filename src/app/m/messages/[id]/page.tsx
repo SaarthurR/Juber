@@ -58,6 +58,7 @@ export default async function MobileThreadPage({
       departAt={thread.context.kind === "missing" ? null : thread.context.departAt}
       contextKind={thread.context.kind}
       contextId={thread.context.id}
+      reportVariant="mobile"
     />
   );
 }

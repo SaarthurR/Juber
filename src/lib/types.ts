@@ -4,7 +4,7 @@
 
 // NOTE: phone/whatsapp are intentionally NOT on Profile. They are not selectable
 // from `profiles` (column-level RLS, migration 0020) and must be read via the
-// booking-scoped RPCs in `@/lib/contact` (getContact / hasContact).
+// booking-scoped helpers in `@/lib/contact` and `@/lib/contact-readiness`.
 export type Profile = {
   id: string;
   full_name: string | null;
@@ -28,6 +28,7 @@ export type EventRow = {
   venue_label: string | null;
   start_date: string | null;
   end_date: string | null;
+  source_url: string | null;
   is_active: boolean;
   created_by: string | null;
   created_at: string;
@@ -67,13 +68,12 @@ export type Place = {
 
 export type RideStatus = "active" | "cancelled" | "completed";
 
+/** Coarse-label browse shape; exact meetup comes from ride_meetup_location RPC. */
 export type Ride = {
   id: string;
   driver_id: string;
   origin_label: string;
   destination_label: string;
-  pickup_location: string | null;
-  dropoff_location: string | null;
   depart_at: string;
   round_trip: boolean;
   return_depart_at: string | null;
@@ -113,7 +113,16 @@ export type RidePassenger = {
   ride_id: string;
   passenger_id: string;
   status: PassengerStatus;
+  guest_count: number;
   created_at: string;
+};
+
+/** Driver meetup points returned only from `ride_meetup_location`. */
+export type RideMeetup = {
+  pickup_location: string | null;
+  dropoff_location: string | null;
+  pickup_note: string | null;
+  passenger_id: string | null;
 };
 
 export type Message = {
@@ -131,8 +140,11 @@ export type NotificationType =
   | "seat_declined"
   | "seat_cancelled"
   | "ride_cancelled"
+  | "ride_completed"
   | "request_accepted"
-  | "new_message";
+  | "new_message"
+  | "event_request_approved"
+  | "event_request_rejected";
 
 export type Notification = {
   id: string;
@@ -142,6 +154,7 @@ export type Notification = {
   ride_id: string | null;
   request_id: string | null;
   conversation_id: string | null;
+  event_id: string | null;
   message: string | null;
   read_at: string | null;
   created_at: string;
@@ -152,6 +165,7 @@ export type NotificationWithContext = Notification & {
   actor: Pick<Profile, "id" | "full_name" | "avatar_url"> | null;
   ride: Pick<Ride, "id" | "origin_label" | "destination_label" | "depart_at" | "status"> | null;
   request: Pick<RideRequest, "id" | "origin_label" | "destination_label" | "depart_at" | "status"> | null;
+  event: Pick<EventRow, "id" | "name" | "slug"> | null;
 };
 
 // Common joined shapes used in the UI.

@@ -59,9 +59,9 @@ test("source: root auth and gate wrappers do not add duplicate mains", () => {
 
   assert.equal(countMainOpenTags(authError), 0);
   assert.equal(countMainOpenTags(landingAuthGate), 0);
-  assert.equal(countMainOpenTags(contactGate), 1);
-  assert.match(contactGate, /if \(!allowed\)[\s\S]*<main/);
+  assert.equal(countMainOpenTags(contactGate), 0);
   assert.match(contactGate, /return children;/);
+  assert.doesNotMatch(contactGate, /<main/);
   assert.equal(existsSync(appPath("auth/callback/route.ts")), true);
   assert.equal(existsSync(appPath("auth/signout/route.ts")), true);
 });

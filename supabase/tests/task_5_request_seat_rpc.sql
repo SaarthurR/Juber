@@ -71,11 +71,11 @@ on conflict (id) do nothing;
 
 select public.task5_assert(
   'request_seat authenticated grant',
-  has_function_privilege('authenticated', 'public.request_seat(uuid)', 'EXECUTE')
+  has_function_privilege('authenticated', 'public.request_seat(uuid,integer,text)', 'EXECUTE')
 );
 select public.task5_assert(
   'request_seat anon revoked',
-  not has_function_privilege('anon', 'public.request_seat(uuid)', 'EXECUTE')
+  not has_function_privilege('anon', 'public.request_seat(uuid,integer,text)', 'EXECUTE')
 );
 
 set role authenticated;

@@ -2,8 +2,12 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getContact } from "@/lib/contact";
+import { getHomeAddress } from "@/lib/home-address";
+import { buildSetupProgress } from "@/lib/setup-progress";
 import { updateProfile } from "@/app/profile/actions";
-import { FormField, SubmitButton } from "@/components/form-bits";
+import { FormField } from "@/components/form-bits";
+import { ProfileForm } from "@/components/profile-form";
+import { ProfileSetupPanel, setupRationale } from "@/components/profile-setup-panel";
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { authCallbackDestination } from "@/lib/route-targets";
 import { SignOutForm } from "@/components/sign-out-form";
@@ -32,29 +36,55 @@ export default async function EditProfilePage({
     nextValues.length === 1 ? nextValues[0] : null,
     fallback,
   );
+  const setupMode =
+    sp.onboarding === "1"
+      ? "onboarding"
+      : sp.contact_required === "1"
+        ? "contact_required"
+        : null;
 
   const supabase = await createClient();
   const contact = await getContact(supabase, user.id);
+  const homeAddress = await getHomeAddress(supabase);
   const preferredContact = profile?.preferred_contact ?? "message";
+  const progress = buildSetupProgress({
+    fullName: profile?.full_name,
+    avatarUrl: profile?.avatar_url,
+    phone: contact.phone,
+    whatsapp: contact.whatsapp,
+    homeAddress,
+    carMakeModel: profile?.car_make_model,
+  });
 
   const radioBase =
-    "flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition has-[:checked]:border-brand-600 has-[:checked]:bg-tint has-[:checked]:text-brand-700 border-[#e2ddd5] text-stone-600 hover:bg-stone-50";
+    "flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition has-[:checked]:border-brand-600 has-[:checked]:bg-tint has-[:checked]:text-brand-700 border-[#e2ddd5] text-stone-600 hover:bg-stone-50";
 
   return (
     <div className="mx-auto flex max-w-4xl flex-wrap-reverse gap-12 px-4 py-10 sm:px-6">
       <div className="min-w-[300px] max-w-[560px] flex-[2]">
-        <form action={updateProfile} className="space-y-8">
+        <ProfileForm
+          action={updateProfile}
+          variant="desktop"
+          className="space-y-8"
+          mode={setupMode ?? "edit"}
+          skipHref={setupMode ? safeNext : undefined}
+        >
           {nextValues.length === 1 && <input type="hidden" name="next" value={safeNext} />}
           <div>
-            <h1 className="text-[30px] font-extrabold tracking-tight text-ink">Edit profile</h1>
+            <h1 className="text-[30px] font-extrabold tracking-tight text-ink">
+              {setupMode ? "Set up your profile" : "Edit profile"}
+            </h1>
             <div className="mt-5 h-px bg-[#efece6]" />
           </div>
 
-        {(sp.onboarding === "1" || sp.contact_required === "1") && (
-          <div className="rounded-xl border border-brand-200 bg-tint px-4 py-3 text-sm font-semibold text-brand-700">
-            Add a phone or WhatsApp number to continue using Juber.
-          </div>
-        )}
+          {setupMode && (
+            <ProfileSetupPanel
+              mode={setupMode}
+              progress={progress}
+              skipHref={safeNext}
+              variant="desktop"
+            />
+          )}
 
         {/* Personal Information */}
         <div>
@@ -78,7 +108,8 @@ export default async function EditProfilePage({
 
         {/* Contact */}
         <div>
-          <h2 className="mb-4 text-base font-extrabold text-ink">Contact</h2>
+          <h2 className="mb-1 text-base font-extrabold text-ink">Contact</h2>
+          <p className="mb-4 text-xs font-medium text-stone-500">{setupRationale("contact")}</p>
           <div className="space-y-4">
             <FormField label="Phone" name="phone" type="tel" defaultValue={contact.phone ?? ""} />
             <FormField
@@ -88,7 +119,16 @@ export default async function EditProfilePage({
               defaultValue={contact.whatsapp ?? ""}
               placeholder="e.g. +1 555 555 5555"
             />
-            <p className="text-xs font-medium text-stone-500">At least one contact number is required.</p>
+            <p className="text-xs font-medium text-stone-500">At least one contact number is required to book or post.</p>
+            <FormField
+              label="Saved home address (optional)"
+              name="home_address"
+              defaultValue={homeAddress ?? ""}
+              placeholder="Only you can see this until you book with it"
+              hint={`${setupRationale("home")} Drivers only see a copy when you request a seat with saved home.`}
+              maxLength={500}
+              ariaDescribedBy="profile-save-error"
+            />
           </div>
         </div>
 
@@ -113,7 +153,8 @@ export default async function EditProfilePage({
 
         {/* Car info */}
         <div>
-          <h2 className="mb-4 text-base font-extrabold text-ink">Car</h2>
+          <h2 className="mb-1 text-base font-extrabold text-ink">Car (optional)</h2>
+          <p className="mb-4 text-xs font-medium text-stone-500">{setupRationale("vehicle")}</p>
           <div className="grid grid-cols-2 gap-4">
             <FormField
               label="Make / model"
@@ -136,8 +177,7 @@ export default async function EditProfilePage({
           <FormField label="" name="bio" textarea defaultValue={profile?.bio ?? ""} placeholder="A short intro for other riders" />
         </div>
 
-          <SubmitButton actionKey="profile-save" pendingLabel="Saving...">Save changes</SubmitButton>
-        </form>
+        </ProfileForm>
 
         <SignOutForm variant="desktop" />
       </div>
@@ -150,6 +190,9 @@ export default async function EditProfilePage({
           initialUrl={profile?.avatar_url ?? null}
           size={120}
         />
+        <p className="mt-3 max-w-[200px] text-center text-xs font-medium text-stone-500">
+          Your Google photo is a starting point. Change it anytime.
+        </p>
       </div>
     </div>
   );

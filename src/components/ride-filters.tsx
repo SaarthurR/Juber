@@ -51,7 +51,7 @@ export function RideFilters() {
       action={update}
       className="rounded-2xl border border-[#efe4d3] bg-white p-4 shadow-[0_24px_50px_-36px_rgba(92,59,46,0.4)] sm:p-5"
     >
-      <div className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_42px_minmax(0,1fr)_minmax(170px,0.8fr)]">
+      <div className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_44px_minmax(0,1fr)_minmax(170px,0.8fr)]">
         <Field label="From">
           <CityCombobox
             key={`from-${params.get("from") ?? ""}`}
@@ -67,7 +67,7 @@ export function RideFilters() {
           type="button"
           onClick={swap}
           aria-label="Swap from and to"
-          className="flex h-10 w-10 items-center justify-center justify-self-center rounded-full bg-tint text-brand-600 transition hover:bg-brand-100 active:scale-95 md:mb-1 md:h-[46px] md:w-[42px]"
+          className="flex h-11 w-11 items-center justify-center justify-self-center rounded-full bg-tint text-brand-600 transition hover:bg-brand-100 active:scale-95 md:mb-1"
         >
           <ArrowLeftRight size={20} />
         </button>
@@ -99,7 +99,7 @@ export function RideFilters() {
                 type="button"
                 onClick={() => pushWith({ date: "" })}
                 aria-label="Clear date and show rides on all dates"
-                className="absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-brand-500 transition hover:bg-tint hover:text-brand-700"
+                className="absolute right-2.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-brand-500 transition hover:bg-tint hover:text-brand-700"
               >
                 <X size={19} strokeWidth={2.3} />
               </button>
@@ -117,7 +117,7 @@ export function RideFilters() {
               type="button"
               onClick={() => pushWith({ trip: "" })}
               aria-label="Clear trip type"
-              className="col-span-2 flex h-10 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold text-[#9b846c] transition hover:bg-tint hover:text-brand-700 sm:col-span-1"
+              className="col-span-2 flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-bold text-[#9b846c] transition hover:bg-tint hover:text-brand-700 sm:col-span-1"
             >
               <X size={15} strokeWidth={2.4} />
               Clear

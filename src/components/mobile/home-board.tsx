@@ -192,7 +192,7 @@ function SearchCard({
           onClick={() => {
             onChange({ from: to, to: from });
           }}
-          className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-tint text-brand-600 transition active:scale-95"
+          className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-tint text-brand-600 transition active:scale-95"
         >
           <ArrowLeftRight size={16} strokeWidth={2.2} />
         </button>
@@ -234,7 +234,7 @@ function SearchCard({
               data-auth-allowed="true"
               onClick={() => onChange({ date: "" })}
               aria-label="Clear date and show rides on all dates"
-              className="absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-brand-500 transition active:bg-tint active:scale-95"
+              className="absolute right-2.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-brand-500 transition active:bg-tint active:scale-95"
             >
               <X size={19} strokeWidth={2.4} />
             </button>
@@ -259,7 +259,7 @@ function SearchCard({
             data-auth-allowed="true"
             onClick={() => onChange({ trip: null })}
             aria-label="Clear trip type"
-            className="col-span-2 flex h-9 items-center justify-center gap-1.5 rounded-xl text-[12px] font-bold text-muted-warm transition active:bg-tint active:scale-[0.98]"
+            className="col-span-2 flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-[12px] font-bold text-muted-warm transition active:bg-tint active:scale-[0.98]"
           >
             <X size={15} strokeWidth={2.4} />
             Clear trip type
@@ -289,7 +289,7 @@ function TripToggle({
       data-auth-allowed="true"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-[13px] px-3 py-2.5 text-[12px] font-bold active:scale-[0.98] ${
+      className={`min-h-11 rounded-[13px] px-3 py-2.5 text-[12px] font-bold active:scale-[0.98] ${
         active ? "bg-brand-600 text-white" : "bg-tint text-brand-700"
       }`}
     >

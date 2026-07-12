@@ -12,6 +12,7 @@ const event = {
   venue_label: "JCNC",
   start_date: "2026-08-20",
   end_date: null,
+  source_url: null,
   is_active: true,
   created_by: null,
   created_at: "2026-07-11T00:00:00Z",

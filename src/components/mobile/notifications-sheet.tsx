@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
+import { Bell, Car, Check, X, Ban, Handshake, MessageCircle, CalendarCheck } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { MAvatar } from "@/components/mobile/m-avatar";
@@ -20,6 +20,7 @@ import {
 } from "@/lib/messages";
 import {
   createNotificationControllerState,
+  createSurfaceRefreshDebouncer,
   isCurrentNotificationRefresh,
   notificationBulkControlStatus,
   notificationCancellationReason,
@@ -28,6 +29,7 @@ import {
   notificationEvictedRowRetry,
   notificationRowPending,
   notificationTitle,
+  notificationTriggersSurfaceRefresh,
   notificationWriteErrorMessage,
   notificationWritePending,
   subscribeToNotificationChanges,
@@ -35,6 +37,7 @@ import {
   type NotificationSnapshot,
 } from "@/lib/notifications-controller";
 import { mobileNotificationDestination } from "@/lib/route-targets";
+import { NOTIFICATION_SELECT, FALLBACK_NOTIFICATION_SELECT } from "@/lib/notifications-query";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
 
 const ICON: Record<NotificationType, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -43,15 +46,12 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   seat_declined: X,
   seat_cancelled: Ban,
   ride_cancelled: Ban,
+  ride_completed: Check,
   request_accepted: Handshake,
   new_message: MessageCircle,
+  event_request_approved: CalendarCheck,
+  event_request_rejected: X,
 };
-
-const NOTIFICATION_SELECT =
-  "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)";
-
-const FALLBACK_NOTIFICATION_SELECT =
-  "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)";
 
 export function MNotificationBell({
   notifications,
@@ -95,6 +95,7 @@ function MNotificationBellController({
   const refreshGeneration = useRef(0);
   const operationSequence = useRef(0);
   const active = useRef(true);
+  const surfaceRefreshRef = useRef(createSurfaceRefreshDebouncer(() => router.refresh()));
 
   const refreshNotifications = useCallback(async () => {
     const generation = ++refreshGeneration.current;
@@ -195,12 +196,27 @@ function MNotificationBellController({
   }, []);
 
   useEffect(() => {
+    surfaceRefreshRef.current.cancel();
+    surfaceRefreshRef.current = createSurfaceRefreshDebouncer(() => router.refresh());
+    return () => {
+      surfaceRefreshRef.current.cancel();
+    };
+  }, [router, userId]);
+
+  useEffect(() => {
     const supabase = createClient();
     return subscribeToNotificationChanges(
       supabase,
       "mobile-notifications",
       userId,
-      () => void refreshNotifications(),
+      ({ type }) => {
+        void refreshNotifications().then(() => {
+          if (!active.current) return;
+          if (notificationTriggersSurfaceRefresh(type)) {
+            surfaceRefreshRef.current.schedule();
+          }
+        });
+      },
     );
   }, [userId, refreshNotifications]);
 
@@ -280,7 +296,7 @@ function MNotificationBellController({
         type="button"
         aria-label="Notifications"
         onClick={open_}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-tint text-brand-700 active:scale-95"
+        className="relative flex h-11 w-11 items-center justify-center rounded-full bg-tint text-brand-700 active:scale-95"
       >
         <Bell size={18} strokeWidth={2.2} />
         {state.unread > 0 && (

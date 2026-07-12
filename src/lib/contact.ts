@@ -20,17 +20,3 @@ export async function getContact(
   const row = Array.isArray(data) ? data[0] : data;
   return { phone: row?.phone ?? null, whatsapp: row?.whatsapp ?? null };
 }
-
-/** Whether a user has any reachable contact method (drives the contact gate). */
-export async function hasContact(
-  supabase: ServerClient,
-  userId: string | null | undefined,
-): Promise<boolean> {
-  if (!userId) return false;
-  const { data, error } = await supabase.rpc("profile_has_contact", { p_profile_id: userId });
-  if (error) {
-    console.error("profile_has_contact failed", { code: error.code, userId });
-    return true;
-  }
-  return Boolean(data);
-}

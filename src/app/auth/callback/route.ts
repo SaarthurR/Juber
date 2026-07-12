@@ -6,6 +6,7 @@ import {
   authOnboardingDestination,
   desktopAuthDestination,
 } from "@/lib/route-targets";
+import { hasContact } from "@/lib/contact-readiness";
 
 // Handles the OAuth redirect from Supabase, exchanging the code for a session.
 export async function GET(request: NextRequest) {
@@ -33,10 +34,7 @@ export async function GET(request: NextRequest) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const { data: contactReady } = await supabase.rpc("profile_has_contact", {
-        p_profile_id: user?.id ?? "",
-      });
-      if (!contactReady) {
+      if (!(await hasContact(supabase, user?.id))) {
         const onboardingPath = authOnboardingDestination(effectiveNext, {
           fallback,
           forceDesktop,

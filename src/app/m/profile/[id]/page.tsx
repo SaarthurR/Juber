@@ -8,6 +8,7 @@ import { openConversation } from "@/app/messages/actions";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { SubHeader } from "@/components/mobile/sub-header";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
+import { ReportTargetButton } from "@/components/report-target-button";
 import type { Profile } from "@/lib/types";
 import { throwReadError } from "@/lib/supabase/read-error";
 
@@ -56,6 +57,16 @@ export default async function MobilePublicProfilePage({
             {profile.full_name ?? "Member"}
           </h1>
           {metaLine && <p className="mt-1 text-[13px] text-muted-warm">{metaLine}</p>}
+          {user && user.id !== profile.id && (
+            <div className="mt-4 flex justify-center">
+              <ReportTargetButton
+                targetType="user"
+                targetId={profile.id}
+                label="Report member"
+                variant="mobile"
+              />
+            </div>
+          )}
           {profile.bio && (
             <p className="mt-4 text-[14px] leading-relaxed text-muted">{profile.bio}</p>
           )}

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { formatEventDateRange, loadEventBoard } from "@/lib/events";
 import { LandingAuthGate } from "@/components/landing-auth-gate";
+import { EventSourceLink } from "@/components/event-source-link";
 import { RideCard, RequestCard } from "@/components/ride-card";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,11 @@ export default async function EventPage({
         {dateLabel && <p className="mt-1 text-brand-100">{dateLabel}</p>}
         {event.venue_label && <p className="text-brand-100">{event.venue_label}</p>}
         {event.description && <p className="mt-3 max-w-prose text-brand-50">{event.description}</p>}
+        {event.source_url && (
+          <div className="mt-3">
+            <EventSourceLink href={event.source_url} className="text-sm font-bold text-white underline decoration-white/40 underline-offset-2 hover:decoration-white" />
+          </div>
+        )}
       </div>
 
       {user ? <ActionLinks eventId={event.id} /> : <LandingAuthGate><ActionLinks eventId={event.id} /></LandingAuthGate>}

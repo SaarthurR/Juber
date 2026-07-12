@@ -428,6 +428,14 @@ export function lifecycleRefreshTarget(
   return null;
 }
 
+export function seatCancelRefreshTarget(
+  kind: ThreadContext["kind"],
+  rideId: string,
+): { table: "ride_passengers"; filter: string } | null {
+  if (kind !== "ride") return null;
+  return { table: "ride_passengers", filter: `ride_id=eq.${rideId}` };
+}
+
 export function archiveTimeoutChunk(
   remaining: number,
   maxDelay = 2_147_483_647,

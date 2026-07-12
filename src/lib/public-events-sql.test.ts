@@ -6,6 +6,12 @@ import { fileURLToPath } from "node:url";
 const migrationPath = fileURLToPath(
   new URL("../../supabase/migrations/0033_fresh_sweep_closure.sql", import.meta.url),
 );
+const publicSourceUrlMigrationPath = fileURLToPath(
+  new URL(
+    "../../supabase/migrations/20260712145411_public_event_source_url_rpc.sql",
+    import.meta.url,
+  ),
+);
 
 test("0033 fresh sweep migration defines event-scoped public rides RPC", () => {
   const sql = readFileSync(migrationPath, "utf8");
@@ -64,4 +70,37 @@ test("0030 public events migration grants only RPC execution to anon", () => {
   assert.match(sql, /grant execute on function public\.public_event_board\(text\) to anon, authenticated/i);
   assert.doesNotMatch(sql, /grant select on (table )?public\.events to anon/i);
   assert.doesNotMatch(sql, /grant select on (table )?public\.ride_requests to anon/i);
+});
+
+test("public source URL migration appends the nullable RPC field compatibly", () => {
+  const sql = readFileSync(publicSourceUrlMigrationPath, "utf8");
+
+  assert.match(sql, /drop function public\.public_upcoming_events\(\)/i);
+  assert.match(sql, /drop function public\.public_event_board\(text\)/i);
+  assert.match(
+    sql,
+    /seats_available bigint,\s*source_url text\s*\)/i,
+  );
+  assert.match(
+    sql,
+    /coalesce\(counts\.seats_available,\s*0\)::bigint as seats_available,\s*e\.source_url/i,
+  );
+  assert.match(sql, /where e\.is_active = true/i);
+  assert.match(
+    sql,
+    /coalesce\(e\.end_date,\s*e\.start_date\) >= current_date/i,
+  );
+});
+
+test("public source URL migration preserves old caller grants", () => {
+  const sql = readFileSync(publicSourceUrlMigrationPath, "utf8");
+
+  assert.match(
+    sql,
+    /grant execute on function public\.public_upcoming_events\(\)\s*to anon, authenticated, service_role/i,
+  );
+  assert.match(
+    sql,
+    /grant execute on function public\.public_event_board\(text\)\s*to anon, authenticated, service_role/i,
+  );
 });

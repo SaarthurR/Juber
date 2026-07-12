@@ -1,13 +1,14 @@
 import { format } from "date-fns";
 import type { createClient } from "@/lib/supabase/server";
-import type { EventRow, RideRequestWithRider, RideWithDriver } from "@/lib/types";
+import type { EventRequest, EventRow, RideRequestWithRider, RideWithDriver } from "@/lib/types";
+import { RIDE_WITH_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
 import { throwReadError } from "@/lib/supabase/read-error";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export type EventCardEvent = Pick<
   EventRow,
-  "id" | "name" | "slug" | "description" | "venue_label" | "start_date" | "end_date"
+  "id" | "name" | "slug" | "description" | "venue_label" | "start_date" | "end_date" | "source_url"
 > & {
   is_active?: boolean;
   created_at?: string;
@@ -116,6 +117,7 @@ export async function loadEventSummaries(
       venue_label: event.venue_label,
       start_date: event.start_date,
       end_date: event.end_date,
+      source_url: event.source_url,
       is_active: event.is_active,
       created_at: event.created_at,
     }));
@@ -176,6 +178,43 @@ export async function loadEventSummaries(
   return summariesFromStats(list, stats);
 }
 
+export type MyEventRequest = Pick<
+  EventRequest,
+  "id" | "name" | "status" | "start_date" | "created_at"
+> & {
+  approved_event: Pick<EventRow, "slug"> | null;
+};
+
+export async function loadMyEventRequests(
+  supabase: ServerClient,
+  userId: string,
+  limit = 6,
+): Promise<MyEventRequest[]> {
+  const { data, error } = await supabase
+    .from("event_requests")
+    .select(
+      "id, name, status, start_date, created_at, approved_event:events!event_requests_approved_event_id_fkey(slug)",
+    )
+    .eq("requested_by", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  throwReadError(error, "event requests");
+  return ((data ?? []) as Array<
+    Omit<MyEventRequest, "approved_event"> & {
+      approved_event: Pick<EventRow, "slug"> | Pick<EventRow, "slug">[] | null;
+    }
+  >).map((row) => ({
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    start_date: row.start_date,
+    created_at: row.created_at,
+    approved_event: Array.isArray(row.approved_event)
+      ? row.approved_event[0] ?? null
+      : row.approved_event,
+  }));
+}
+
 export async function loadEventBoard(
   supabase: ServerClient,
   slug: string,
@@ -220,32 +259,34 @@ export async function loadEventBoard(
   const event = filterPublicUpcomingEvents(rawEvent ? [rawEvent] : [], today)[0];
   if (!event) return null;
 
-  const { data: rides, error: ridesError } = await supabase
-    .from("rides")
-    .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
-    .eq("event_id", event.id)
-    .eq("status", "active")
-    .gte("depart_at", nowIso)
-    .order("depart_at", { ascending: true });
+  const [{ data: rides, error: ridesError }, { data: requests, error: requestsError }] =
+    await Promise.all([
+      supabase
+        .from("rides")
+        .select(RIDE_WITH_JOIN)
+        .eq("event_id", event.id)
+        .eq("status", "active")
+        .gte("depart_at", nowIso)
+        .order("depart_at", { ascending: true }),
+      supabase
+        .from("ride_requests")
+        .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
+        .eq("event_id", event.id)
+        .eq("status", "active")
+        .order("depart_at", { ascending: true }),
+    ]);
   throwReadError(ridesError, "event rides");
-
-  const { data: requests, error: requestsError } = await supabase
-    .from("ride_requests")
-    .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
-    .eq("event_id", event.id)
-    .eq("status", "active")
-    .order("depart_at", { ascending: true });
   throwReadError(requestsError, "event ride requests");
 
   return {
     event,
-    rides: (rides as RideWithDriver[]) ?? [],
+    rides: asRideWithDriverRows(rides),
     requests: ((requests as RideRequestWithRider[]) ?? []).filter((request) =>
       requestIsUpcoming(request, today),
     ),
     stats: {
-      rides: ((rides as RideWithDriver[]) ?? []).length,
-      seats: ((rides as RideWithDriver[]) ?? []).reduce(
+      rides: asRideWithDriverRows(rides).length,
+      seats: asRideWithDriverRows(rides).reduce(
         (total, ride) => total + ride.seats_available,
         0,
       ),

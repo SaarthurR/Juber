@@ -10,7 +10,9 @@ import { openConversation } from "@/app/messages/actions";
 import { getContact } from "@/lib/contact";
 import { getProfileContactContext } from "@/lib/profile-contact";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
+import { ReportTargetButton } from "@/components/report-target-button";
 import type { Profile, RideWithDriver, RideRequestWithRider } from "@/lib/types";
+import { RIDE_WITH_JOIN, RIDE_NESTED_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
 import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
@@ -110,18 +112,18 @@ export default async function PublicProfilePage({
   if (tab === "all" || tab === "posted") {
     const { data, error } = await supabase
       .from("rides")
-      .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+      .select(RIDE_WITH_JOIN)
       .eq("driver_id", id)
       .order("depart_at", { ascending: false });
     throwReadError(error, "posted rides");
-    postedRides = (data ?? []) as RideWithDriver[];
+    postedRides = asRideWithDriverRows(data);
   }
 
   if (tab === "all" || tab === "joined") {
     const { data: joinedRows, error } = await supabase
       .from("ride_passengers")
       .select(
-        "*, ride:rides!ride_passengers_ride_id_fkey(*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug))"
+        `*, ride:rides!ride_passengers_ride_id_fkey(${RIDE_NESTED_JOIN})`
       )
       .eq("passenger_id", id)
       .eq("status", "confirmed");
@@ -188,6 +190,16 @@ export default async function PublicProfilePage({
             </div>
           )}
           <h1 className="text-2xl font-extrabold text-ink">{profile.full_name ?? "Member"}</h1>
+          {user && user.id !== profile.id && (
+            <div className="mt-4">
+              <ReportTargetButton
+                targetType="user"
+                targetId={profile.id}
+                label="Report member"
+                variant="desktop"
+              />
+            </div>
+          )}
           {profile.pronouns && <p className="text-sm text-[#a8a29e]">{profile.pronouns}</p>}
           {profile.neighborhood && (
             <p className="mt-1 text-sm text-stone-500">{profile.neighborhood}</p>

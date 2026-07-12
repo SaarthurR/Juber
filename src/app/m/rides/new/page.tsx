@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getDateTimeInputValue } from "@/lib/date-time";
-import { hasContact } from "@/lib/contact";
+import { hasContact } from "@/lib/contact-readiness";
+import { contactSetupDestination } from "@/lib/route-targets";
 import { NewRideForm } from "@/components/new-ride-form";
 import { SubHeader } from "@/components/mobile/sub-header";
 import type { EventRow, Place } from "@/lib/types";
@@ -21,7 +22,8 @@ export default async function MobileNewRidePage({
 
   const supabase = await createClient();
   if (!(await hasContact(supabase, user.id))) {
-    redirect("/m/profile/edit?contact_required=1");
+    const attempted = eventId ? `/m/rides/new?event_id=${eventId}` : "/m/rides/new";
+    redirect(contactSetupDestination(attempted, { mobile: true }));
   }
 
   const minDepartDate = new Date();

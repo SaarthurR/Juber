@@ -16,7 +16,7 @@ export function BackButtonView({
       aria-label="Back"
       data-auth-allowed={allowAnonymousBrowse ? "true" : undefined}
       onClick={onBack}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-tint text-brand-700 transition active:scale-95"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-tint text-brand-700 transition active:scale-95"
     >
       <ChevronLeft size={20} strokeWidth={2.5} />
     </button>

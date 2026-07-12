@@ -74,6 +74,12 @@ export function EventRequestForm({
                 </select>
               </label>
               <FormField
+                label="Event link (optional)"
+                name="source_url"
+                type="url"
+                placeholder="https://example.org/event"
+              />
+              <FormField
                 label="Why add it?"
                 name="description"
                 textarea

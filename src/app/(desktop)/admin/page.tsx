@@ -40,6 +40,23 @@ export default async function AdminPage() {
       <section className="mb-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
+            <h2 className="text-lg font-bold">Moderation</h2>
+            <p className="mt-1 text-sm text-stone-500">
+              Review reports, appeals, warnings, and bans.
+            </p>
+          </div>
+          <a
+            href="/admin/moderation"
+            className="rounded-xl border border-brand-200 bg-white px-4 py-2.5 text-sm font-bold text-brand-700 transition hover:bg-tint"
+          >
+            Open moderation queue
+          </a>
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
             <h2 className="text-lg font-bold">Event requests</h2>
             <p className="mt-1 text-sm text-stone-500">
               Approve user suggestions or import likely high-traffic JCNC calendar items.

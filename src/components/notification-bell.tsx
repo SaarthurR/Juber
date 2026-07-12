@@ -2,12 +2,13 @@
 
 import { useEffect, useRef } from "react";
 import { RouteProgressLink as Link } from "@/components/route-progress-link";
-import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
+import { Bell, Car, Check, X, Ban, Handshake, MessageCircle, CalendarCheck } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
   notificationBulkControlStatus,
   notificationWritePending,
 } from "@/lib/notifications-controller";
+import { desktopNotificationHref } from "@/lib/notification-href";
 import { useNotifications } from "@/components/notifications-provider";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
 
@@ -17,8 +18,11 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   seat_declined: X,
   seat_cancelled: Ban,
   ride_cancelled: Ban,
+  ride_completed: Check,
   request_accepted: Handshake,
   new_message: MessageCircle,
+  event_request_approved: CalendarCheck,
+  event_request_rejected: X,
 };
 
 // Warm per-type chip colors, echoing the mock's varied avatars.
@@ -28,8 +32,11 @@ const CHIP: Record<NotificationType, string> = {
   seat_declined: "bg-[#fee2e2] text-[#b91c1c]",
   seat_cancelled: "bg-[#fee2e2] text-[#b91c1c]",
   ride_cancelled: "bg-[#fee2e2] text-[#b91c1c]",
+  ride_completed: "bg-[#dcfce7] text-[#15803d]",
   request_accepted: "bg-[#dcfce7] text-[#15803d]",
   new_message: "bg-[#e0f2fe] text-[#0369a1]",
+  event_request_approved: "bg-[#dcfce7] text-[#15803d]",
+  event_request_rejected: "bg-[#fee2e2] text-[#b91c1c]",
 };
 
 function firstName(name: string | null | undefined) {
@@ -66,6 +73,8 @@ function copyFor(n: NotificationWithContext) {
       );
     case "ride_cancelled":
       return <>Your ride{route && <> {route}</>} was cancelled.</>;
+    case "ride_completed":
+      return <>Your ride{route && <> {route}</>} was completed.</>;
     case "request_accepted":
       return (
         <>
@@ -78,6 +87,10 @@ function copyFor(n: NotificationWithContext) {
           One new message from <strong>{who}</strong>.
         </>
       );
+    case "event_request_approved":
+      return <>Your event board request was approved.</>;
+    case "event_request_rejected":
+      return <>Your event board request was not approved.</>;
   }
 }
 
@@ -184,13 +197,7 @@ export function NotificationBell() {
                     )}
                   </div>
                 );
-                const href = n.ride_id
-                  ? `/rides/${n.ride_id}`
-                  : n.request_id
-                    ? `/requests/${n.request_id}`
-                    : n.conversation_id
-                      ? `/messages/${n.conversation_id}`
-                      : null;
+                const href = desktopNotificationHref(n);
                 return href ? (
                   <Link
                     key={n.id}

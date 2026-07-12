@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { NotificationCard } from "@/components/notification-card";
 import { NotificationsMarkRead } from "@/components/notifications-mark-read";
 import { MessagesList } from "@/components/messages-list";
+import { FALLBACK_NOTIFICATION_SELECT, NOTIFICATION_SELECT } from "@/lib/notifications-query";
 import type { NotificationWithContext } from "@/lib/types";
 import { loadThreadSummaries, loadVisibleNotificationIds } from "@/lib/messages";
 
@@ -82,9 +83,7 @@ async function NotificationsTab({
   const notificationsResult = notificationIds.length
     ? await supabase
         .from("notifications")
-        .select(
-          "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status), request:ride_requests!notifications_request_id_fkey(id,origin_label,destination_label,depart_at,status)",
-        )
+        .select(NOTIFICATION_SELECT)
         .eq("recipient_id", userId)
         .in("id", notificationIds)
         .order("created_at", { ascending: false })
@@ -94,9 +93,7 @@ async function NotificationsTab({
   if (notificationsResult.error) {
     const fallback = await supabase
       .from("notifications")
-      .select(
-        "*, actor:profiles!notifications_actor_id_fkey(id,full_name,avatar_url), ride:rides!notifications_ride_id_fkey(id,origin_label,destination_label,depart_at,status)",
-      )
+      .select(FALLBACK_NOTIFICATION_SELECT)
       .eq("recipient_id", userId)
       .in("id", notificationIds)
       .order("created_at", { ascending: false })

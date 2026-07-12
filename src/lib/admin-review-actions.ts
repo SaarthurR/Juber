@@ -6,7 +6,10 @@ import {
 } from "./admin-action-state";
 import {
   isApproveEventRequestV2Result,
+  isRejectEventRequestV2Result,
+  rejectV2OutcomeToAdminState,
   type ApproveEventRequestV2Outcome,
+  type RejectEventRequestV2Outcome,
 } from "./admin-approval";
 
 type DatabaseError = { message: string };
@@ -81,6 +84,19 @@ function approvalMessage(outcome: ApproveEventRequestV2Outcome) {
       return "Request was already approved.";
     case "already_rejected":
       return "Request was already rejected.";
+    case "missing":
+      return "Request not found.";
+  }
+}
+
+function rejectionMessage(outcome: RejectEventRequestV2Outcome) {
+  switch (outcome) {
+    case "rejected":
+      return "Request rejected.";
+    case "already_rejected":
+      return "Request was already rejected.";
+    case "already_approved":
+      return "Request was already approved.";
     case "missing":
       return "Request not found.";
   }
@@ -180,6 +196,42 @@ export function createAdminReviewActions({
       } catch (error) {
         return adminActionError(
           actionErrorMessage(error, "Could not approve request."),
+        );
+      }
+    },
+
+    async rejectEventRequest(
+      requestId: string,
+      previousState: AdminActionState,
+    ): Promise<AdminActionState> {
+      try {
+        const { supabase } = await requireAdmin();
+        const { data, error } = await supabase.rpc(
+          "reject_event_request_v2",
+          { p_request_id: requestId },
+        );
+
+        if (error) return adminActionError(error.message);
+        if (!isRejectEventRequestV2Result(data)) {
+          return adminActionError("Could not reject this request.");
+        }
+
+        if (data.outcome === "rejected") {
+          revalidatePath("/admin");
+          revalidatePath("/events");
+          revalidatePath("/m/events");
+        } else {
+          revalidatePath("/admin");
+        }
+
+        const nextState = rejectV2OutcomeToAdminState(data.outcome, previousState);
+        if (data.outcome === "rejected") {
+          return { ...nextState, resetKey: nextState.resetKey };
+        }
+        return adminActionInfo(rejectionMessage(data.outcome));
+      } catch (error) {
+        return adminActionError(
+          actionErrorMessage(error, "Could not reject request."),
         );
       }
     },

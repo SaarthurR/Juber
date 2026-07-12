@@ -1,4 +1,4 @@
-import type { NotificationWithContext } from "@/lib/types";
+import type { NotificationType, NotificationWithContext } from "@/lib/types";
 
 export type NotificationSnapshot = {
   items: NotificationWithContext[];
@@ -352,10 +352,16 @@ export function notificationTitle(notification: NotificationWithContext): string
       return `${who} cancelled their seat`;
     case "ride_cancelled":
       return "Your ride was cancelled";
+    case "ride_completed":
+      return "Your ride was completed";
     case "request_accepted":
       return `${who} accepted your ride request`;
     case "new_message":
       return `One new message from ${who}`;
+    case "event_request_approved":
+      return "Your event board request was approved";
+    case "event_request_rejected":
+      return "Your event board request was not approved";
   }
 }
 
@@ -370,6 +376,66 @@ export function notificationCancellationReason(
 export type NotificationRealtimeEvent = "INSERT" | "UPDATE";
 export type NotificationRealtimeOwner = "mobile-notifications" | "bell";
 
+export type NotificationRealtimeChange = {
+  event: NotificationRealtimeEvent;
+  type: string | undefined;
+};
+
+const SURFACE_REFRESH_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set([
+  "seat_requested",
+  "seat_confirmed",
+  "seat_declined",
+  "seat_cancelled",
+  "ride_cancelled",
+  "ride_completed",
+  "request_accepted",
+  "event_request_approved",
+  "event_request_rejected",
+]);
+
+export function notificationTriggersSurfaceRefresh(
+  type: string | undefined | null,
+): boolean {
+  return (
+    type != null
+    && SURFACE_REFRESH_NOTIFICATION_TYPES.has(type as NotificationType)
+  );
+}
+
+export function createSurfaceRefreshDebouncer(
+  refresh: () => void,
+  debounceMs = 400,
+  maxWaitMs = 1500,
+): { schedule(): void; cancel(): void } {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let maxTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearTimers() {
+    if (timer) clearTimeout(timer);
+    if (maxTimer) clearTimeout(maxTimer);
+    timer = null;
+    maxTimer = null;
+  }
+
+  function flush() {
+    clearTimers();
+    refresh();
+  }
+
+  return {
+    schedule() {
+      if (!maxTimer) {
+        maxTimer = setTimeout(flush, maxWaitMs);
+      }
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(flush, debounceMs);
+    },
+    cancel() {
+      clearTimers();
+    },
+  };
+}
+
 type NotificationRealtimeFilter = {
   event: NotificationRealtimeEvent;
   schema: "public";
@@ -381,7 +447,7 @@ type NotificationRealtimeChannel<TChannel> = {
   on(
     kind: "postgres_changes",
     filter: NotificationRealtimeFilter,
-    callback: () => void,
+    callback: (payload: { new?: { type?: string } }) => void,
   ): TChannel;
   subscribe(): TChannel;
 };
@@ -402,7 +468,7 @@ export function subscribeToNotificationChanges<
   client: NotificationRealtimeClient<TChannel>,
   owner: NotificationRealtimeOwner,
   userId: string,
-  onChange: (event: NotificationRealtimeEvent) => void,
+  onChange: (change: NotificationRealtimeChange) => void,
 ): () => void {
   let channel = client.channel(`${owner}:${userId}`);
   for (const event of NOTIFICATION_REALTIME_EVENTS) {
@@ -414,7 +480,9 @@ export function subscribeToNotificationChanges<
         table: "notifications",
         filter: `recipient_id=eq.${userId}`,
       },
-      () => onChange(event),
+      (payload: { new?: { type?: string } }) => {
+        onChange({ event, type: payload.new?.type });
+      },
     );
   }
   const subscribed = channel.subscribe();

@@ -6,10 +6,20 @@ import { formatRideDateTime } from "@/lib/date-time";
 import { getCurrentUser } from "@/lib/auth";
 import { Avatar } from "@/components/ui/avatar";
 import { ShareButton } from "@/components/share-button";
+import { ReportTargetButton } from "@/components/report-target-button";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { ContactModal } from "@/components/contact-modal";
 import { getContact } from "@/lib/contact";
+import { getHomeAddress } from "@/lib/home-address";
+import { getRideMeetup } from "@/lib/meetup";
+import { confirmedSeatTotal, partyTotal, passengerDisplayName } from "@/lib/booking";
+import { RIDE_WITH_JOIN } from "@/lib/rides-query";
 import { canReserveRide } from "@/lib/action-lifecycle";
+import {
+  MeetupLocations,
+  PassengerPickupNote,
+  resolveMeetupLabels,
+} from "@/components/meetup-locations";
 import {
   ReserveSeatButton,
   PassengerStatusButtons,
@@ -34,19 +44,23 @@ export default async function RideDetailPage({
   const { user } = await getCurrentUser();
   const supabase = await createClient();
 
-  const { data: ride, error: rideError } = await supabase
-    .from("rides")
-    .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
-    .eq("id", id)
-    .maybeSingle<Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }>();
+  const [{ data: ride, error: rideError }, { data: passengers, error: passengersError }] =
+    await Promise.all([
+      supabase
+        .from("rides")
+        .select(RIDE_WITH_JOIN)
+        .eq("id", id)
+        .maybeSingle<
+          Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }
+        >(),
+      supabase
+        .from("ride_passengers")
+        .select("*, passenger:profiles!ride_passengers_passenger_id_fkey(*)")
+        .eq("ride_id", id),
+    ]);
 
   throwReadError(rideError, "ride");
   if (!ride) notFound();
-
-  const { data: passengers, error: passengersError } = await supabase
-    .from("ride_passengers")
-    .select("*, passenger:profiles!ride_passengers_passenger_id_fkey(*)")
-    .eq("ride_id", id);
   throwReadError(passengersError, "ride passengers");
 
   let passengerRows = (passengers as PassengerRow[]) ?? [];
@@ -71,8 +85,24 @@ export default async function RideDetailPage({
   const myJoin = passengerRows.find((p) => p.passenger_id === user?.id);
   const confirmed = passengerRows.filter((p) => p.status === "confirmed");
   const confirmedCount = Math.max(
-    confirmed.length,
+    confirmedSeatTotal(passengerRows),
     ride.seats_total - ride.seats_available,
+  );
+  const meetupPromise = user ? getRideMeetup(supabase, id) : Promise.resolve([]);
+  const homePromise =
+    user && !isDriver ? getHomeAddress(supabase) : Promise.resolve(null);
+  const [meetupRows, savedHome] = await Promise.all([meetupPromise, homePromise]);
+  const meetup = resolveMeetupLabels({
+    coarsePickup: ride.origin_label,
+    coarseDropoff: ride.destination_label,
+    meetupRows,
+    userId: user?.id,
+    isDriver,
+  });
+  const meetupByPassenger = new Map(
+    meetupRows
+      .filter((row) => row.passenger_id)
+      .map((row) => [row.passenger_id as string, row]),
   );
 
   // phone/whatsapp aren't on the profile join anymore (column-level RLS); read
@@ -85,8 +115,6 @@ export default async function RideDetailPage({
   const price = ride.gas_contribution
     ? `$${Number(ride.gas_contribution).toFixed(0)}`
     : "Free";
-  const pickupLocation = ride.pickup_location || ride.origin_label;
-  const dropoffLocation = ride.dropoff_location || ride.destination_label;
 
   const cancelled = ride.status === "cancelled";
   const completed = ride.status === "completed";
@@ -133,6 +161,15 @@ export default async function RideDetailPage({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-3xl font-bold text-stone-900">{price}</span>
+          {user && user.id !== ride.driver_id && (
+            <ReportTargetButton
+              targetType="ride"
+              targetId={ride.id}
+              label="Report ride"
+              variant="desktop"
+              tone="subtle"
+            />
+          )}
           <ShareButton title={`${ride.origin_label} → ${ride.destination_label}`} />
         </div>
       </div>
@@ -144,21 +181,13 @@ export default async function RideDetailPage({
             {formatRideDateTime(ride.depart_at, "EEEE, MMM d hh:mm a").toUpperCase()}
           </p>
           <div className="mt-4 flex gap-5">
-            <div className="flex flex-col items-center py-1">
-              <span className="h-3 w-3 rounded-full border-2 border-white bg-transparent" />
-              <span className="my-1 w-px flex-1 bg-white/30" />
-              <span className="h-3 w-3 rounded-full bg-white" />
-            </div>
-            <div className="flex flex-1 flex-col gap-3.5 text-[15px]">
-              <p>
-                <span className="font-bold">Pick Up:</span>{" "}
-                <span className="text-white/80">{pickupLocation}</span>
-              </p>
-              <p>
-                <span className="font-bold">Drop off:</span>{" "}
-                <span className="text-white/80">{dropoffLocation}</span>
-              </p>
-            </div>
+            <MeetupLocations
+              pickupLabel={meetup.pickupLabel}
+              dropoffLabel={meetup.dropoffLabel}
+              pickupMapsUrl={meetup.pickupMapsUrl}
+              dropoffMapsUrl={meetup.dropoffMapsUrl}
+              variant="desktop"
+            />
           </div>
           {ride.round_trip && (
             <div className="mt-5 rounded-2xl bg-white/10 p-4 text-[15px]">
@@ -253,7 +282,7 @@ export default async function RideDetailPage({
               />
             </Link>
           ))}
-          {Array.from({ length: Math.max(0, ride.seats_total - confirmed.length) }).map((_, i) => (
+          {Array.from({ length: Math.max(0, ride.seats_total - confirmedCount) }).map((_, i) => (
             <span
               key={i}
               className="flex h-9 w-9 items-center justify-center rounded-full border-[1.5px] border-dashed border-[#d6cfc4] text-[#c2bbb0]"
@@ -270,7 +299,12 @@ export default async function RideDetailPage({
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-6 py-4 text-base font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
             />
           ) : isDriver ? (
-            <DriverPanel ride={ride} passengerRows={passengerRows} />
+            <DriverPanel
+              ride={ride}
+              passengerRows={passengerRows}
+              meetupByPassenger={meetupByPassenger}
+              confirmedRiderCount={confirmedCount}
+            />
           ) : terminal ? (
             <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
               {cancelled ? "This ride was cancelled" : "This ride is closed"}
@@ -279,8 +313,19 @@ export default async function RideDetailPage({
             <div>
               <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
                 Seat {myJoin.status}
+                {partyTotal(myJoin.guest_count ?? 0) > 1
+                  ? ` · Party of ${partyTotal(myJoin.guest_count ?? 0)}`
+                  : ""}
               </div>
-              {myJoin.status === "confirmed" && (
+              {meetup.selfPickupNote && meetup.selfPickupMapsUrl && (
+                <div className="mt-2 text-center">
+                  <PassengerPickupNote
+                    note={meetup.selfPickupNote}
+                    mapsUrl={meetup.selfPickupMapsUrl}
+                  />
+                </div>
+              )}
+              {myJoin.status === "confirmed" && !meetup.selfPickupNote && (
                 <p className="mt-3 text-center text-sm text-stone-600">
                   Use in-app chat to confirm pickup details with your driver.
                 </p>
@@ -293,6 +338,8 @@ export default async function RideDetailPage({
           ) : canReserveRide(ride.status, myJoin?.status, ride.seats_available) ? (
             <ReserveSeatButton
               rideId={ride.id}
+              seatsAvailable={ride.seats_available}
+              savedHome={savedHome}
               label={myJoin ? "Request a seat again" : undefined}
             />
           ) : (
@@ -362,12 +409,15 @@ function LostItemPanel({
 function DriverPanel({
   ride,
   passengerRows,
+  meetupByPassenger,
+  confirmedRiderCount,
 }: {
   ride: Ride;
   passengerRows: PassengerRow[];
+  meetupByPassenger: Map<string, { pickup_note: string | null }>;
+  confirmedRiderCount: number;
 }) {
   const pendingRequests = passengerRows.filter((p) => p.status === "pending");
-  const confirmedRiderCount = passengerRows.filter((p) => p.status === "confirmed").length;
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-5">
@@ -389,9 +439,14 @@ function DriverPanel({
                 <Avatar src={p.passenger?.avatar_url} name={p.passenger?.full_name} size={32} />
                 <div>
                   <p className="text-sm font-medium text-stone-900">
-                    {p.passenger?.full_name ?? "Member"}
+                    {passengerDisplayName(p.passenger?.full_name, p.guest_count ?? 0)}
                   </p>
                   <p className="text-xs capitalize text-stone-400">{p.status}</p>
+                  {meetupByPassenger.get(p.passenger_id)?.pickup_note && (
+                    <p className="mt-0.5 text-xs text-stone-500">
+                      Pickup: {meetupByPassenger.get(p.passenger_id)?.pickup_note}
+                    </p>
+                  )}
                 </div>
               </Link>
               {ride.status === "active" && (

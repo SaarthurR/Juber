@@ -2,9 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { TempleLogo } from "@/components/temple-logo";
 import { RidesView } from "@/components/rides-view";
-import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
+import type { RideRequestWithRider } from "@/lib/types";
 import { dateOnlyToIso, getTodayDateInputValue, parseDateOnly } from "@/lib/date-time";
 import { redirect } from "next/navigation";
+import { RIDE_WITH_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
 import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
@@ -58,17 +59,6 @@ export default async function RidesPage({
 
   const nowIso = now.toISOString();
 
-  function applyRideFilters<T extends { eq: (c: string, v: boolean | string) => T; gte: (c: string, v: string) => T; lt: (c: string, v: string) => T; ilike: (c: string, v: string) => T }>(
-    q: T,
-  ): T {
-    if (from) q = q.ilike("origin_label", `%${from}%`);
-    if (to) q = q.ilike("destination_label", `%${to}%`);
-    if (tripFilter) q = q.eq("round_trip", tripFilter === "round");
-    if (dayRange) q = q.gte("depart_at", dayRange.gte).lt("depart_at", dayRange.lt);
-    else q = q.gte("depart_at", nowIso);
-    return q;
-  }
-
   function applyRequestFilters<T extends { gte: (c: string, v: string) => T; lte: (c: string, v: string) => T; ilike: (c: string, v: string) => T }>(
     q: T,
   ): T {
@@ -80,13 +70,19 @@ export default async function RidesPage({
   }
 
   const ridesQuery = user
-    ? applyRideFilters(
-        supabase
+    ? (() => {
+        let q = supabase
           .from("rides")
-          .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+          .select(RIDE_WITH_JOIN)
           .eq("status", "active")
-          .order("depart_at", { ascending: true }),
-      )
+          .order("depart_at", { ascending: true });
+        if (from) q = q.ilike("origin_label", `%${from}%`);
+        if (to) q = q.ilike("destination_label", `%${to}%`);
+        if (tripFilter) q = q.eq("round_trip", tripFilter === "round");
+        if (dayRange) q = q.gte("depart_at", dayRange.gte).lt("depart_at", dayRange.lt);
+        else q = q.gte("depart_at", nowIso);
+        return q;
+      })()
     : supabase.rpc("public_upcoming_rides", {
         p_from: from ?? null,
         p_to: to ?? null,
@@ -119,7 +115,7 @@ export default async function RidesPage({
   throwReadError(requestsResult.error, "ride requests");
   throwReadError(countResult.error, "ride request count");
 
-  const rides = (ridesResult.data as RideWithDriver[]) ?? [];
+  const rides = asRideWithDriverRows(ridesResult.data);
   const requests = (requestsResult.data as RideRequestWithRider[]) ?? [];
   const requestCount = countResult.count ?? 0;
 

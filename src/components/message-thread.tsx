@@ -5,6 +5,7 @@ import type { FormEvent } from "react";
 import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Send } from "lucide-react";
+import { ReportTargetButton } from "@/components/report-target-button";
 import { createClient } from "@/lib/supabase/client";
 import { markConversationRead, sendMessage } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
@@ -15,6 +16,7 @@ import {
   isCurrentCatchUp,
   lifecycleRefreshTarget,
   mergeMessageWindow,
+  seatCancelRefreshTarget,
 } from "@/lib/messages";
 import type { ThreadContext } from "@/lib/messages";
 import type { Message, Profile } from "@/lib/types";
@@ -25,6 +27,7 @@ type SendState = {
   body: string;
   status: "sending" | "failed";
   error: string | null;
+  setupPath?: string | null;
 };
 
 export function MessageThread({
@@ -39,6 +42,7 @@ export function MessageThread({
   departAt,
   contextKind,
   contextId,
+  reportVariant = "desktop",
 }: {
   conversationId: string;
   currentUserId: string;
@@ -52,6 +56,7 @@ export function MessageThread({
   departAt: string | null;
   contextKind: ThreadContext["kind"];
   contextId: string;
+  reportVariant?: "desktop" | "mobile";
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -151,6 +156,19 @@ export function MessageThread({
           schema: "public",
           table: lifecycleTarget.table,
           filter: lifecycleTarget.filter,
+        },
+        () => router.refresh(),
+      );
+    }
+    const seatCancelTarget = seatCancelRefreshTarget(contextKind, contextId);
+    if (seatCancelTarget) {
+      channel = channel.on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: seatCancelTarget.table,
+          filter: seatCancelTarget.filter,
         },
         () => router.refresh(),
       );
@@ -286,6 +304,12 @@ export function MessageThread({
       const formData = new FormData();
       formData.set("body", body);
       formData.set("client_message_id", pendingId);
+      formData.set(
+        "return_to",
+        backHref.startsWith("/m")
+          ? `/m/messages/${conversationId}`
+          : `/messages/${conversationId}`,
+      );
       const result = await sendMessage(conversationId, formData);
       if (result.error || !result.message) {
         if (sendStateRef.current?.pendingId !== pendingId) return;
@@ -294,6 +318,7 @@ export function MessageThread({
           body,
           status: "failed",
           error: result.error ?? "Could not send this message. Please try again.",
+          setupPath: "setupPath" in result ? result.setupPath ?? null : null,
         };
         sendStateRef.current = failed;
         setSendState(failed);
@@ -338,9 +363,17 @@ export function MessageThread({
           <ArrowLeft size={20} />
         </Link>
         <Avatar src={other?.avatar_url} name={other?.full_name} size={40} />
-        <Link href={other ? `${profileBase}/${other.id}` : "#"} className="font-semibold">
+        <Link href={other ? `${profileBase}/${other.id}` : "#"} className="min-w-0 flex-1 font-semibold">
           {other?.full_name ?? "Member"}
         </Link>
+        {other && other.id !== currentUserId && (
+          <ReportTargetButton
+            targetType="user"
+            targetId={other.id}
+            label="Report"
+            variant={reportVariant}
+          />
+        )}
       </div>
 
       {archiveState === "archived" && (
@@ -371,7 +404,7 @@ export function MessageThread({
           const mine = m.sender_id === currentUserId;
           return (
             <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
-              <div className="flex max-w-[75%] flex-col">
+              <div className="group relative flex max-w-[75%] flex-col">
                 <div
                   className={cn(
                     "rounded-2xl px-4 py-2 text-sm",
@@ -391,6 +424,17 @@ export function MessageThread({
                   <span className="mt-1 self-end text-[11px] font-semibold text-stone-400">
                     {sendState.status === "sending" ? "Sending…" : "Not sent"}
                   </span>
+                )}
+                {!mine && (
+                  <div className="absolute left-full top-1/2 ml-1 -translate-y-1/2 opacity-70 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0">
+                    <ReportTargetButton
+                      targetType="message"
+                      targetId={m.id}
+                      label="Report message"
+                      variant={reportVariant}
+                      compact
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -424,16 +468,28 @@ export function MessageThread({
         {sendState?.status === "failed" && (
           <div
             role="alert"
-            className="mt-2 flex items-center justify-between gap-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700"
+            className="mt-2 flex flex-col gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700"
           >
-            <span>{sendState.error}</span>
-            <button
-              type="button"
-              onClick={() => void performSend(sendState.body, sendState.pendingId)}
-              className="shrink-0 font-bold underline underline-offset-2"
-            >
-              Retry
-            </button>
+            <div className="flex items-center justify-between gap-3">
+              <span>{sendState.error}</span>
+              {!sendState.setupPath && (
+                <button
+                  type="button"
+                  onClick={() => void performSend(sendState.body, sendState.pendingId)}
+                  className="shrink-0 font-bold underline underline-offset-2"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+            {sendState.setupPath && (
+              <Link
+                href={sendState.setupPath}
+                className="inline-flex min-h-11 items-center font-bold text-brand-700 underline-offset-2 hover:underline"
+              >
+                Finish contact info in profile
+              </Link>
+            )}
           </div>
         )}
       </form>

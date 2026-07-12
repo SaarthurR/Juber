@@ -13,6 +13,7 @@ import {
   newestThreadMessages,
   nextArchiveRefreshDelay,
   replaceThreadSummary,
+  seatCancelRefreshTarget,
   type ConversationHide,
   type ThreadContext,
 } from "./messages";
@@ -454,6 +455,14 @@ test("lifecycle refresh target selects only the thread context table", () => {
     filter: "id=eq.request-1",
   });
   assert.equal(lifecycleRefreshTarget("missing", "missing-1"), null);
+});
+
+test("seat cancel refresh targets ride_passengers UPDATE on the open ride thread", () => {
+  assert.deepEqual(seatCancelRefreshTarget("ride", "ride-1"), {
+    table: "ride_passengers",
+    filter: "ride_id=eq.ride-1",
+  });
+  assert.equal(seatCancelRefreshTarget("request", "request-1"), null);
 });
 
 test("archive timer chunks long delays until the real boundary", () => {

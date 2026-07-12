@@ -54,7 +54,7 @@ function StepBtn({
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
-      className="flex h-[42px] w-[42px] items-center justify-center rounded-lg bg-tint text-brand-600 transition active:scale-95 disabled:opacity-40"
+      className="flex h-11 w-11 items-center justify-center rounded-lg bg-tint text-brand-600 transition active:scale-95 disabled:opacity-40"
     >
       {children}
     </button>

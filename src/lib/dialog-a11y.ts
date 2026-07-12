@@ -48,6 +48,15 @@ export function getInitialFocusTarget(root: HTMLElement) {
   );
 }
 
+export function restoreFocus(
+  target: HTMLElement | null,
+  contains: (element: HTMLElement) => boolean = (element) => document.contains(element),
+) {
+  if (!target || !contains(target)) return false;
+  target.focus();
+  return true;
+}
+
 export function contrastRatio(foreground: string, background: string) {
   const [front, back] = [relativeLuminance(foreground), relativeLuminance(background)];
   const lighter = Math.max(front, back);

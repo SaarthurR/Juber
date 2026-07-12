@@ -28,6 +28,13 @@ test("EventRequestForm renders typed action-state feedback", () => {
   assert.match(markup, /Please add an event name\./);
 });
 
+test("EventRequestForm exposes a pasteable source URL field", () => {
+  const markup = renderToStaticMarkup(createElement(EventRequestForm, { signedIn: true }));
+  assert.match(markup, /name="source_url"/);
+  assert.match(markup, /type="url"/);
+  assert.match(markup, /Event link \(optional\)/);
+});
+
 test("EventRequestForm keeps success feedback visible after reset closes the fields", () => {
   const markup = renderToStaticMarkup(
     createElement(EventRequestForm, {

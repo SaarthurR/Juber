@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { formatEventDateRange, loadEventBoard } from "@/lib/events";
 import { LandingAuthGate } from "@/components/landing-auth-gate";
+import { EventSourceLink } from "@/components/event-source-link";
 import { MRideCard, MRequestCard } from "@/components/mobile/mobile-cards";
 import { SubHeader } from "@/components/mobile/sub-header";
 
@@ -57,6 +58,14 @@ export default async function MobileEventPage({
           {dateLabel && <p className="mt-1 text-[13px] font-semibold text-brand-50">{dateLabel}</p>}
           {event.venue_label && <p className="text-[13px] font-semibold text-brand-50">{event.venue_label}</p>}
           {event.description && <p className="mt-3 text-[13px] leading-relaxed text-white/90">{event.description}</p>}
+          {event.source_url && (
+            <div className="mt-3">
+              <EventSourceLink
+                href={event.source_url}
+                className="text-[13px] font-bold text-white underline decoration-white/40 underline-offset-2"
+              />
+            </div>
+          )}
         </section>
 
         {user ? actionLinks : <LandingAuthGate>{actionLinks}</LandingAuthGate>}

@@ -1,57 +1,51 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AdminActionFeedback } from "./admin-action-feedback";
+import {
+  AdminCreateEventForm,
+  AdminCreatePlaceForm,
+  AdminEventRequestCard,
+} from "./admin-forms";
 
-const adminForms = readFileSync(new URL("./admin-forms.tsx", import.meta.url), "utf8");
-const adminPage = readFileSync(new URL("../app/(desktop)/admin/page.tsx", import.meta.url), "utf8");
-
-test("AdminActionFeedback renders success, info, and error regions", () => {
-  const success = renderToStaticMarkup(
-    createElement(AdminActionFeedback, {
-      state: { status: "success", message: "Event added.", resetKey: 1 },
-    }),
-  );
-  const info = renderToStaticMarkup(
-    createElement(AdminActionFeedback, {
-      state: { status: "info", message: "Request was already approved.", resetKey: 0 },
-    }),
-  );
-  const error = renderToStaticMarkup(
-    createElement(AdminActionFeedback, {
-      state: { status: "error", message: "Delete failed.", resetKey: 0 },
-    }),
-  );
-
-  assert.match(success, /role="status"/);
-  assert.match(info, /role="status"/);
-  assert.match(error, /role="alert"/);
-  assert.match(success, /Event added\./);
+test("AdminCreateEventForm exposes a pasteable source URL field", () => {
+  const markup = renderToStaticMarkup(createElement(AdminCreateEventForm));
+  assert.match(markup, /name="source_url"/);
+  assert.match(markup, /type="url"/);
 });
 
-test("AdminActionFeedback renders nothing while idle", () => {
+test("AdminCreatePlaceForm labels the optional event attach select accurately", () => {
   const markup = renderToStaticMarkup(
-    createElement(AdminActionFeedback, {
-      state: { status: "idle", message: null, resetKey: 0 },
+    createElement(AdminCreatePlaceForm, { events: [] }),
+  );
+  assert.match(markup, /Attach to event \(optional\)/);
+  assert.doesNotMatch(markup, /Link to event/);
+});
+
+test("AdminEventRequestCard reuses the safe normalized source link", () => {
+  const markup = renderToStaticMarkup(
+    createElement(AdminEventRequestCard, {
+      request: {
+        id: "request-1",
+        name: "Paryushan",
+        description: null,
+        venue_label: "JCNC",
+        start_date: "2026-08-20",
+        end_date: null,
+        source: "user",
+        source_url: "HTTPS://Example.COM:443/event",
+        expected_traffic: "high",
+        status: "pending",
+        requested_by: "user-1",
+        reviewed_by: null,
+        approved_event_id: null,
+        reviewed_at: null,
+        created_at: "2026-07-12T00:00:00Z",
+        requester: { id: "user-1", full_name: "Requester" },
+      },
     }),
   );
 
-  assert.equal(markup, "");
-});
-
-test("admin client forms wire useActionState and pending labels", () => {
-  assert.match(adminForms, /useActionState/);
-  assert.match(adminForms, /Importing\.\.\./);
-  assert.match(adminForms, /Adding event\.\.\./);
-  assert.match(adminForms, /AdminActionFeedback/);
-});
-
-test("desktop admin page uses typed client forms and stays desktop-only", () => {
-  assert.match(adminPage, /AdminJcncImportForm/);
-  assert.match(adminPage, /AdminEventRequestCard/);
-  assert.match(adminPage, /AdminCreateEventForm/);
-  assert.match(adminPage, /AdminCreatePlaceForm/);
-  assert.doesNotMatch(adminPage, /\/m\/admin/);
+  assert.match(markup, /href="https:\/\/example\.com\/event"/);
+  assert.match(markup, /rel="noopener noreferrer"/);
 });

@@ -62,3 +62,31 @@ test("signed-out loadEventBoard uses event-scoped public_event_rides RPC", () =>
   assert.match(signedOutBranch, /public_event_rides/);
   assert.doesNotMatch(signedOutBranch, /public_upcoming_rides/);
 });
+
+test("signed-out event loaders preserve public source URLs", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("./events.ts", import.meta.url)),
+    "utf8",
+  );
+
+  assert.match(source, /source_url:\s*event\.source_url/);
+  assert.doesNotMatch(source, /source_url:\s*null/);
+});
+
+test("desktop and mobile event board headers share the safe source link", () => {
+  for (const path of [
+    "../app/(desktop)/events/[slug]/page.tsx",
+    "../app/m/events/[slug]/page.tsx",
+  ]) {
+    const page = readFileSync(
+      fileURLToPath(new URL(path, import.meta.url)),
+      "utf8",
+    );
+    assert.match(page, /import \{ EventSourceLink \}/);
+    assert.match(page, /event\.source_url[\s\S]*<EventSourceLink/);
+    assert.doesNotMatch(
+      page,
+      /(redirect|router\.push)\s*\([^)]*source_url/,
+    );
+  }
+});

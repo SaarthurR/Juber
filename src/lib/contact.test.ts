@@ -1,43 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import Module, { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { hasContact } from "./contact-readiness";
 
-const require = createRequire(import.meta.url);
-const serverOnlyStub = "server-only-stub";
-type ResolveFilename = (
-  request: string,
-  parent: NodeModule,
-  isMain: boolean,
-  options?: { paths?: string[] },
-) => string;
-
-const nodeModule = Module as typeof Module & { _resolveFilename: ResolveFilename };
-const resolveFilename = nodeModule._resolveFilename;
-nodeModule._resolveFilename = function (request, parent, isMain, options) {
-  if (request === "server-only") {
-    return serverOnlyStub;
-  }
-  return resolveFilename.call(this, request, parent, isMain, options);
-};
-require.cache[serverOnlyStub] = {
-  id: serverOnlyStub,
-  filename: serverOnlyStub,
-  loaded: true,
-  exports: {},
-} as NodeModule;
-
-type HasContact = typeof import("./contact").hasContact;
-
-let hasContact: HasContact;
-
-test.before(async () => {
-  ({ hasContact } = await import("./contact"));
-});
-
-test.after(() => {
-  nodeModule._resolveFilename = resolveFilename;
-  delete require.cache[serverOnlyStub];
-});
+type HasContact = typeof hasContact;
 
 type RpcResult = {
   data: boolean | null;
@@ -63,7 +30,12 @@ test("hasContact returns false when RPC reports no contact", async () => {
   assert.equal(await hasContact(supabase, "user-1"), false);
 });
 
-test("hasContact fails open when RPC errors", async () => {
+test("hasContact returns true only when RPC confirms contact", async () => {
+  const supabase = stubSupabase({ data: true, error: null });
+  assert.equal(await hasContact(supabase, "user-1"), true);
+});
+
+test("hasContact fails closed when RPC errors", async () => {
   const errorLogs: unknown[][] = [];
   const originalError = console.error;
   console.error = (...args: unknown[]) => {
@@ -79,7 +51,7 @@ test("hasContact fails open when RPC errors", async () => {
         hint: "",
       },
     });
-    assert.equal(await hasContact(supabase, "user-1"), true);
+    assert.equal(await hasContact(supabase, "user-1"), false);
     assert.deepEqual(errorLogs, [
       ["profile_has_contact failed", { code: "PGRST000", userId: "user-1" }],
     ]);
@@ -92,4 +64,32 @@ test("hasContact returns false without user id", async () => {
   const supabase = stubSupabase({ data: true, error: null });
   assert.equal(await hasContact(supabase, null), false);
   assert.equal(await hasContact(supabase, undefined), false);
+});
+
+test("contact-gated callers share the pure fail-closed helper", () => {
+  const sources = [
+    "../app/auth/callback/route.ts",
+    "../app/(desktop)/requests/new/page.tsx",
+    "../app/(desktop)/rides/new/page.tsx",
+    "../app/m/requests/new/page.tsx",
+    "../app/m/rides/new/page.tsx",
+    "../app/m/actions.ts",
+    "../app/rides/actions.ts",
+    "../app/messages/actions.ts",
+  ];
+
+  for (const source of sources) {
+    const contents = readFileSync(
+      fileURLToPath(new URL(source, import.meta.url)),
+      "utf8",
+    );
+    assert.match(contents, /from "@\/lib\/contact-readiness"/, source);
+    assert.doesNotMatch(contents, /\.rpc\("profile_has_contact"/, source);
+  }
+
+  const serverContact = readFileSync(
+    fileURLToPath(new URL("./contact.ts", import.meta.url)),
+    "utf8",
+  );
+  assert.doesNotMatch(serverContact, /function hasContact/);
 });

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -22,6 +23,21 @@ const contactSheetExports = ContactSheetModule as unknown as {
     defaultOpen?: boolean;
   }>;
 };
+
+test("npm test discovers nested src tests without shell globstar", () => {
+  const pkg = JSON.parse(readRepo("package.json"));
+  assert.match(pkg.scripts.test, /scripts\/run-tests\.mjs/);
+  assert.doesNotMatch(pkg.scripts.test, /\*\*/);
+
+  const listed = execFileSync("node", ["scripts/run-tests.mjs", "--list"], {
+    encoding: "utf8",
+  })
+    .trim()
+    .split("\n");
+  assert.equal(listed.length, 49);
+  assert.ok(listed.includes("src/components/mobile/back-button.test.ts"));
+  assert.ok(listed.includes("src/lib/supabase/read-error.test.ts"));
+});
 
 test("ci workflow runs every push and pull request through the required Node 24 gates", () => {
   const workflow = readRepo(".github/workflows/ci.yml");

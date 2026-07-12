@@ -14,6 +14,7 @@ test("BackButtonView can opt public shell navigation out of the auth gate", () =
 
   assert.match(markup, /aria-label="Back"/);
   assert.match(markup, /data-auth-allowed="true"/);
+  assert.match(markup, /class="flex h-11 w-11 shrink-0/);
 });
 
 test("BackButtonView keeps other Back controls gated by default", () => {

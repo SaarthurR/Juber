@@ -9,6 +9,8 @@ import {
   authCallbackDestination,
   authOnboardingDestination,
   authRevalidationPath,
+  contactActionReturnPath,
+  contactSetupDestination,
   desktopAuthDestination,
   mobileNotificationDestination,
   pickAllowed,
@@ -438,13 +440,18 @@ test("route targets expose a sanitized onboarding destination builder", () => {
   assert.equal(typeof authOnboardingDestination, "function");
 });
 
-test("callback and contact gate pass only sanitized next into the correct profile shell", () => {
+test("callback and contact setup preserve sanitized next into the correct profile shell", () => {
   const callback = readFileSync(
     fileURLToPath(new URL("../app/auth/callback/route.ts", import.meta.url)),
     "utf8",
   );
-  const gate = readFileSync(
-    fileURLToPath(new URL("../components/contact-required-gate.tsx", import.meta.url)),
+  const desktopRequestsNew = readFileSync(appPagePath("/requests/new"), "utf8");
+  const mobileRequestsNew = readFileSync(
+    fileURLToPath(new URL("../app/m/requests/new/page.tsx", import.meta.url)),
+    "utf8",
+  );
+  const ridesActions = readFileSync(
+    fileURLToPath(new URL("../app/rides/actions.ts", import.meta.url)),
     "utf8",
   );
 
@@ -455,11 +462,39 @@ test("callback and contact gate pass only sanitized next into the correct profil
   assert.match(callback, /isMobileUa && !forceDesktop/);
   assert.match(callback, /desktopAuthDestination/);
   assert.match(callback, /NextResponse\.redirect\(`\$\{origin\}\$\{effectiveNext\}`\)/);
-  assert.match(gate, /window\.location\.pathname.*window\.location\.search/);
-  assert.match(gate, /authCallbackDestination/);
-  assert.match(gate, /new URLSearchParams/);
-  assert.match(gate, /"\/m\/profile\/edit"/);
-  assert.match(gate, /"\/profile"/);
+  assert.match(desktopRequestsNew, /contactSetupDestination/);
+  assert.match(mobileRequestsNew, /contactSetupDestination/);
+  assert.match(ridesActions, /contactSetupDestination/);
+  assert.match(ridesActions, /CONTACT_SETUP_MESSAGE/);
+});
+
+test("contactSetupDestination preserves attempted paths for desktop and mobile", () => {
+  const eventId = "123e4567-e89b-42d3-a456-426614174001";
+  assert.equal(
+    contactSetupDestination(`/requests/new?event_id=${eventId}`),
+    `/profile?contact_required=1&next=%2Frequests%2Fnew%3Fevent_id%3D${eventId}`,
+  );
+  assert.equal(
+    contactSetupDestination(`/m/rides/new?event_id=${eventId}`, { mobile: true }),
+    `/m/profile/edit?contact_required=1&next=%2Fm%2Frides%2Fnew%3Fevent_id%3D${eventId}`,
+  );
+});
+
+test("contactActionReturnPath prefers explicit return_to and ride context", () => {
+  const formData = new FormData();
+  formData.set("return_to", "/rides/123e4567-e89b-42d3-a456-426614174000");
+  assert.equal(
+    contactActionReturnPath(formData, "/rides"),
+    "/rides/123e4567-e89b-42d3-a456-426614174000",
+  );
+
+  const rideForm = new FormData();
+  rideForm.set("ride_id", "123e4567-e89b-42d3-a456-426614174000");
+  rideForm.set("base", "/m/messages");
+  assert.equal(
+    contactActionReturnPath(rideForm, "/messages"),
+    "/m/rides/123e4567-e89b-42d3-a456-426614174000",
+  );
 });
 
 test("proxy preserves selected desktop onboarding and shares opt-out semantics", () => {
@@ -558,6 +593,18 @@ test("mobile notifications map to concrete detail pages only", () => {
   assert.equal(
     mobileNotificationDestination({ conversation_id: "conversation-123" }),
     "/m/messages/conversation-123",
+  );
+  assert.equal(
+    mobileNotificationDestination({
+      type: "event_request_approved",
+      event_id: "event-123",
+      event: { slug: "paryushan-2026" },
+    }),
+    "/m/events/paryushan-2026",
+  );
+  assert.equal(
+    mobileNotificationDestination({ type: "event_request_rejected" }),
+    "/m/events",
   );
   assert.equal(mobileNotificationDestination({}), null);
   assert.notEqual(mobileNotificationDestination({ ride_id: "ride-123" }), "/m/rides");

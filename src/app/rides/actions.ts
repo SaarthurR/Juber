@@ -18,11 +18,27 @@ import {
 import {
   MESSAGE_BASE_TARGETS,
   RIDE_LIST_TARGETS,
+  contactActionReturnPath,
+  contactSetupDestination,
   pickAllowed,
   requestListDestination,
   requestRevalidationTargets,
   rideDetailDestination,
 } from "@/lib/route-targets";
+import {
+  parseGuestCount,
+  parsePickupSource,
+  trimPickupNote,
+} from "@/lib/booking";
+import { acceptRideRequestForUser } from "@/lib/accept-ride-request";
+import { CONTACT_SETUP_MESSAGE } from "@/lib/contact-setup";
+import { hasContact } from "@/lib/contact-readiness";
+import { getHomeAddress } from "@/lib/home-address";
+import {
+  mapCoarseLabelDbError,
+  validateCoarseLabel,
+} from "@/lib/coarse-label";
+import { mapInsertError } from "@/lib/rate-limit";
 
 function revalidateMessageRoutes() {
   revalidatePath("/messages");
@@ -52,6 +68,23 @@ function logDeferredCancellationError(
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
   return s.length ? s : null;
+}
+
+async function activePlaceNames(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<Set<string>> {
+  const { data } = await supabase.from("places").select("name").eq("active", true);
+  return new Set((data ?? []).map((row) => row.name as string));
+}
+
+function assertCoarseLabels(
+  labels: Array<string | null>,
+  presets: ReadonlySet<string>,
+) {
+  for (const label of labels) {
+    const error = validateCoarseLabel(label, presets);
+    if (error) throw new Error(error);
+  }
 }
 
 function parsePositiveInt(v: FormDataEntryValue | null, fallback: number, label: string) {
@@ -84,10 +117,17 @@ function isoDate(v: FormDataEntryValue | null) {
 
 export type RideFormState = { error: string } | null;
 export type RequestFormState = { error: string } | null;
-export type RideActionState = { error: string } | null;
+export type RideActionState =
+  | { error: string; setupPath?: string }
+  | {
+      success: true;
+      guestCount: number;
+      pickupNote: string | null;
+    }
+  | null;
 export type RedirectActionResult =
   | { success: true; redirectTo: string }
-  | { error: string };
+  | { error: string; setupPath?: string };
 
 export async function postRide(
   _previousState: RideFormState,
@@ -99,10 +139,7 @@ export async function postRide(
   const base = pickAllowed(formData.get("base")?.toString(), RIDE_LIST_TARGETS, "/rides");
 
   try {
-    const { data: contactReady } = await supabase.rpc("profile_has_contact", {
-      p_profile_id: user.id,
-    });
-    if (!contactReady) {
+    if (!(await hasContact(supabase, user.id))) {
       throw new Error("Add a phone or WhatsApp number to your profile before posting a ride.");
     }
     const seats = parsePositiveInt(formData.get("seats_total"), 1, "Seats available");
@@ -123,6 +160,9 @@ export async function postRide(
     if (!origin || !destination) {
       throw new Error("Please choose whether this ride is to or from JCNC and add the city.");
     }
+
+    const presets = await activePlaceNames(supabase);
+    assertCoarseLabels([origin, destination], presets);
 
     if (returnDepartAt && new Date(returnDepartAt) <= new Date(departAt)) {
       throw new Error("Return time must be after the outbound departure.");
@@ -157,9 +197,18 @@ export async function postRide(
       event_id: eventId,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      throw new Error(
+        mapInsertError(error, "Unable to post this ride.", mapCoarseLabelDbError),
+      );
+    }
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Unable to post this ride." };
+    return {
+      error:
+        error instanceof Error
+          ? mapCoarseLabelDbError(error.message)
+          : "Unable to post this ride.",
+    };
   }
 
   revalidatePath("/rides");
@@ -176,6 +225,9 @@ export async function postRequest(
   if (!user) redirect("/");
 
   try {
+    if (!(await hasContact(supabase, user.id))) {
+      throw new Error("Add a phone or WhatsApp number to your profile before posting a ride request.");
+    }
     const earliestDate = str(formData.get("earliest_date"));
     const latestDate = str(formData.get("latest_date"));
     const maxPrice = parseNonNegativeNumber(formData.get("max_price"), "Max gas contribution");
@@ -189,13 +241,15 @@ export async function postRequest(
     }
 
     const departAt = dateOnlyToIso(earliestDate);
+    const origin = str(formData.get("origin_label"));
+    const destination = str(formData.get("destination_label")) ?? JCNC_LABEL;
+    const presets = await activePlaceNames(supabase);
+    assertCoarseLabels([origin, destination], presets);
 
     const { error } = await supabase.from("ride_requests").insert({
       rider_id: user.id,
-      origin_label: str(formData.get("origin_label")),
-      destination_label:
-        str(formData.get("destination_label")) ??
-        "JCNC",
+      origin_label: origin,
+      destination_label: destination,
       depart_at: departAt,
       earliest_date: earliestDate,
       latest_date: latestDate,
@@ -205,9 +259,18 @@ export async function postRequest(
       event_id: str(formData.get("event_id")),
     });
 
-    if (error) throw new Error(error.message);
+    if (error) {
+      throw new Error(
+        mapInsertError(error, "Unable to post this request.", mapCoarseLabelDbError),
+      );
+    }
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Unable to post this request." };
+    return {
+      error:
+        error instanceof Error
+          ? mapCoarseLabelDbError(error.message)
+          : "Unable to post this request.",
+    };
   }
   revalidatePath("/rides");
   revalidatePath("/m");
@@ -242,42 +305,34 @@ export async function cancelRideRequest(
   return { success: true, redirectTo };
 }
 
-export async function acceptRideRequest(requestId: string, formData?: FormData) {
+export async function acceptRideRequest(
+  requestId: string,
+  formData?: FormData,
+): Promise<RedirectActionResult> {
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
   const base = pickAllowed(formData?.get("base")?.toString(), MESSAGE_BASE_TARGETS, "/messages");
 
-  const { data: request } = await supabase
-    .from("ride_requests")
-    .select("rider_id")
-    .eq("id", requestId)
-    .single<{ rider_id: string }>();
-  if (!request) throw new Error("Could not find this request.");
-  if (request.rider_id === user.id) {
-    throw new Error("You cannot accept your own ride request.");
+  const result = await acceptRideRequestForUser(supabase, user.id, requestId);
+  if (result.status === "contact_required") {
+    const returnPath = contactActionReturnPath(
+      formData,
+      `/requests/${requestId}`,
+    );
+    const mobile = returnPath.startsWith("/m");
+    return {
+      error: CONTACT_SETUP_MESSAGE,
+      setupPath: contactSetupDestination(returnPath, { mobile }),
+    };
   }
-
-  const { data, error } = await supabase.rpc("accept_ride_request", {
-    p_request_id: requestId,
-  });
-  if (error) throw new Error(error.message);
-  if (!data) {
-    throw new Error("This request is no longer available.");
-  }
-
-  const { data: conversationId, error: convoError } = await supabase.rpc("open_conversation", {
-    p_other_user_id: request.rider_id,
-    p_ride_id: null,
-    p_request_id: requestId,
-  });
-  if (convoError || !conversationId) {
-    throw new Error(convoError?.message ?? "Could not start chat");
+  if (result.status === "error") {
+    return { error: result.error };
   }
 
   revalidateRequestRoutes(requestId);
   revalidateMessageRoutes();
-  redirect(`${base}/${conversationId}`);
+  return { success: true, redirectTo: `${base}/${result.conversationId}` };
 }
 
 export async function requestSeat(
@@ -285,19 +340,66 @@ export async function requestSeat(
   _previousState: RideActionState,
   formData: FormData,
 ): Promise<RideActionState> {
-  void formData;
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const { error } = await supabase.rpc("request_seat", { p_ride_id: rideId });
-  if (error) return { error: error.message };
+  try {
+    if (!(await hasContact(supabase, user.id))) {
+      const returnPath = contactActionReturnPath(formData, `/rides/${rideId}`);
+      const mobile = returnPath.startsWith("/m");
+      return {
+        error: CONTACT_SETUP_MESSAGE,
+        setupPath: contactSetupDestination(returnPath, { mobile }),
+      };
+    }
 
-  revalidatePath(`/rides/${rideId}`);
-  revalidatePath(`/m/rides/${rideId}`);
-  revalidatePath("/rides");
-  revalidatePath("/m");
-  return null;
+    const { data: ride, error: rideError } = await supabase
+      .from("rides")
+      .select("seats_available,status")
+      .eq("id", rideId)
+      .maybeSingle<{ seats_available: number; status: string }>();
+    if (rideError) throw new Error(rideError.message);
+    if (!ride || ride.status !== "active") {
+      throw new Error("This ride is not accepting reservations.");
+    }
+
+    const guestCount = parseGuestCount(formData.get("guest_count"), ride.seats_available);
+    const pickupSource = parsePickupSource(formData.get("pickup_source"));
+    let pickupNote: string | null = null;
+
+    if (pickupSource === "home") {
+      pickupNote = await getHomeAddress(supabase);
+      if (!pickupNote) {
+        throw new Error("Add a saved home address in your profile, or enter a custom pickup.");
+      }
+    } else if (pickupSource === "custom") {
+      pickupNote = trimPickupNote(formData.get("pickup_note"));
+      if (!pickupNote) {
+        throw new Error("Enter a pickup location or choose your saved home.");
+      }
+      if (pickupNote.length > 500) {
+        throw new Error("Pickup location must be 500 characters or fewer.");
+      }
+    }
+
+    const { error } = await supabase.rpc("request_seat", {
+      p_ride_id: rideId,
+      p_guest_count: guestCount,
+      p_pickup_note: pickupNote,
+    });
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/rides/${rideId}`);
+    revalidatePath(`/m/rides/${rideId}`);
+    revalidatePath("/rides");
+    revalidatePath("/m");
+    return { success: true, guestCount, pickupNote };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Unable to request this seat.",
+    };
+  }
 }
 
 export async function setPassengerStatus(

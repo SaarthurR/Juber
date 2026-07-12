@@ -8,7 +8,7 @@ import { EventCard } from "@/components/event-card";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { LandingAuthGate } from "@/components/landing-auth-gate";
 import { loadEventSummaries } from "@/lib/events";
-import type { RideWithDriver } from "@/lib/types";
+import { RIDE_WITH_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
 import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export default async function HomePage() {
   const ridesPromise = user
     ? supabase
         .from("rides")
-        .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+        .select(RIDE_WITH_JOIN)
         .eq("status", "active")
         .gte("depart_at", nowIso)
         .order("depart_at", { ascending: true })
@@ -104,7 +104,7 @@ export default async function HomePage() {
         <SectionHeader title="Scheduled rides" href="/rides" allowAnonymousBrowse />
         {rides && rides.length > 0 ? (
           <div className="grid gap-3">
-            {(rides as RideWithDriver[]).map((ride) => (
+            {asRideWithDriverRows(rides).map((ride) => (
               <RideCard key={ride.id} ride={ride} />
             ))}
           </div>

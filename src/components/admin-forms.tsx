@@ -13,6 +13,7 @@ import {
   rejectEventRequest,
 } from "@/app/admin/actions";
 import { AdminActionFeedback } from "@/components/admin-action-feedback";
+import { EventSourceLink } from "@/components/event-source-link";
 import { FormField } from "@/components/form-bits";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import { ADMIN_ACTION_INITIAL, type AdminActionState } from "@/lib/admin-action-state";
@@ -80,14 +81,11 @@ export function AdminEventRequestCard({ request }: { request: EventRequestWithRe
             </p>
           )}
           {request.source_url && (
-            <a
+            <EventSourceLink
               href={request.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
+              label="View source"
               className="mt-2 inline-block text-sm font-bold text-brand-600 hover:text-brand-700"
-            >
-              View source
-            </a>
+            />
           )}
         </div>
 
@@ -143,6 +141,12 @@ export function AdminCreateEventForm() {
         <FormField label="End date" name="end_date" type="date" />
       </div>
       <FormField label="Description" name="description" textarea />
+      <FormField
+        label="Event link (optional)"
+        name="source_url"
+        type="url"
+        placeholder="https://example.org/event"
+      />
       <PendingActionButton
         actionKey="add-event"
         pendingLabel="Adding event..."
@@ -196,7 +200,7 @@ export function AdminCreatePlaceForm({ events }: { events: EventRow[] }) {
       </label>
       <label className="block">
         <span className="mb-1.5 block text-sm font-medium text-stone-700">
-          Link to event (optional)
+          Attach to event (optional)
         </span>
         <select
           name="event_id"

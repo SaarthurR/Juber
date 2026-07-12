@@ -41,6 +41,7 @@ function notification(
     ride_id: "ride-1",
     request_id: null,
     conversation_id: null,
+    event_id: null,
     message: null,
     read_at: null,
     created_at: "2026-07-11T12:00:00.000Z",
@@ -57,6 +58,7 @@ function notification(
       status: "active",
     },
     request: null,
+    event: null,
     ...overrides,
   };
 }
@@ -310,7 +312,7 @@ test("one realtime channel owns INSERT and UPDATE and cleans up once", async () 
   assert.ok(controller, "notification controller must exist");
   if (!controller) return;
 
-  const handlers = new Map<string, () => void>();
+  const handlers = new Map<string, (payload: { new?: { type?: string } }) => void>();
   let channelCount = 0;
   let subscribeCount = 0;
   let cleanupCount = 0;
@@ -318,7 +320,7 @@ test("one realtime channel owns INSERT and UPDATE and cleans up once", async () 
     on(
       _kind: "postgres_changes",
       filter: { event: string },
-      handler: () => void,
+      handler: (payload: { new?: { type?: string } }) => void,
     ) {
       handlers.set(filter.event, handler);
       return channel;
@@ -345,15 +347,15 @@ test("one realtime channel owns INSERT and UPDATE and cleans up once", async () 
     client,
     "mobile-notifications",
     "user-1",
-    (event: string) => events.push(event),
+    (change) => events.push(`${change.event}:${change.type ?? ""}`),
   );
-  handlers.get("INSERT")?.();
-  handlers.get("UPDATE")?.();
+  handlers.get("INSERT")?.({ new: { type: "seat_requested" } });
+  handlers.get("UPDATE")?.({ new: { type: "seat_confirmed" } });
   cleanup();
 
   assert.equal(channelCount, 1);
   assert.equal(subscribeCount, 1);
-  assert.deepEqual(events, ["INSERT", "UPDATE"]);
+  assert.deepEqual(events, ["INSERT:seat_requested", "UPDATE:seat_confirmed"]);
   assert.equal(cleanupCount, 1);
 });
 

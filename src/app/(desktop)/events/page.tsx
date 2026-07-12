@@ -8,9 +8,9 @@ import {
   eventStatsAreEmpty,
   formatEventDateShort,
   loadEventSummaries,
+  loadMyEventRequests,
+  type MyEventRequest,
 } from "@/lib/events";
-import type { EventRequest, EventRow } from "@/lib/types";
-import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -18,24 +18,13 @@ export default async function EventsPage() {
   const { user } = await getCurrentUser();
   const supabase = await createClient();
 
-  const [summaries, requestRows] = await Promise.all([
+  const [summaries, myRequests] = await Promise.all([
     loadEventSummaries(supabase, Boolean(user)),
-    user
-      ? supabase
-          .from("event_requests")
-          .select("*, approved_event:events(id,name,slug)")
-          .eq("requested_by", user.id)
-          .order("created_at", { ascending: false })
-          .limit(6)
-      : Promise.resolve({ data: [], error: null }),
+    user ? loadMyEventRequests(supabase, user.id) : Promise.resolve([]),
   ]);
-  throwReadError(requestRows.error, "event requests");
 
   const featured = summaries[0];
   const rest = summaries.slice(1);
-  const myRequests = (requestRows.data as (EventRequest & {
-    approved_event: Pick<EventRow, "id" | "name" | "slug"> | null;
-  })[]) ?? [];
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
@@ -126,14 +115,10 @@ function Stat({ n, label }: { n: number; label: string }) {
   );
 }
 
-function EventRequestStatus({
-  rows,
-}: {
-  rows: (EventRequest & { approved_event: Pick<EventRow, "id" | "name" | "slug"> | null })[];
-}) {
+function EventRequestStatus({ rows }: { rows: MyEventRequest[] }) {
   return (
     <section className="mt-8 rounded-2xl border border-[#e7ddcf] bg-white p-5">
-      <h2 className="text-lg font-extrabold text-ink">Your event board requests</h2>
+      <h2 className="text-lg font-extrabold text-ink">My event requests</h2>
       <div className="mt-3 space-y-2">
         {rows.map((row) => (
           <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#fbf7f0] px-4 py-3 text-sm">

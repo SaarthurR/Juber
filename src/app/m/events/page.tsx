@@ -3,9 +3,12 @@ import { ChevronRight, CalendarDays } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { EventRequestForm } from "@/components/event-request-form";
-import { formatEventDateShort, loadEventSummaries } from "@/lib/events";
-import type { EventRequest, EventRow } from "@/lib/types";
-import { throwReadError } from "@/lib/supabase/read-error";
+import {
+  formatEventDateShort,
+  loadEventSummaries,
+  loadMyEventRequests,
+  type MyEventRequest,
+} from "@/lib/events";
 
 export const dynamic = "force-dynamic";
 
@@ -13,21 +16,10 @@ export default async function MobileEventsPage() {
   const { user } = await getCurrentUser();
   const supabase = await createClient();
 
-  const [summaries, requestRows] = await Promise.all([
+  const [summaries, myRequests] = await Promise.all([
     loadEventSummaries(supabase, Boolean(user)),
-    user
-      ? supabase
-          .from("event_requests")
-          .select("*, approved_event:events(id,name,slug)")
-          .eq("requested_by", user.id)
-          .order("created_at", { ascending: false })
-          .limit(4)
-      : Promise.resolve({ data: [], error: null }),
+    user ? loadMyEventRequests(supabase, user.id, 4) : Promise.resolve([]),
   ]);
-  throwReadError(requestRows.error, "event requests");
-  const myRequests = (requestRows.data as (EventRequest & {
-    approved_event: Pick<EventRow, "id" | "name" | "slug"> | null;
-  })[]) ?? [];
 
   return (
     <div className="pb-[calc(5rem+env(safe-area-inset-bottom)+1rem)]">
@@ -77,15 +69,11 @@ export default async function MobileEventsPage() {
   );
 }
 
-function MobileEventRequestStatus({
-  rows,
-}: {
-  rows: (EventRequest & { approved_event: Pick<EventRow, "id" | "name" | "slug"> | null })[];
-}) {
+function MobileEventRequestStatus({ rows }: { rows: MyEventRequest[] }) {
   return (
     <section className="px-4 pt-4">
       <div className="rounded-2xl border border-border bg-white p-4">
-        <h2 className="text-[15px] font-extrabold text-ink">Your event board requests</h2>
+        <h2 className="text-[15px] font-extrabold text-ink">My event requests</h2>
         <div className="mt-3 space-y-2">
           {rows.map((row) => (
             <div key={row.id} className="rounded-xl bg-sand px-3 py-2 text-[12px]">

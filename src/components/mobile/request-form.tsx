@@ -61,6 +61,9 @@ export function MobileRequestForm({
 
         <label className="block">
           <Label>Pick-up neighborhood</Label>
+          <p className="mb-2 text-[12px] leading-relaxed text-muted-warm">
+            City or neighborhood, not a street address.
+          </p>
           <div className="relative">
             <select name="neighborhood" required defaultValue="" className={`${inputCls} appearance-none pr-10`}>
               <option value="" disabled>

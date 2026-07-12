@@ -1,3 +1,5 @@
+import { parseEventSourceUrl } from "@/lib/event-url";
+
 export type EventRequestActionState = {
   status: "idle" | "error" | "success";
   message: string | null;
@@ -10,6 +12,7 @@ export type EventRequestPayload = {
   venue_label: string | null;
   start_date: string | null;
   end_date: string | null;
+  source_url: string | null;
   expected_traffic: "unsure" | "high";
   requested_by: string;
 };
@@ -46,6 +49,13 @@ export function buildEventRequestPayload(formData: FormData, userId: string) {
   }
 
   const expectedTraffic = str(formData.get("expected_traffic"));
+  const sourceUrl = parseEventSourceUrl(formData.get("source_url"));
+  if (formData.get("source_url")?.toString().trim() && !sourceUrl) {
+    return {
+      state: eventRequestError("Please enter a valid http or https URL."),
+      payload: null,
+    };
+  }
 
   return {
     state: EVENT_REQUEST_INITIAL_STATE,
@@ -55,6 +65,7 @@ export function buildEventRequestPayload(formData: FormData, userId: string) {
       venue_label: str(formData.get("venue_label")),
       start_date: str(formData.get("start_date")),
       end_date: str(formData.get("end_date")),
+      source_url: sourceUrl,
       expected_traffic: expectedTraffic === "high" ? "high" : "unsure",
       requested_by: userId,
     } satisfies EventRequestPayload,

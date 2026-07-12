@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { NewRideForm } from "@/components/new-ride-form";
 import { getDateTimeInputValue } from "@/lib/date-time";
-import { hasContact } from "@/lib/contact";
+import { hasContact } from "@/lib/contact-readiness";
+import { contactSetupDestination } from "@/lib/route-targets";
 import type { EventRow, Place } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,8 @@ export default async function NewRidePage({
 
   const supabase = await createClient();
   if (!(await hasContact(supabase, user.id))) {
-    redirect("/profile?contact_required=1");
+    const attempted = eventId ? `/rides/new?event_id=${eventId}` : "/rides/new";
+    redirect(contactSetupDestination(attempted));
   }
 
   const [{ data: places }, { data: events }] = await Promise.all([
