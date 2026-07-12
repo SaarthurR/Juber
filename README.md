@@ -4,53 +4,75 @@
 
 A Moober-style carpool board for the **Jain Center of Northern California (JCNC)** community.
 Members sign in with Google, post and find carpools (and ride requests) to the temple,
-coordinate via in-app messaging + contact info, and rally around events like **Paryushan**.
+coordinate via in-app messaging plus booking-scoped contact info, and rally around events
+like **Paryushan**.
 
 Built with **Next.js (App Router)** + **Supabase** (Postgres, Auth, Realtime, RLS),
 deployed on **Vercel**.
 
 ## Features
 
-- 🔐 Google sign-in (Supabase Auth)
-- 🚗 Post a ride (time, from/to, seats, optional gas contribution)
-- 🙋 Request a ride
-- 🔎 Browse + filter by from / to / date
-- 💺 Seat requests with driver confirm/decline (seats auto-sync)
-- 💬 Realtime in-app messaging + open contact (phone/WhatsApp)
-- 📅 First-class events with their own ride boards
-- 🛠️ Admin tools for events and preset locations
+- Google sign-in (Supabase Auth)
+- Post a ride or request a ride (time, from/to, seats, optional gas contribution)
+- Browse and filter by from / to / date / trip type
+- Seat requests with driver confirm/decline (seats auto-sync)
+- Realtime in-app messaging plus booking-scoped phone/WhatsApp contact
+- First-class public events with their own ride boards
+- Admin tools: approve event requests, create events/places, JCNC calendar import
 
 ## Setup
 
-### 1. Create a Supabase project
+### 1. Create and link a Supabase project
 
-1. Go to [supabase.com](https://supabase.com) → New project.
-2. In **SQL Editor**, run `supabase/migrations/0001_init.sql`, then `supabase/seed.sql`.
-3. Enable **Google** auth: Authentication → Providers → Google. Add your Google OAuth
-   client ID/secret (from Google Cloud Console). Set the authorized redirect URL to:
-   `https://YOUR-PROJECT.supabase.co/auth/v1/callback`.
-4. Under Authentication → URL Configuration, add your site URLs
-   (`http://localhost:3000` and your Vercel domain) to **Redirect URLs**.
+1. Create a project at [supabase.com](https://supabase.com).
+2. Install the [Supabase CLI](https://supabase.com/docs/guides/cli) and link the repo:
+
+   ```bash
+   supabase link --project-ref YOUR-PROJECT-REF
+   ```
+
+3. Apply every migration (`0001` through `0032`):
+
+   ```bash
+   supabase db push
+   supabase migration list --linked
+   ```
+
+   Local and remote histories should match through `0032`. Optionally run
+   `supabase/seed.sql` in the SQL editor for default JCNC places.
+
+4. Enable **Google** auth: Authentication → Providers → Google. Add your Google OAuth
+   client ID/secret from Google Cloud Console. Set the authorized redirect URL to:
+
+   ```
+   https://YOUR-PROJECT.supabase.co/auth/v1/callback
+   ```
+
+5. Under Authentication → URL Configuration, add **Redirect URLs** for every environment:
+
+   - `http://localhost:3000/auth/callback`
+   - `https://YOUR-VERCEL-DOMAIN/auth/callback`
+
+   The app builds OAuth redirects from `NEXT_PUBLIC_SITE_URL` and preserves the
+   attempted path (including `/m/...` mobile routes) via the `next` query param.
 
 ### 2. Environment variables
 
-Copy `.env.local.example` to `.env.local` and fill in from Supabase
-(Project Settings → API):
+Copy `.env.local.example` to `.env.local` and fill in values from Supabase
+(Project Settings → API). **Never commit real keys.**
 
-```
-NEXT_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
+| Variable | Required | Where used |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Browser, server, middleware |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Browser, server, middleware |
+| `NEXT_PUBLIC_SITE_URL` | Yes | OAuth redirect origin |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only | Best-effort cancellation SMS |
+| `TWILIO_ACCOUNT_SID` | Optional | Cancellation SMS |
+| `TWILIO_AUTH_TOKEN` | Optional | Cancellation SMS |
+| `TWILIO_FROM_NUMBER` | Optional | Cancellation SMS |
 
-# Optional: send cancellation texts through Twilio
-TWILIO_ACCOUNT_SID=your-account-sid
-TWILIO_AUTH_TOKEN=your-auth-token
-TWILIO_FROM_NUMBER=+15555555555
-```
-
-When the Twilio variables are configured, cancelling a ride texts each pending or
-confirmed rider, and cancelling a seat texts the driver. Phone numbers may be stored
-as US numbers or in E.164 format. Cancellation still succeeds if SMS delivery fails.
+`SUPABASE_SECRET_KEY` is accepted as an alias for the service role key. Twilio vars are
+best-effort: cancellation still succeeds if SMS delivery fails.
 
 ### 3. Run locally
 
@@ -59,46 +81,106 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+- Desktop: [http://localhost:3000](http://localhost:3000)
+- Mobile shell: [http://localhost:3000/m](http://localhost:3000/m)
 
-### 4. Make yourself an admin
+### 4. Grant admin access
 
-After signing in once, run this in the Supabase SQL editor:
+After signing in once, run in the Supabase SQL editor:
 
 ```sql
 update public.profiles set is_admin = true
 where id = (select id from auth.users where email = 'you@example.com');
 ```
 
-Then the **Admin** link appears in the navbar (create events / preset locations).
+The **Admin** link appears in the navbar. Admins can approve event requests, create
+events/places, and run **JCNC import** to seed likely high-traffic calendar items.
+
+## Demo walkthrough
+
+Use **two Google accounts** for the full driver/rider flow, or one account to explore
+posting and admin tools.
+
+### Contact-filled profiles (required before posting)
+
+Phone and WhatsApp live in `profile_contacts` (migration `0020`). Both driver and rider
+accounts need at least one contact method before posting rides or requests:
+
+1. Sign in → **Profile** → add phone and/or WhatsApp → save.
+2. Repeat for the second account.
+
+### Driver + rider happy path
+
+**Desktop**
+
+1. Driver: `/rides/new` → post a ride to JCNC.
+2. Rider: `/rides` → reserve a seat.
+3. Driver: ride detail → confirm the passenger.
+4. Rider: ride detail → **Contact** or **Messages** to coordinate pickup.
+5. After departure + 24 hours, raw phone/WhatsApp expire; in-app chat remains for
+   lost-item follow-up.
+
+**Mobile**
+
+Same flow under `/m`, `/m/rides/new`, `/m/rides/[id]`, and `/m/messages`. OAuth `next`
+preserves the mobile shell when signing in from a gated action.
+
+### Events
+
+- Browse public events at `/events` (desktop) or `/m/events` (mobile).
+- Signed-in members can suggest events; admins approve them or import from JCNC.
+
+### Contact and chat policy
+
+- Raw phone/WhatsApp are visible only to confirmed booking counterparties.
+- Access ends **24 hours after scheduled departure** for active rides/fulfilled requests.
+- Access ends **immediately** when a ride is closed or cancelled.
+- **In-app chat is retained** in Past/Archived for lost-item follow-up regardless of
+  raw-contact expiry.
+
+### SMS fallback
+
+Configure all three Twilio variables on Vercel to send cancellation texts. Without them,
+in-app notifications still fire and cancellations succeed silently.
 
 ## Deploy to Vercel
 
 1. Push to GitHub and import the repo at [vercel.com](https://vercel.com).
-2. Add the same env vars in Vercel → Project → Settings → Environment Variables
-   (set `NEXT_PUBLIC_SITE_URL` to your production domain).
-3. Add your Vercel domain to Supabase Auth redirect URLs.
-4. Deploy.
+2. Add env vars from `.env.local.example` (set `NEXT_PUBLIC_SITE_URL` to production).
+3. Add the Vercel domain to Supabase Auth redirect URLs.
+4. Ensure migrations are pushed to the linked Supabase project before deploy.
+5. Deploy. CI (`.github/workflows/ci.yml`) runs `npm ci`, test, lint, `tsc`, and build
+   on every push/PR.
+
+## Known limitations
+
+- **Browser/Realtime E2E:** Full two-account browser and WebSocket acceptance was not run
+  against a paid Supabase preview branch. Coverage relies on unit/static tests, isolated
+  SQL fixtures, lint, typecheck, build, and read-only production checks.
+- **Cancellation SMS:** Requires Twilio env vars plus `SUPABASE_SERVICE_ROLE_KEY` on the
+  deployment; otherwise SMS is skipped.
 
 ## Project structure
 
 ```
 src/
   app/
-    page.tsx              Home (hero, events, latest rides)
-    rides/                Board, post ride, ride detail, actions
-    requests/new/         Post a ride request
-    events/               Event list + event page
-    profile/              Own edit + public profile
-    messages/             Inbox + realtime thread + actions
-    admin/                Admin tools + actions
-    auth/                 OAuth callback + signout
-  components/             RideCard, RouteTrack, MessageThread, Navbar, …
-  lib/
-    supabase/             Browser/server/proxy clients
-    auth.ts types.ts utils.ts constants.ts
-  proxy.ts                Session refresh (Next 16 proxy convention)
+    (desktop)/          Desktop shell: home, rides, events, profile, messages, admin
+    m/                  Mobile shell: /m, /m/rides, /m/events, /m/messages, /m/profile
+    auth/               OAuth callback + signout
+  components/           RideCard, MessageThread, ContactModal, admin forms, …
+  lib/                  Supabase clients, auth, messages, notifications, …
 supabase/
-  migrations/0001_init.sql
-  seed.sql
+  migrations/           0001_init.sql … 0032_task13_admin_review_contracts.sql
+  seed.sql              Default JCNC places
+```
+
+## Verification
+
+```bash
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
+supabase migration list --linked
 ```

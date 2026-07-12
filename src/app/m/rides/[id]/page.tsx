@@ -276,6 +276,11 @@ export default async function MobileTripPage({
             <div className="flex h-[48px] items-center justify-center rounded-[14px] bg-tint text-[14px] font-bold capitalize text-brand-700">
               Seat {myJoin.status}
             </div>
+            {myJoin.status === "confirmed" && (
+              <p className="mt-2 text-center text-[12px] leading-relaxed text-muted-warm">
+                Use in-app chat to confirm pickup details with {driverFirst}.
+              </p>
+            )}
             {ride.status === "active" &&
               (myJoin.status === "pending" || myJoin.status === "confirmed") && (
               <CancelSeatButton rideId={ride.id} base="/m" />

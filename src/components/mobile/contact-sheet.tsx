@@ -137,6 +137,10 @@ export function ContactSheetContent({
             />
           </form>
         </div>
+
+        <p className="pb-1 text-[11px] leading-relaxed text-muted-warm">
+          In-app chat stays available after phone and WhatsApp access expires.
+        </p>
       </BottomSheet>
     </>
   );

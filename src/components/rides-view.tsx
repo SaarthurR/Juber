@@ -3,7 +3,7 @@
 import { useEffect, useReducer } from "react";
 import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Car, MessagesSquare, Plus } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { RideCard, RequestCard } from "@/components/ride-card";
 import { RideFilters } from "@/components/ride-filters";
@@ -132,18 +132,25 @@ function Empty({
   signedIn: boolean;
   hasFilters: boolean;
 }) {
+  const Icon = kind === "rides" ? Car : MessagesSquare;
+  const title = hasFilters
+    ? `No ${kind === "rides" ? "carpools" : "requests"} match your search`
+    : kind === "rides"
+      ? "No carpools yet"
+      : "No ride requests yet";
+  const description = hasFilters
+    ? "Try clearing your filters, or check back later."
+    : kind === "rides"
+      ? "Be the first to offer a ride to JCNC. Your sangha will thank you."
+      : "When someone needs a ride to JCNC, it will show up here.";
+
   return (
     <div className="rounded-2xl border border-dashed border-[#e0d3bf] px-8 py-14 text-center">
-      <p className="font-semibold text-stone-700">
-        No {kind} match your search.
-      </p>
-      <p className="mt-1 text-sm text-stone-400">
-        {hasFilters
-          ? "Try clearing your filters, or check back later."
-          : kind === "rides"
-            ? "Be the first to offer a carpool."
-            : "No one is asking for a ride right now."}
-      </p>
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-tint">
+        <Icon size={36} className="text-brand-600" strokeWidth={1.8} />
+      </div>
+      <p className="mt-5 font-semibold text-stone-700">{title}</p>
+      <p className="mt-1 text-sm text-stone-400">{description}</p>
       {signedIn && (
         <Link
           href={kind === "rides" ? "/rides/new" : "/requests/new"}

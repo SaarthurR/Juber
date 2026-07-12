@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useState } from "react";
-import { ArrowLeftRight, CalendarDays, X } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, Car, MessagesSquare, X } from "lucide-react";
 import { CityCombobox } from "@/components/city-combobox";
 import { Segmented } from "@/components/mobile/segmented";
 import { MRideCard, MRequestCard } from "@/components/mobile/mobile-cards";
@@ -78,8 +78,8 @@ export function HomeBoard({
 
       <div hidden={tab !== "carpools"}>
         <List
+          kind="rides"
           label={`${filteredRides.length} matching ride${filteredRides.length === 1 ? "" : "s"}`}
-          empty="No carpools match yet. Be the first to offer one."
         >
           {filteredRides.map((ride) => (
             <MRideCard key={ride.id} ride={ride} />
@@ -88,8 +88,8 @@ export function HomeBoard({
       </div>
       <div hidden={tab !== "requests"}>
         <List
+          kind="requests"
           label={`${filteredRequests.length} matching request${filteredRequests.length === 1 ? "" : "s"}`}
-          empty="No one is asking for a ride right now."
         >
           {filteredRequests.map((request) => (
             <MRequestCard key={request.id} request={request} />
@@ -101,14 +101,21 @@ export function HomeBoard({
 }
 
 function List({
+  kind,
   label,
-  empty,
   children,
 }: {
+  kind: "rides" | "requests";
   label: string;
-  empty: string;
   children: React.ReactNode[];
 }) {
+  const Icon = kind === "rides" ? Car : MessagesSquare;
+  const title = kind === "rides" ? "No carpools yet" : "No requests yet";
+  const description =
+    kind === "rides"
+      ? "Be the first to offer a ride to JCNC."
+      : "When someone needs a ride, it will show up here.";
+
   return (
     <div>
       <div className="mb-3 mt-1 flex items-center justify-between">
@@ -119,8 +126,12 @@ function List({
       {children.length ? (
         <div className="space-y-3">{children}</div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-[13px] text-muted-warm">
-          {empty}
+        <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center">
+          <div className="mx-auto flex h-[88px] w-[88px] items-center justify-center rounded-full bg-tint">
+            <Icon size={40} className="text-brand-bright" strokeWidth={1.8} />
+          </div>
+          <h2 className="mt-5 text-[17px] font-extrabold text-ink">{title}</h2>
+          <p className="mt-2 text-[13px] leading-relaxed text-muted-warm">{description}</p>
         </div>
       )}
     </div>

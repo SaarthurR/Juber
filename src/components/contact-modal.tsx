@@ -158,6 +158,10 @@ function ContactDialog({
                   </PendingActionButton>
                 </form>
             </div>
+
+            <p className="mt-5 text-xs text-stone-400">
+              In-app chat stays available after phone and WhatsApp access expires.
+            </p>
     </DesktopDialog>
   );
 }

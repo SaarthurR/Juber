@@ -276,6 +276,11 @@ export default async function RideDetailPage({
               <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
                 Seat {myJoin.status}
               </div>
+              {myJoin.status === "confirmed" && (
+                <p className="mt-3 text-center text-sm text-stone-600">
+                  Use in-app chat to confirm pickup details with your driver.
+                </p>
+              )}
               {ride.status === "active" &&
                 (myJoin.status === "pending" || myJoin.status === "confirmed") && (
                 <CancelSeatButton rideId={ride.id} />
