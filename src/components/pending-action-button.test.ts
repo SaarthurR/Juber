@@ -189,7 +189,9 @@ test("PendingActionButton presentation renders pending and restored views", () =
 });
 
 test("admin mutation forms use PendingActionButton with action-specific pending labels", () => {
-  assert.match(adminPage, /PendingActionGroup/);
+  const adminForms = readFileSync(new URL("./admin-forms.tsx", import.meta.url), "utf8");
+
+  assert.match(adminForms, /PendingActionGroup/);
   for (const label of [
     "Importing...",
     "Approving...",
@@ -198,8 +200,9 @@ test("admin mutation forms use PendingActionButton with action-specific pending 
     "Adding event...",
     "Adding location...",
   ]) {
-    assert.match(adminPage, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(adminForms, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  assert.match(adminPage, /AdminJcncImportForm/);
 });
 
 test("profile and contact message forms use PendingActionButton", () => {
