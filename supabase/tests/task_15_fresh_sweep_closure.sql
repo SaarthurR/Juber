@@ -262,30 +262,64 @@ select public.task15_assert(
   'expired request accept_ride_request returns false',
   public.accept_ride_request(:'expired_request') = false
 );
+update public.ride_requests
+set status = 'fulfilled',
+    accepted_driver_id = :'accepter'::uuid,
+    accepted_at = now()
+where id = :'expired_request';
+reset role;
+select public.task15_assert(
+  'expired request direct authenticated update is an RLS no-op',
+  (
+    select status = 'active'
+       and accepted_driver_id is null
+       and accepted_at is null
+    from public.ride_requests
+    where id = :'expired_request'
+  )
+);
+
+set role service_role;
+select set_config('request.jwt.claim.sub', :'accepter', false);
 do $task15_expired_fulfill$
+declare
+  v_message text;
+  v_sqlstate text;
 begin
-  update public.ride_requests
-  set status = 'fulfilled',
-      accepted_driver_id = '00000000-0000-4000-8000-000000008003',
-      accepted_at = now()
-  where id = '00000000-0000-4000-8000-000000008201';
-  if found then
-    insert into task15_failures values (
-      'expired request direct fulfill rejected',
-      'request became fulfilled'
-    ) on conflict do nothing;
-  end if;
-exception
-  when others then
-    if sqlerrm not like '%This ride request is no longer available%'
-       and sqlerrm not like '%Invalid ride request status transition%' then
-      insert into task15_failures values (
-        'expired request direct fulfill rejected',
-        sqlerrm
-      ) on conflict do nothing;
-    end if;
+  begin
+    update public.ride_requests
+    set status = 'fulfilled',
+        accepted_driver_id = '00000000-0000-4000-8000-000000008003',
+        accepted_at = now()
+    where id = '00000000-0000-4000-8000-000000008201';
+    raise exception 'expired request fulfillment unexpectedly succeeded';
+  exception
+    when others then
+      get stacked diagnostics
+        v_message = message_text,
+        v_sqlstate = returned_sqlstate;
+      if v_sqlstate is distinct from 'P0001'
+         or v_message is distinct from 'This ride request is no longer available' then
+        raise exception 'expected [P0001] This ride request is no longer available, got [%] %',
+          v_sqlstate,
+          v_message;
+      end if;
+  end;
 end
 $task15_expired_fulfill$;
+reset role;
+select public.task15_assert(
+  'expired request service-role trigger rejection leaves row unchanged',
+  (
+    select status = 'active'
+       and accepted_driver_id is null
+       and accepted_at is null
+    from public.ride_requests
+    where id = :'expired_request'
+  )
+);
+set role authenticated;
+select set_config('request.jwt.claim.sub', :'accepter', false);
 
 -- Fresh request: accept_ride_request succeeds
 select public.task15_assert(
