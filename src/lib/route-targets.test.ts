@@ -475,7 +475,7 @@ test("proxy preserves selected desktop onboarding and shares opt-out semantics",
   assert.match(proxy, /import \{ DESKTOP_COOKIE \} from "@\/lib\/route-targets"/);
   assert.match(callback, /DESKTOP_COOKIE/);
   assert.match(proxy, /preserveDesktopProfileFlow/);
-  assert.match(proxy, /!preserveDesktopProfileFlow/);
+  assert.match(proxy, /preserveDesktopProfileFlow \|\| isExcludedPath/);
 });
 
 test("safe revalidation helper returns only canonical pathnames", () => {

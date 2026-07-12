@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { NextRequest } from "next/server";
+import { getProxyDecision } from "../proxy";
 
 const root = new URL("../", import.meta.url);
 
@@ -12,11 +14,24 @@ test("mobile event detail route exists inside the /m shell", () => {
 });
 
 test("proxy maps mobile event detail without looping or overriding desktop opt-out", () => {
-  const proxy = readFileSync(fileURLToPath(new URL("proxy.ts", root)), "utf8");
+  const mobile = new NextRequest("https://juber.invalid/events/paryushan-2026", {
+    headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" },
+  });
+  const optedOut = new NextRequest("https://juber.invalid/events/paryushan-2026", {
+    headers: {
+      "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+      cookie: "force-desktop=1",
+    },
+  });
+  const alreadyMobile = new NextRequest("https://juber.invalid/m/events/paryushan-2026", {
+    headers: { "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" },
+  });
 
-  assert.match(proxy, /pathname\.startsWith\("\/events\/"\)/);
-  assert.match(proxy, /url\.pathname = `\/m\/events\/\$\{[^}]+}`/);
-  assert.match(proxy, /!optedOut/);
+  const decision = getProxyDecision(mobile);
+  assert.equal(decision.kind, "redirect");
+  assert.equal(decision.url.pathname, "/m/events/paryushan-2026");
+  assert.equal(getProxyDecision(optedOut).kind, "next");
+  assert.equal(getProxyDecision(alreadyMobile).kind, "next");
 });
 
 test("landing browse links are marked anonymous-safe", () => {

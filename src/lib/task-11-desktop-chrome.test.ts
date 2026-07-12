@@ -121,9 +121,11 @@ test("session proxy behavior remains invariant and exposes no spoofable surface 
     "utf8",
   );
 
-  assert.match(proxy, /return await updateSession\(request\)/);
+  assert.match(proxy, /return handleProxyRequest\(request\)/);
+  assert.match(proxy, /const refreshedResponse = await refreshSession\(request\)/);
+  assert.match(proxy, /copySetCookieHeaders\(refreshedResponse, response\)/);
   assert.match(proxy, /pathname === "\/profile"/);
-  assert.match(proxy, /pathname\.startsWith\("\/events\/"\)/);
+  assert.match(proxy, /root === "events"/);
   assert.match(proxy, /matcher: \[/);
   assert.doesNotMatch(proxy, /x-juber-surface|headers\(\)/);
   assert.match(middleware, /await supabase\.auth\.getSession\(\)/);
