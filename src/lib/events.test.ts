@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   eventStatsAreEmpty,
   filterPublicUpcomingEvents,
@@ -43,4 +45,20 @@ test("eventStatsAreEmpty distinguishes first-mover cards from active boards", ()
   assert.equal(eventStatsAreEmpty({ rides: 0, seats: 0, requests: 0 }), true);
   assert.equal(eventStatsAreEmpty({ rides: 0, seats: 0, requests: null }), true);
   assert.equal(eventStatsAreEmpty({ rides: 1, seats: 0, requests: null }), false);
+});
+
+test("signed-out loadEventBoard uses event-scoped public_event_rides RPC", () => {
+  const source = readFileSync(
+    fileURLToPath(new URL("./events.ts", import.meta.url)),
+    "utf8",
+  );
+  const loadEventBoardStart = source.indexOf("export async function loadEventBoard");
+  const signedOutBranch = source.slice(
+    loadEventBoardStart,
+    source.indexOf("if (!signedIn)", loadEventBoardStart) + 700,
+  );
+
+  assert.match(signedOutBranch, /public_event_board/);
+  assert.match(signedOutBranch, /public_event_rides/);
+  assert.doesNotMatch(signedOutBranch, /public_upcoming_rides/);
 });

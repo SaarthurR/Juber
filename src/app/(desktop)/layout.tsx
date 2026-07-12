@@ -45,7 +45,6 @@ function DesktopFooter() {
             <div>
               <p className="mb-2.5 font-medium text-stone-900">Contact</p>
               <ul className="space-y-1.5 text-sand-text">
-                <li><a href="https://wa.me/" className="hover:text-stone-900 transition">WhatsApp</a></li>
                 <li><a href="mailto:hello@jcnc.org" className="hover:text-stone-900 transition">Email</a></li>
               </ul>
             </div>

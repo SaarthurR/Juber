@@ -182,14 +182,11 @@ export async function loadEventBoard(
       .single<PublicEventRpcRow>();
     if (!event) return null;
 
-    const { data: publicRides } = await supabase.rpc("public_upcoming_rides", {
-      p_from: null,
-      p_to: null,
-      p_date: null,
+    const { data: publicRides } = await supabase.rpc("public_event_rides", {
+      p_slug: slug,
       p_limit: 100,
-      p_round_trip: null,
     });
-    const rides = ((publicRides as RideWithDriver[]) ?? []).filter((ride) => ride.event_id === event.id);
+    const rides = (publicRides as RideWithDriver[]) ?? [];
     return {
       event,
       rides,

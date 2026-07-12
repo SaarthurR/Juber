@@ -367,6 +367,18 @@ test("desktop footer uses margin-safe link colors and public legal routes", () =
 
   assert.match(footer, /href="\/terms"/);
   assert.match(footer, /href="\/privacy"/);
+  assert.match(footer, /mailto:hello@jcnc\.org/);
+  assert.doesNotMatch(footer, /https:\/\/wa\.me\//);
   assert.equal((footer.match(/space-y-1\.5 text-sand-text/g) ?? []).length, 3);
   assert.doesNotMatch(footer, /space-y-1\.5 text-stone-500/);
+});
+
+test("mobile confirmed passenger profile links expose accessible names", () => {
+  const page = readFileSync("src/app/m/rides/[id]/page.tsx", "utf8");
+  const goingSection = page.slice(page.indexOf("{confirmed.map"), page.indexOf("{Array.from({ length: emptySlots })"));
+
+  assert.match(
+    goingSection,
+    /aria-label=\{`View \$\{p\.passenger\?\.full_name \?\? "confirmed passenger"\}'s profile`\}/,
+  );
 });

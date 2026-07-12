@@ -189,7 +189,12 @@ export default async function MobileTripPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {confirmed.map((p) => (
-              <Link key={p.id} href={`/m/profile/${p.passenger_id}`} className="active:scale-95">
+              <Link
+                key={p.id}
+                href={`/m/profile/${p.passenger_id}`}
+                className="active:scale-95"
+                aria-label={`View ${p.passenger?.full_name ?? "confirmed passenger"}'s profile`}
+              >
                 <MAvatar src={p.passenger?.avatar_url} name={p.passenger?.full_name} seed={p.passenger_id} size={46} />
               </Link>
             ))}
