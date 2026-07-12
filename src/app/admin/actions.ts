@@ -11,13 +11,15 @@ import {
   type AdminActionState,
 } from "@/lib/admin-action-state";
 import {
-  approveOutcomeToAdminState,
-  interpretApproveEventRequest,
   interpretRejectEventRequest,
   rejectOutcomeToAdminState,
   type EventRequestReviewStatus,
 } from "@/lib/admin-approval";
 import { actionErrorMessage } from "@/lib/action-lifecycle";
+import {
+  createAdminReviewActions,
+  type AdminReviewClient,
+} from "@/lib/admin-review-actions";
 import {
   buildJcncImportRows,
   collectExistingJcncDedupeKeys,
@@ -59,6 +61,17 @@ function revalidateAdminEventPaths() {
   revalidatePath("/events");
   revalidatePath("/m/events");
 }
+
+const adminReviewActions = createAdminReviewActions({
+  requireAdmin: async () => {
+    const { supabase } = await requireAdmin();
+    return {
+      supabase: supabase as unknown as AdminReviewClient,
+    };
+  },
+  revalidatePath,
+  actionErrorMessage,
+});
 
 async function readEventRequestStatus(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -128,65 +141,21 @@ export async function deleteEvent(
   eventId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
-  try {
-    const { supabase } = await requireAdmin();
-    const { error } = await supabase.from("events").delete().eq("id", eventId);
-    if (error) return adminActionError(error.message);
-
-    revalidateAdminEventPaths();
-    return adminActionSuccess("Event deleted.", previousState);
-  } catch (error) {
-    return adminActionError(actionErrorMessage(error, "Could not delete event."));
-  }
+  return adminReviewActions.deleteEvent(eventId, previousState);
 }
 
 export async function deletePlace(
   placeId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
-  try {
-    const { supabase } = await requireAdmin();
-    const { error } = await supabase.from("places").delete().eq("id", placeId);
-    if (error) return adminActionError(error.message);
-
-    revalidatePath("/admin");
-    return adminActionSuccess("Location deleted.", previousState);
-  } catch (error) {
-    return adminActionError(actionErrorMessage(error, "Could not delete location."));
-  }
+  return adminReviewActions.deletePlace(placeId, previousState);
 }
 
 export async function approveEventRequest(
   requestId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
-  try {
-    const { supabase } = await requireAdmin();
-    const beforeStatus = await readEventRequestStatus(supabase, requestId);
-
-    const { data: rpcEventId, error } = await supabase.rpc("approve_event_request", {
-      p_request_id: requestId,
-    });
-
-    const afterStatus = await readEventRequestStatus(supabase, requestId);
-    const outcome = interpretApproveEventRequest({
-      beforeStatus,
-      rpcEventId: (rpcEventId as string | null) ?? null,
-      afterStatus,
-      rpcError: error?.message ?? null,
-    });
-    const nextState = approveOutcomeToAdminState(outcome, previousState);
-
-    if (outcome.kind === "approved" || outcome.kind === "already_approved") {
-      revalidateAdminEventPaths();
-    } else if (outcome.kind === "rejected" || outcome.kind === "missing") {
-      revalidatePath("/admin");
-    }
-
-    return { ...nextState, resetKey: nextState.resetKey };
-  } catch (error) {
-    return adminActionError(actionErrorMessage(error, "Could not approve request."));
-  }
+  return adminReviewActions.approveEventRequest(requestId, previousState);
 }
 
 export async function rejectEventRequest(
@@ -232,16 +201,7 @@ export async function deleteEventRequest(
   requestId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
-  try {
-    const { supabase } = await requireAdmin();
-    const { error } = await supabase.from("event_requests").delete().eq("id", requestId);
-    if (error) return adminActionError(error.message);
-
-    revalidatePath("/admin");
-    return adminActionSuccess("Request deleted.", previousState);
-  } catch (error) {
-    return adminActionError(actionErrorMessage(error, "Could not delete request."));
-  }
+  return adminReviewActions.deleteEventRequest(requestId, previousState);
 }
 
 export async function importJcncEvents(

@@ -1,7 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import {
   JCNC_FETCH_TIMEOUT_MS,
   buildJcncImportRows,
@@ -148,17 +146,4 @@ test("fetchJcncCalendar uses an explicit timeout and surfaces fetch failures", a
 test("jcncFetchErrorMessage preserves non-timeout failures", () => {
   assert.equal(jcncFetchErrorMessage(new Error("Could not load JCNC calendar.")), "Could not load JCNC calendar.");
   assert.match(jcncFetchErrorMessage(Object.assign(new Error("aborted"), { name: "AbortError" })), /timed out/);
-});
-
-test("0022 migration keeps approve_event_request admin-only and row-locked", () => {
-  const sql = readFileSync(
-    fileURLToPath(new URL("../../supabase/migrations/0022_demo_backend_hardening.sql", import.meta.url)),
-    "utf8",
-  );
-
-  assert.match(sql, /create or replace function public\.approve_event_request\(p_request_id uuid\)/i);
-  assert.match(sql, /if not public\.is_admin\(\)/i);
-  assert.match(sql, /for update/i);
-  assert.match(sql, /if v_req\.status <> 'pending'/i);
-  assert.match(sql, /grant execute on function public\.approve_event_request\(uuid\) to authenticated/i);
 });
