@@ -14,6 +14,9 @@ import { SignOutForm } from "@/components/sign-out-form";
 
 export const dynamic = "force-dynamic";
 
+const ONBOARDING_WELCOME_BODY =
+  "A quick profile helps drivers and riders coordinate pickup. You can browse rides now and finish contact info when you are ready to book or post.";
+
 export default async function EditProfilePage({
   searchParams,
 }: {
@@ -59,6 +62,180 @@ export default async function EditProfilePage({
   const radioBase =
     "flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition has-[:checked]:border-brand-600 has-[:checked]:bg-tint has-[:checked]:text-brand-700 border-[#e2ddd5] text-stone-600 hover:bg-stone-50";
 
+  const hiddenNext =
+    nextValues.length === 1 ? (
+      <input type="hidden" name="next" value={safeNext} />
+    ) : null;
+
+  const nameFields = (
+    <div className="space-y-4">
+      <FormField label="Name" name="full_name" defaultValue={profile?.full_name ?? ""} required />
+      <FormField
+        label="Pronouns (optional)"
+        name="pronouns"
+        defaultValue={profile?.pronouns ?? ""}
+        placeholder="e.g. she/her"
+      />
+      <FormField
+        label="Neighborhood / city"
+        name="neighborhood"
+        defaultValue={profile?.neighborhood ?? ""}
+        placeholder="e.g. Fremont"
+      />
+    </div>
+  );
+
+  const contactFields = (
+    <div className="space-y-4">
+      <FormField label="Phone" name="phone" type="tel" defaultValue={contact.phone ?? ""} />
+      <FormField
+        label="WhatsApp number"
+        name="whatsapp"
+        type="tel"
+        defaultValue={contact.whatsapp ?? ""}
+        placeholder="e.g. +1 555 555 5555"
+      />
+      <p className="text-xs font-medium text-stone-500">At least one contact number is required to book or post.</p>
+    </div>
+  );
+
+  const preferredContactFields = (
+    <div className="flex flex-wrap gap-2">
+      <label className={radioBase}>
+        <input type="radio" name="preferred_contact" value="phone" defaultChecked={preferredContact === "phone"} className="sr-only" />
+        Phone
+      </label>
+      <label className={radioBase}>
+        <input type="radio" name="preferred_contact" value="whatsapp" defaultChecked={preferredContact === "whatsapp"} className="sr-only" />
+        WhatsApp
+      </label>
+      <label className={radioBase}>
+        <input type="radio" name="preferred_contact" value="message" defaultChecked={preferredContact === "message"} className="sr-only" />
+        In-app message
+      </label>
+    </div>
+  );
+
+  const homeField = (
+    <FormField
+      label="Saved home address (optional)"
+      name="home_address"
+      defaultValue={homeAddress ?? ""}
+      placeholder="Only you can see this until you book with it"
+      hint={`${setupRationale("home")} Drivers only see a copy when you request a seat with saved home.`}
+      maxLength={500}
+      ariaDescribedBy="profile-save-error"
+    />
+  );
+
+  const avatarFields = (
+    <div className="flex flex-col items-center">
+      <AvatarUploader
+        userId={user.id}
+        name={profile?.full_name ?? null}
+        initialUrl={profile?.avatar_url ?? null}
+        size={120}
+      />
+      <p className="mt-3 max-w-[280px] text-center text-xs font-medium text-stone-500">
+        Your Google photo is a starting point. Change it anytime.
+      </p>
+    </div>
+  );
+
+  const vehicleFields = (
+    <div className="grid grid-cols-2 gap-4">
+      <FormField
+        label="Make / model"
+        name="car_make_model"
+        defaultValue={profile?.car_make_model ?? ""}
+        placeholder="Toyota Sienna"
+      />
+      <FormField
+        label="Color"
+        name="car_color"
+        defaultValue={profile?.car_color ?? ""}
+        placeholder="Silver"
+      />
+    </div>
+  );
+
+  const bioField = (
+    <FormField label="" name="bio" textarea defaultValue={profile?.bio ?? ""} placeholder="A short intro for other riders" />
+  );
+
+  if (setupMode === "onboarding") {
+    return (
+      <div className="mx-auto px-4 py-10 sm:px-6">
+        <ProfileForm
+          action={updateProfile}
+          variant="desktop"
+          className="space-y-8"
+          mode="onboarding"
+          skipHref={safeNext}
+          steps={[
+            {
+              key: "welcome",
+              title: "Welcome to Juber",
+              description: ONBOARDING_WELCOME_BODY,
+              content: null,
+            },
+            {
+              key: "name",
+              title: "Your name",
+              description: "How should other riders know you?",
+              content: nameFields,
+            },
+            {
+              key: "contact",
+              title: "How can riders reach you?",
+              description: setupRationale("contact"),
+              content: (
+                <>
+                  {contactFields}
+                  {preferredContactFields}
+                </>
+              ),
+            },
+            {
+              key: "photo",
+              title: "Add a profile photo",
+              description: "Help drivers and riders recognize you.",
+              optional: true,
+              content: avatarFields,
+            },
+            {
+              key: "home",
+              title: "Save your home address",
+              description: setupRationale("home"),
+              optional: true,
+              content: homeField,
+            },
+            {
+              key: "vehicle",
+              title: "Your car",
+              description: setupRationale("vehicle"),
+              optional: true,
+              content: (
+                <>
+                  {vehicleFields}
+                  <div>
+                    <p className="mb-4 text-xs font-medium text-stone-500">About (optional)</p>
+                    {bioField}
+                  </div>
+                </>
+              ),
+            },
+          ]}
+        >
+          {hiddenNext}
+        </ProfileForm>
+        <div className="mx-auto mt-8 w-full max-w-[480px]">
+          <SignOutForm variant="desktop" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex max-w-4xl flex-wrap-reverse gap-12 px-4 py-10 sm:px-6">
       <div className="min-w-[300px] max-w-[560px] flex-[2]">
@@ -69,7 +246,7 @@ export default async function EditProfilePage({
           mode={setupMode ?? "edit"}
           skipHref={setupMode ? safeNext : undefined}
         >
-          {nextValues.length === 1 && <input type="hidden" name="next" value={safeNext} />}
+          {hiddenNext}
           <div>
             <h1 className="text-[30px] font-extrabold tracking-tight text-ink">
               {setupMode ? "Set up your profile" : "Edit profile"}
@@ -89,21 +266,7 @@ export default async function EditProfilePage({
         {/* Personal Information */}
         <div>
           <h2 className="mb-4 text-base font-extrabold text-ink">Personal information</h2>
-          <div className="space-y-4">
-            <FormField label="Name" name="full_name" defaultValue={profile?.full_name ?? ""} required />
-            <FormField
-              label="Pronouns (optional)"
-              name="pronouns"
-              defaultValue={profile?.pronouns ?? ""}
-              placeholder="e.g. she/her"
-            />
-            <FormField
-              label="Neighborhood / city"
-              name="neighborhood"
-              defaultValue={profile?.neighborhood ?? ""}
-              placeholder="e.g. Fremont"
-            />
-          </div>
+          {nameFields}
         </div>
 
         {/* Contact */}
@@ -135,46 +298,20 @@ export default async function EditProfilePage({
         {/* Preferred contact */}
         <div>
           <h2 className="mb-4 text-base font-extrabold text-ink">Preferred contact method</h2>
-          <div className="flex flex-wrap gap-2">
-            <label className={radioBase}>
-              <input type="radio" name="preferred_contact" value="phone" defaultChecked={preferredContact === "phone"} className="sr-only" />
-              Phone
-            </label>
-            <label className={radioBase}>
-              <input type="radio" name="preferred_contact" value="whatsapp" defaultChecked={preferredContact === "whatsapp"} className="sr-only" />
-              WhatsApp
-            </label>
-            <label className={radioBase}>
-              <input type="radio" name="preferred_contact" value="message" defaultChecked={preferredContact === "message"} className="sr-only" />
-              In-app message
-            </label>
-          </div>
+          {preferredContactFields}
         </div>
 
         {/* Car info */}
         <div>
           <h2 className="mb-1 text-base font-extrabold text-ink">Car (optional)</h2>
           <p className="mb-4 text-xs font-medium text-stone-500">{setupRationale("vehicle")}</p>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              label="Make / model"
-              name="car_make_model"
-              defaultValue={profile?.car_make_model ?? ""}
-              placeholder="Toyota Sienna"
-            />
-            <FormField
-              label="Color"
-              name="car_color"
-              defaultValue={profile?.car_color ?? ""}
-              placeholder="Silver"
-            />
-          </div>
+          {vehicleFields}
         </div>
 
         {/* Bio */}
         <div>
           <h2 className="mb-4 text-base font-extrabold text-ink">About (optional)</h2>
-          <FormField label="" name="bio" textarea defaultValue={profile?.bio ?? ""} placeholder="A short intro for other riders" />
+          {bioField}
         </div>
 
         </ProfileForm>

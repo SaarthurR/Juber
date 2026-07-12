@@ -18,6 +18,9 @@ export const dynamic = "force-dynamic";
 const inputCls =
   "w-full min-h-11 rounded-xl border border-border bg-white px-3.5 py-3 text-[14px] text-ink outline-none placeholder:text-muted-warm focus:border-brand-600 focus:ring-2 focus:ring-brand-100";
 
+const ONBOARDING_WELCOME_BODY =
+  "A quick profile helps drivers and riders coordinate pickup. You can browse rides now and finish contact info when you are ready to book or post.";
+
 function Caption({ children }: { children: React.ReactNode }) {
   return <span className="mb-1.5 block text-[12px] font-semibold text-muted">{children}</span>;
 }
@@ -78,6 +81,203 @@ export default async function MobileEditProfilePage({
   const preferred = profile?.preferred_contact ?? "message";
   const hasNeighborhood = options.some((p) => p.name === profile?.neighborhood);
 
+  const hiddenNext =
+    nextValues.length === 1 ? (
+      <input type="hidden" name="next" value={safeNext} />
+    ) : null;
+
+  const nameFields = (
+    <div className="space-y-3.5">
+      <div className="flex gap-3">
+        <label className="block flex-[2]">
+          <Caption>First name</Caption>
+          <input name="first_name" defaultValue={firstName} required className={inputCls} />
+        </label>
+        <label className="block flex-1">
+          <Caption>Last initial</Caption>
+          <input
+            name="last_initial"
+            defaultValue={lastInitial}
+            maxLength={1}
+            placeholder="S"
+            className={inputCls}
+          />
+        </label>
+      </div>
+      <label className="block">
+        <Caption>Pronouns</Caption>
+        <input
+          name="pronouns"
+          defaultValue={profile?.pronouns ?? ""}
+          placeholder="she/her"
+          className={inputCls}
+        />
+      </label>
+      <label className="block">
+        <Caption>Neighborhood</Caption>
+        <SelectWithChevron
+          name="neighborhood"
+          defaultValue={hasNeighborhood ? (profile?.neighborhood ?? "") : ""}
+        >
+          <option value="">Choose your neighborhood</option>
+          {!hasNeighborhood && profile?.neighborhood && (
+            <option value={profile.neighborhood}>{profile.neighborhood}</option>
+          )}
+          {options.map((p) => (
+            <option key={p.id} value={p.name}>
+              {p.name}
+            </option>
+          ))}
+        </SelectWithChevron>
+      </label>
+    </div>
+  );
+
+  const contactFields = (
+    <div className="space-y-3.5">
+      <label className="block">
+        <Caption>Phone</Caption>
+        <input
+          name="phone"
+          type="tel"
+          defaultValue={contact.phone ?? ""}
+          placeholder="(555) 555-5555"
+          className={inputCls}
+        />
+      </label>
+      <label className="block">
+        <Caption>WhatsApp</Caption>
+        <input
+          name="whatsapp"
+          type="tel"
+          defaultValue={contact.whatsapp ?? ""}
+          placeholder="+1 555 555 5555"
+          className={inputCls}
+        />
+      </label>
+      <p className="text-[12px] font-medium text-muted-warm">
+        At least one contact number is required to book or post.
+      </p>
+    </div>
+  );
+
+  const preferredContactField = (
+    <label className="block">
+      <Caption>Preferred contact method</Caption>
+      <SelectWithChevron name="preferred_contact" defaultValue={preferred}>
+        <option value="phone">Phone</option>
+        <option value="whatsapp">WhatsApp</option>
+        <option value="message">In-app message</option>
+      </SelectWithChevron>
+    </label>
+  );
+
+  const homeField = (
+    <label className="block">
+      <Caption>Saved home address (optional)</Caption>
+      <input
+        name="home_address"
+        defaultValue={homeAddress ?? ""}
+        placeholder="Only you can see this until you book with it"
+        maxLength={500}
+        aria-describedby="profile-save-error"
+        className={inputCls}
+      />
+      <p className="mt-1.5 text-[11px] text-muted-warm">
+        {setupRationale("home")} Drivers only see a copy when you request a seat with saved home.
+      </p>
+    </label>
+  );
+
+  const avatarFields = (
+    <>
+      <AvatarUploader
+        userId={user.id}
+        name={profile?.full_name ?? null}
+        initialUrl={profile?.avatar_url ?? null}
+        size={96}
+        tone="brand"
+      />
+      <p className="-mt-2 text-center text-[11px] font-medium text-muted-warm">
+        Your Google photo is a starting point. Change it anytime.
+      </p>
+    </>
+  );
+
+  const vehicleField = (
+    <label className="block">
+      <Caption>Car make &amp; model (optional)</Caption>
+      <input
+        name="car_make_model"
+        defaultValue={profile?.car_make_model ?? ""}
+        placeholder="Toyota Sienna"
+        className={inputCls}
+      />
+      <p className="mt-1.5 text-[11px] text-muted-warm">{setupRationale("vehicle")}</p>
+    </label>
+  );
+
+  if (setupMode === "onboarding") {
+    return (
+      <ProfileForm
+        action={updateProfileMobile}
+        variant="mobile"
+        className="pb-8"
+        mode="onboarding"
+        skipHref={safeNext}
+        steps={[
+          {
+            key: "welcome",
+            title: "Welcome to Juber",
+            description: ONBOARDING_WELCOME_BODY,
+            content: null,
+          },
+          {
+            key: "name",
+            title: "Your name",
+            description: "How should other riders know you?",
+            content: nameFields,
+          },
+          {
+            key: "contact",
+            title: "How can riders reach you?",
+            description: setupRationale("contact"),
+            content: (
+              <>
+                {contactFields}
+                {preferredContactField}
+              </>
+            ),
+          },
+          {
+            key: "photo",
+            title: "Add a profile photo",
+            description: "Help drivers and riders recognize you.",
+            optional: true,
+            content: avatarFields,
+          },
+          {
+            key: "home",
+            title: "Save your home address",
+            description: setupRationale("home"),
+            optional: true,
+            content: homeField,
+          },
+          {
+            key: "vehicle",
+            title: "Your car",
+            description: setupRationale("vehicle"),
+            optional: true,
+            content: vehicleField,
+          },
+        ]}
+      >
+        {hiddenNext}
+        <SubHeader title="Set up your profile" backFallback="/m/profile" />
+      </ProfileForm>
+    );
+  }
+
   return (
     <ProfileForm
       action={updateProfileMobile}
@@ -86,7 +286,7 @@ export default async function MobileEditProfilePage({
       mode={setupMode ?? "edit"}
       skipHref={setupMode ? safeNext : undefined}
     >
-      {nextValues.length === 1 && <input type="hidden" name="next" value={safeNext} />}
+      {hiddenNext}
       <SubHeader
         title={setupMode ? "Set up your profile" : "Edit profile"}
         backFallback="/m/profile"
@@ -118,50 +318,7 @@ export default async function MobileEditProfilePage({
           <h2 className="mb-3 text-[11px] font-extrabold uppercase tracking-[0.1em] text-brand-600">
             Personal information
           </h2>
-          <div className="space-y-3.5">
-            <div className="flex gap-3">
-              <label className="block flex-[2]">
-                <Caption>First name</Caption>
-                <input name="first_name" defaultValue={firstName} required className={inputCls} />
-              </label>
-              <label className="block flex-1">
-                <Caption>Last initial</Caption>
-                <input
-                  name="last_initial"
-                  defaultValue={lastInitial}
-                  maxLength={1}
-                  placeholder="S"
-                  className={inputCls}
-                />
-              </label>
-            </div>
-            <label className="block">
-              <Caption>Pronouns</Caption>
-              <input
-                name="pronouns"
-                defaultValue={profile?.pronouns ?? ""}
-                placeholder="she/her"
-                className={inputCls}
-              />
-            </label>
-            <label className="block">
-              <Caption>Neighborhood</Caption>
-              <SelectWithChevron
-                name="neighborhood"
-                defaultValue={hasNeighborhood ? (profile?.neighborhood ?? "") : ""}
-              >
-                <option value="">Choose your neighborhood</option>
-                {!hasNeighborhood && profile?.neighborhood && (
-                  <option value={profile.neighborhood}>{profile.neighborhood}</option>
-                )}
-                {options.map((p) => (
-                  <option key={p.id} value={p.name}>
-                    {p.name}
-                  </option>
-                ))}
-              </SelectWithChevron>
-            </label>
-          </div>
+          {nameFields}
         </section>
 
         {/* Contact */}
