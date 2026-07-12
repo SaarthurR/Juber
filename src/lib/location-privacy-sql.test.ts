@@ -56,6 +56,15 @@ const task24 = readFileSync(
   ),
   "utf8",
 );
+const coarseLabelPermissionFix = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../../supabase/migrations/20260712181946_fix_coarse_label_trigger_permissions.sql",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 
 test("0034 adds guest_count and swaps seat math to sum(1+guest_count)", () => {
   assert.match(migration34, /guest_count int not null default 0/i);
@@ -188,6 +197,21 @@ test("address trigger hardening migration closes C2/I1/I2 regressions", () => {
   assert.match(addressTriggerHardeningMigration, /case\s+when v_pickup_set then excluded\.pickup_location/i);
   assert.match(addressTriggerHardeningMigration, /authenticated must execute request_seat/i);
   assert.doesNotMatch(addressTriggerHardeningMigration, /create trigger rides_divert_meetup/i);
+});
+
+test("coarse-label trigger wrappers execute as their owner", () => {
+  assert.match(
+    coarseLabelPermissionFix,
+    /alter function public\.enforce_ride_coarse_labels\(\)\s+security definer/i,
+  );
+  assert.match(
+    coarseLabelPermissionFix,
+    /alter function public\.enforce_request_coarse_labels\(\)\s+security definer/i,
+  );
+  assert.match(
+    coarseLabelPermissionFix,
+    /revoke all on function public\.assert_coarse_label\(text\)\s+from public, anon, authenticated/i,
+  );
 });
 
 test("task24 exercises duplicate-ignore exploit closure and label enforcement", () => {
