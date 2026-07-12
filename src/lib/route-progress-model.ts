@@ -22,20 +22,24 @@ export type RouteProgressNavigateEvent = {
 export type RouteProgressState = {
   status: "idle" | "active" | "settling";
   targetKey: string | null;
+  completedKey: string | null;
 };
 
 export type RouteProgressAction =
   | { type: "start"; targetKey: string }
-  | { type: "popstate" }
+  | { type: "popstate"; currentKey: string }
   | { type: "url"; currentKey: string }
   | { type: "settled" }
   | { type: "watchdog" }
   | { type: "reset" };
 
-export function createRouteProgressState(): RouteProgressState {
+export function createRouteProgressState(
+  initialKey: string | null = null,
+): RouteProgressState {
   return {
     status: "idle",
     targetKey: null,
+    completedKey: initialKey,
   };
 }
 
@@ -45,19 +49,55 @@ export function routeProgressReducer(
 ): RouteProgressState {
   switch (action.type) {
     case "start":
-      return { status: "active", targetKey: action.targetKey };
+      if (state.status === "active" && state.targetKey === action.targetKey) {
+        return state;
+      }
+      return {
+        ...state,
+        status: "active",
+        targetKey: action.targetKey,
+      };
     case "popstate":
-      return { status: "active", targetKey: null };
+      if (
+        action.currentKey === state.completedKey
+        || (
+          state.status === "active"
+          && state.targetKey === action.currentKey
+        )
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        status: "active",
+        targetKey: action.currentKey,
+      };
     case "url":
-      if (state.status !== "active") return state;
-      if (state.targetKey === null || state.targetKey === action.currentKey) {
-        return { status: "settling", targetKey: state.targetKey };
+      if (state.status === "idle") {
+        return state.completedKey === action.currentKey
+          ? state
+          : { ...state, completedKey: action.currentKey };
+      }
+      if (
+        state.status === "active"
+        && state.targetKey === action.currentKey
+      ) {
+        return {
+          ...state,
+          status: "settling",
+          completedKey: action.currentKey,
+        };
       }
       return state;
     case "settled":
     case "watchdog":
     case "reset":
-      return createRouteProgressState();
+      if (state.status === "idle" && state.targetKey === null) return state;
+      return {
+        ...state,
+        status: "idle",
+        targetKey: null,
+      };
   }
 }
 

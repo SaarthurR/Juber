@@ -11,6 +11,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import {
   ROUTE_PROGRESS_WATCHDOG_MS,
   createRouteProgressState,
+  routeKey,
   routeProgressReducer,
 } from "@/lib/route-progress-model";
 
@@ -21,12 +22,12 @@ const RouteProgressContext = createContext<RouteProgressStart | null>(null);
 export function RouteProgress({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const currentKey = `${pathname}${searchParams.size ? `?${searchParams}` : ""}`;
   const [state, dispatch] = useReducer(
     routeProgressReducer,
-    undefined,
+    currentKey,
     createRouteProgressState,
   );
-  const currentKey = `${pathname}${searchParams.size ? `?${searchParams}` : ""}`;
   const active = state.status === "active" || state.status === "settling";
   const start = useCallback<RouteProgressStart>((targetKey) => {
     dispatch({ type: "start", targetKey });
@@ -54,7 +55,8 @@ export function RouteProgress({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     function onPopState() {
-      dispatch({ type: "popstate" });
+      const currentKey = routeKey(new URL(window.location.href));
+      dispatch({ type: "popstate", currentKey });
     }
 
     function reset() {

@@ -157,6 +157,10 @@ test("RouteProgress integrates through Next Link onNavigate, not document captur
   assert.match(trackedLink, /onNavigate=\{handleNavigate\}/);
   assert.match(trackedLink, /completeRouteProgressNavigation/);
   assert.doesNotMatch(progress, /document\.addEventListener\("click"/);
+  assert.match(
+    progress,
+    /function onPopState\(\)[\s\S]*routeKey\(new URL\(window\.location\.href\)\)[\s\S]*type: "popstate", currentKey/,
+  );
   assert.match(authGate, /event\.preventDefault\(\);[\s\S]*event\.stopPropagation\(\)/);
 
   const linkClickHandler = nextLink.indexOf("onClick (e)");
@@ -175,6 +179,63 @@ test("RouteProgress integrates through Next Link onNavigate, not document captur
   assert.ok(frameworkPreventDefault > linkClickedDefinition);
   assert.ok(onNavigate > frameworkPreventDefault);
   assert.ok(routerDispatch > onNavigate);
+});
+
+test("hash-only popstate and repeated same-key events remain idle", () => {
+  const initial = createRouteProgressState("/rides?tab=requests");
+  const hashOnly = routeProgressReducer(initial, {
+    type: "popstate",
+    currentKey: "/rides?tab=requests",
+  });
+  const repeated = routeProgressReducer(hashOnly, {
+    type: "popstate",
+    currentKey: "/rides?tab=requests",
+  });
+
+  assert.equal(initial.completedKey, "/rides?tab=requests");
+  assert.strictEqual(hashOnly, initial);
+  assert.strictEqual(repeated, initial);
+  assert.equal(repeated.status, "idle");
+});
+
+test("path and query popstate start once and complete into the new key", () => {
+  const initial = createRouteProgressState("/rides?tab=requests");
+  const pathStarted = routeProgressReducer(initial, {
+    type: "popstate",
+    currentKey: "/events",
+  });
+  const repeatedPath = routeProgressReducer(pathStarted, {
+    type: "popstate",
+    currentKey: "/events",
+  });
+  const pathCompleted = routeProgressReducer(repeatedPath, {
+    type: "url",
+    currentKey: "/events",
+  });
+  const pathIdle = routeProgressReducer(pathCompleted, { type: "settled" });
+  const queryStarted = routeProgressReducer(pathIdle, {
+    type: "popstate",
+    currentKey: "/events?page=2",
+  });
+  const queryCompleted = routeProgressReducer(queryStarted, {
+    type: "url",
+    currentKey: "/events?page=2",
+  });
+  const repeatedCompleted = routeProgressReducer(queryCompleted, {
+    type: "popstate",
+    currentKey: "/events?page=2",
+  });
+
+  assert.equal(pathStarted.status, "active");
+  assert.equal(pathStarted.targetKey, "/events");
+  assert.strictEqual(repeatedPath, pathStarted);
+  assert.equal(pathCompleted.status, "settling");
+  assert.equal(pathCompleted.completedKey, "/events");
+  assert.equal(queryStarted.status, "active");
+  assert.equal(queryStarted.targetKey, "/events?page=2");
+  assert.equal(queryCompleted.status, "settling");
+  assert.equal(queryCompleted.completedKey, "/events?page=2");
+  assert.strictEqual(repeatedCompleted, queryCompleted);
 });
 
 test("route progress state completes by target URL, supersedes, and resets", () => {
@@ -197,15 +258,15 @@ test("route progress state completes by target URL, supersedes, and resets", () 
   assert.equal(state.targetKey, "/messages");
 
   state = routeProgressReducer(state, { type: "settled" });
-  assert.deepEqual(state, createRouteProgressState());
+  assert.deepEqual(state, createRouteProgressState("/messages"));
 
-  state = routeProgressReducer(state, { type: "popstate" });
-  assert.equal(state.status, "active");
-  assert.equal(state.targetKey, null);
-  state = routeProgressReducer(state, { type: "url", currentKey: "/profile" });
-  assert.equal(state.status, "settling");
+  state = routeProgressReducer(state, { type: "start", targetKey: "/profile" });
   state = routeProgressReducer(state, { type: "watchdog" });
-  assert.deepEqual(state, createRouteProgressState());
+  assert.deepEqual(state, createRouteProgressState("/messages"));
+
+  state = routeProgressReducer(state, { type: "start", targetKey: "/events" });
+  state = routeProgressReducer(state, { type: "reset" });
+  assert.deepEqual(state, createRouteProgressState("/messages"));
 });
 
 test("watchdog and reduced-motion contracts are explicit", () => {
