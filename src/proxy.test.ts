@@ -115,13 +115,31 @@ test("proxy redirects only safe navigation methods", () => {
   }
 });
 
-test("desktop query opt-out preserves path and query without looping", () => {
+test("desktop query opt-out activates only for exactly one desktop=1 value", () => {
   const decision = getProxyDecision(request("/rides/new?desktop=1&event_id=abc"));
 
   assert.equal(decision.kind, "redirect");
   assert.equal(decision.setDesktopCookie, true);
   assert.equal(decision.url.pathname, "/rides/new");
   assert.equal(decision.url.search, "?event_id=abc");
+});
+
+test("desktop query opt-out ignores falsey empty arbitrary and duplicate values", () => {
+  const cases = [
+    ["/rides?desktop=0&x=1", "/m", "?desktop=0&x=1"],
+    ["/rides?desktop=&x=1", "/m", "?desktop=&x=1"],
+    ["/rides?desktop=yes&x=1", "/m", "?desktop=yes&x=1"],
+    ["/rides?desktop=1&desktop=1&x=1", "/m", "?desktop=1&desktop=1&x=1"],
+    ["/rides?desktop=1&desktop=0&x=1", "/m", "?desktop=1&desktop=0&x=1"],
+  ] as const;
+
+  for (const [path, pathname, search] of cases) {
+    const decision = getProxyDecision(request(path));
+    assert.equal(decision.kind, "redirect", path);
+    assert.equal(decision.setDesktopCookie, undefined, path);
+    assert.equal(decision.url.pathname, pathname, path);
+    assert.equal(decision.url.search, search, path);
+  }
 });
 
 test("proxy refreshes session before redirect and copies only set-cookie headers", async () => {
@@ -156,6 +174,19 @@ test("proxy refreshes session before opt-out redirect and keeps the desktop cook
   assert.ok(cookies.includes("sb-b=; Path=/; Max-Age=0"));
   assert.ok(cookies.some((cookie) => cookie.startsWith(`${DESKTOP_COOKIE}=1;`)));
   assert.equal(response.headers.get("x-session-internal"), null);
+});
+
+test("proxy does not set desktop cookie for non-exact desktop query values", async () => {
+  const response = await handleProxyRequest(
+    request("/rides?desktop=0&ref=mail"),
+    async () => refreshedResponse(),
+  );
+  const cookies = setCookies(response);
+
+  assert.equal(response.headers.get("location"), `${ORIGIN}/m?desktop=0&ref=mail`);
+  assert.ok(cookies.includes("sb-a=1; Path=/; HttpOnly"));
+  assert.ok(cookies.includes("sb-b=; Path=/; Max-Age=0"));
+  assert.ok(cookies.every((cookie) => !cookie.startsWith(`${DESKTOP_COOKIE}=`)));
 });
 
 test("proxy refreshes session before pass-through branches", async () => {

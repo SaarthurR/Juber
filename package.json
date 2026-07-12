@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "TZ=America/Los_Angeles tsx --test src/**/*.test.ts"
+    "test": "TZ=America/Los_Angeles tsx --test src/*.test.ts src/**/*.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

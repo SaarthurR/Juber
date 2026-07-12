@@ -33,7 +33,7 @@ export function getProxyDecision(request: NextRequest): ProxyDecision {
   if (!SAFE_NAVIGATION_METHODS.has(request.method)) return { kind: "next" };
   if (isExcludedPath(originalPathname)) return { kind: "next" };
 
-  if (searchParams.has("desktop")) {
+  if (isDesktopOptOut(searchParams)) {
     const url = request.nextUrl.clone();
     url.searchParams.delete("desktop");
     return { kind: "redirect", url, setDesktopCookie: true };
@@ -99,6 +99,11 @@ function mobileTargetPath(pathname: string) {
   if (root === "profile" && UUID_SEGMENT.test(segment)) return `/m/profile/${segment}`;
 
   return null;
+}
+
+function isDesktopOptOut(searchParams: URLSearchParams) {
+  const desktopValues = searchParams.getAll("desktop");
+  return desktopValues.length === 1 && desktopValues[0] === "1";
 }
 
 function isExcludedPath(pathname: string) {
