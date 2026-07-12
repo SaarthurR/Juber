@@ -23,9 +23,13 @@ const contactSheetExports = ContactSheetModule as unknown as {
   }>;
 };
 
-test("ci workflow runs the required gates on Node 24", () => {
+test("ci workflow runs every push and pull request through the required Node 24 gates", () => {
   const workflow = readRepo(".github/workflows/ci.yml");
+  const triggers = workflow.match(/^on:\n([\s\S]*?)^concurrency:/m)?.[1] ?? "";
 
+  assert.match(triggers, /^  push:\s*$/m);
+  assert.match(triggers, /^  pull_request:\s*$/m);
+  assert.doesNotMatch(triggers, /^\s+branches:/m);
   assert.match(workflow, /node-version:\s*24/);
   assert.match(workflow, /npm ci/);
   assert.match(workflow, /npm test/);
