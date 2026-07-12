@@ -9,6 +9,7 @@ import { MAvatar } from "@/components/mobile/m-avatar";
 import { SubHeader } from "@/components/mobile/sub-header";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import type { Profile } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,13 @@ export default async function MobilePublicProfilePage({
   if (user?.id === id) redirect("/m/profile");
 
   const supabase = await createClient();
-  const { data: profile } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", id)
-    .single<Profile>();
+    .maybeSingle<Profile>();
 
+  throwReadError(error, "profile");
   if (!profile) notFound();
 
   const { canViewContact, messagingRideId } = await getProfileContactContext(

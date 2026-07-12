@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { MessageSquare } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
@@ -8,8 +9,9 @@ import { MAvatar } from "@/components/mobile/m-avatar";
 import { HomeBoard } from "@/components/mobile/home-board";
 import { MNotificationBell } from "@/components/mobile/notifications-sheet";
 import { GoogleSignInButton } from "@/components/auth-button";
-import { getTodayDateInputValue } from "@/lib/date-time";
+import { getTodayDateInputValue, parseDateOnly } from "@/lib/date-time";
 import { loadVisibleNotificationIds } from "@/lib/messages";
+import { throwReadError } from "@/lib/supabase/read-error";
 import type {
   NotificationWithContext,
   RideRequestWithRider,
@@ -33,9 +35,20 @@ export default async function MobileHomePage({
   const from = one(sp.from) ?? "";
   const to = one(sp.to) ?? "";
   const requestedDate = one(sp.date);
-  const date = requestedDate === "all" ? "" : requestedDate ?? "";
+  const date =
+    requestedDate === "all" ? "" : (parseDateOnly(requestedDate) ?? "");
   const trip = one(sp.trip);
   const tripFilter = trip === "round" || trip === "one" ? trip : null;
+  if (
+    (Array.isArray(sp.date) || (requestedDate && requestedDate !== "all")) &&
+    !date
+  ) {
+    const clean = new URLSearchParams();
+    if (from) clean.set("from", from);
+    if (to) clean.set("to", to);
+    if (tripFilter) clean.set("trip", tripFilter);
+    redirect(`/m${clean.size ? `?${clean}` : ""}`);
+  }
 
   const { user, profile } = await getCurrentUser();
   const supabase = await createClient();
@@ -55,23 +68,27 @@ export default async function MobileHomePage({
         p_round_trip: null,
       });
 
-  let requestsQuery = supabase
-    .from("ride_requests")
-    .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
-    .eq("status", "active")
-    .order("depart_at", { ascending: true });
-  requestsQuery = requestsQuery.gte("latest_date", today);
+  const requestsQuery = user
+    ? supabase
+        .from("ride_requests")
+        .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
+        .eq("status", "active")
+        .gte("latest_date", today)
+        .order("depart_at", { ascending: true })
+    : Promise.resolve({ data: [], error: null });
 
-  const [{ data: ridesData }, { data: requestsData }, notif] = await Promise.all([
+  const [ridesResult, requestsResult, notif] = await Promise.all([
     ridesQuery,
     requestsQuery,
     user
       ? loadNotifications(supabase, user.id)
       : Promise.resolve({ items: [], unread: 0, error: null }),
   ]);
+  throwReadError(ridesResult.error, "rides");
+  throwReadError(requestsResult.error, "ride requests");
 
-  const rides = (ridesData as RideWithDriver[]) ?? [];
-  const requests = (requestsData as RideRequestWithRider[]) ?? [];
+  const rides = (ridesResult.data as RideWithDriver[]) ?? [];
+  const requests = (requestsResult.data as RideRequestWithRider[]) ?? [];
 
   return (
     <div className="pb-[calc(5rem+env(safe-area-inset-bottom)+1rem)]">
@@ -135,6 +152,7 @@ export default async function MobileHomePage({
         <HomeBoard
           rides={rides}
           requests={requests}
+          signedIn={Boolean(user)}
           initialFrom={from}
           initialTo={to}
           initialDate={date}

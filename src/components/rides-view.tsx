@@ -133,13 +133,17 @@ function Empty({
   hasFilters: boolean;
 }) {
   const Icon = kind === "rides" ? Car : MessagesSquare;
-  const title = hasFilters
-    ? `No ${kind === "rides" ? "carpools" : "requests"} match your search`
+  const title = kind === "requests" && !signedIn
+    ? "Sign in to view ride requests"
+    : hasFilters
+      ? `No ${kind === "rides" ? "carpools" : "requests"} match your search`
     : kind === "rides"
       ? "No carpools yet"
       : "No ride requests yet";
-  const description = hasFilters
-    ? "Try clearing your filters, or check back later."
+  const description = kind === "requests" && !signedIn
+    ? "Ride requests are available to signed-in community members."
+    : hasFilters
+      ? "Try clearing your filters, or check back later."
     : kind === "rides"
       ? "Be the first to offer a ride to JCNC. Your sangha will thank you."
       : "When someone needs a ride to JCNC, it will show up here.";
@@ -159,6 +163,7 @@ function Empty({
           {kind === "rides" ? "Post a ride" : "Request a ride"}
         </Link>
       )}
+      {!signedIn && kind === "requests" && <GoogleSignInButton className="mt-5" />}
     </div>
   );
 }

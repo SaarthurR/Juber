@@ -9,6 +9,7 @@ import { GoogleSignInButton } from "@/components/auth-button";
 import { PublicLegalLinks } from "@/components/landing-auth-gate";
 import { SignOutForm } from "@/components/sign-out-form";
 import type { RideWithDriver } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,7 @@ export default async function MobileProfilePage() {
   }
 
   const supabase = await createClient();
-  const [{ data: postedData }, { data: joinedData }] = await Promise.all([
+  const [postedResult, joinedResult] = await Promise.all([
     supabase
       .from("rides")
       .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
@@ -50,6 +51,10 @@ export default async function MobileProfilePage() {
       .eq("passenger_id", user.id)
       .eq("status", "confirmed"),
   ]);
+  throwReadError(postedResult.error, "posted rides");
+  throwReadError(joinedResult.error, "joined rides");
+  const postedData = postedResult.data;
+  const joinedData = joinedResult.data;
 
   const posted = (postedData as RideWithDriver[]) ?? [];
   const joined = ((joinedData as JoinedRideRow[] | null) ?? [])

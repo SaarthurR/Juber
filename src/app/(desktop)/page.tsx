@@ -9,6 +9,7 @@ import { GoogleSignInButton } from "@/components/auth-button";
 import { LandingAuthGate } from "@/components/landing-auth-gate";
 import { loadEventSummaries } from "@/lib/events";
 import type { RideWithDriver } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +35,12 @@ export default async function HomePage() {
         p_round_trip: null,
       });
 
-  const [{ data: rides }, eventSummaries] = await Promise.all([
+  const [ridesResult, eventSummaries] = await Promise.all([
     ridesPromise,
     loadEventSummaries(supabase, Boolean(user)),
   ]);
+  throwReadError(ridesResult.error, "rides");
+  const rides = ridesResult.data;
 
   const content = (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">

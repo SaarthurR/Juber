@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { EventRequestForm } from "@/components/event-request-form";
 import { formatEventDateShort, loadEventSummaries } from "@/lib/events";
 import type { EventRequest, EventRow } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,9 @@ export default async function MobileEventsPage() {
           .eq("requested_by", user.id)
           .order("created_at", { ascending: false })
           .limit(4)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  throwReadError(requestRows.error, "event requests");
   const myRequests = (requestRows.data as (EventRequest & {
     approved_event: Pick<EventRow, "id" | "name" | "slug"> | null;
   })[]) ?? [];

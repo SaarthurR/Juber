@@ -12,6 +12,7 @@ import { acceptRideRequest } from "@/app/rides/actions";
 import { CancelRequestButton } from "@/components/ride-actions";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import type { EventRow, Profile, RideRequest } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -28,14 +29,24 @@ export default async function RequestDetailPage({
 }) {
   const { id } = await params;
   const { user } = await getCurrentUser();
+  if (!user) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+        <h1 className="text-2xl font-extrabold text-ink">Sign in to view ride requests</h1>
+        <p className="mt-2 text-sm text-stone-500">Ride requests are available to signed-in community members.</p>
+        <GoogleSignInButton className="mt-5" />
+      </div>
+    );
+  }
   const supabase = await createClient();
 
-  const { data: request } = await supabase
+  const { data: request, error } = await supabase
     .from("ride_requests")
     .select("*, rider:profiles!ride_requests_rider_id_fkey(*), accepted_driver:profiles!ride_requests_accepted_driver_id_fkey(*), event:events(id,name,slug)")
     .eq("id", id)
-    .single<RequestDetail>();
+    .maybeSingle<RequestDetail>();
 
+  throwReadError(error, "ride request");
   if (!request) notFound();
 
   const isOwner = user?.id === request.rider_id;

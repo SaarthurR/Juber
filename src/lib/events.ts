@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 import type { createClient } from "@/lib/supabase/server";
 import type { EventRow, RideRequestWithRider, RideWithDriver } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -105,7 +106,8 @@ export async function loadEventSummaries(
   signedIn: boolean,
 ): Promise<EventSummary[]> {
   if (!signedIn) {
-    const { data } = await supabase.rpc("public_upcoming_events");
+    const { data, error } = await supabase.rpc("public_upcoming_events");
+    throwReadError(error, "events");
     const events = ((data as PublicEventRpcRow[]) ?? []).map((event) => ({
       id: event.id,
       name: event.name,
@@ -130,7 +132,7 @@ export async function loadEventSummaries(
 
   const nowIso = new Date().toISOString();
   const today = nowIso.slice(0, 10);
-  const [{ data: events }, { data: rides }, { data: requests }] = await Promise.all([
+  const [eventsResult, ridesResult, requestsResult] = await Promise.all([
     supabase
       .from("events")
       .select("*")
@@ -148,6 +150,12 @@ export async function loadEventSummaries(
       .eq("status", "active")
       .not("event_id", "is", null),
   ]);
+  throwReadError(eventsResult.error, "events");
+  throwReadError(ridesResult.error, "event rides");
+  throwReadError(requestsResult.error, "event ride requests");
+  const events = eventsResult.data;
+  const rides = ridesResult.data;
+  const requests = requestsResult.data;
 
   const list = filterPublicUpcomingEvents((events as EventRow[]) ?? [], today);
   const stats = new Map<string, EventStats>();
@@ -177,15 +185,17 @@ export async function loadEventBoard(
   const today = nowIso.slice(0, 10);
 
   if (!signedIn) {
-    const { data: event } = await supabase
+    const { data: event, error: eventError } = await supabase
       .rpc("public_event_board", { p_slug: slug })
-      .single<PublicEventRpcRow>();
+      .maybeSingle<PublicEventRpcRow>();
+    throwReadError(eventError, "event");
     if (!event) return null;
 
-    const { data: publicRides } = await supabase.rpc("public_event_rides", {
-      p_slug: slug,
-      p_limit: 100,
-    });
+    const { data: publicRides, error: ridesError } = await supabase.rpc(
+      "public_event_rides",
+      { p_slug: slug, p_limit: 100 },
+    );
+    throwReadError(ridesError, "event rides");
     const rides = (publicRides as RideWithDriver[]) ?? [];
     return {
       event,
@@ -200,29 +210,32 @@ export async function loadEventBoard(
     };
   }
 
-  const { data: rawEvent } = await supabase
+  const { data: rawEvent, error: eventError } = await supabase
     .from("events")
     .select("*")
     .eq("slug", slug)
     .eq("is_active", true)
-    .single<EventRow>();
+    .maybeSingle<EventRow>();
+  throwReadError(eventError, "event");
   const event = filterPublicUpcomingEvents(rawEvent ? [rawEvent] : [], today)[0];
   if (!event) return null;
 
-  const { data: rides } = await supabase
+  const { data: rides, error: ridesError } = await supabase
     .from("rides")
     .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
     .eq("event_id", event.id)
     .eq("status", "active")
     .gte("depart_at", nowIso)
     .order("depart_at", { ascending: true });
+  throwReadError(ridesError, "event rides");
 
-  const { data: requests } = await supabase
+  const { data: requests, error: requestsError } = await supabase
     .from("ride_requests")
     .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
     .eq("event_id", event.id)
     .eq("status", "active")
     .order("depart_at", { ascending: true });
+  throwReadError(requestsError, "event ride requests");
 
   return {
     event,

@@ -19,6 +19,7 @@ import {
 } from "@/components/ride-actions";
 import { PendingActionGroup } from "@/components/pending-action-button";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -33,28 +34,31 @@ export default async function RideDetailPage({
   const { user } = await getCurrentUser();
   const supabase = await createClient();
 
-  const { data: ride } = await supabase
+  const { data: ride, error: rideError } = await supabase
     .from("rides")
     .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
     .eq("id", id)
-    .single<Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }>();
+    .maybeSingle<Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }>();
 
+  throwReadError(rideError, "ride");
   if (!ride) notFound();
 
-  const { data: passengers } = await supabase
+  const { data: passengers, error: passengersError } = await supabase
     .from("ride_passengers")
     .select("*, passenger:profiles!ride_passengers_passenger_id_fkey(*)")
     .eq("ride_id", id);
+  throwReadError(passengersError, "ride passengers");
 
   let passengerRows = (passengers as PassengerRow[]) ?? [];
   const missingProfileIds = passengerRows
     .filter((p) => !p.passenger && p.passenger_id)
     .map((p) => p.passenger_id);
   if (missingProfileIds.length) {
-    const { data: fallbackProfiles } = await supabase
+    const { data: fallbackProfiles, error: fallbackError } = await supabase
       .from("profiles")
       .select("*")
       .in("id", missingProfileIds);
+    throwReadError(fallbackError, "passenger profiles");
     const profilesById = new Map(
       ((fallbackProfiles as Profile[] | null) ?? []).map((profile) => [profile.id, profile]),
     );

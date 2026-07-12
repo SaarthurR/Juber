@@ -3,7 +3,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { TempleLogo } from "@/components/temple-logo";
 import { RidesView } from "@/components/rides-view";
 import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
-import { getTodayDateInputValue } from "@/lib/date-time";
+import { dateOnlyToIso, getTodayDateInputValue, parseDateOnly } from "@/lib/date-time";
+import { redirect } from "next/navigation";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -24,19 +26,34 @@ export default async function RidesPage({
   const from = one(sp.from);
   const to = one(sp.to);
   const requestedDate = one(sp.date);
-  const date = requestedDate === "all" ? "" : requestedDate ?? "";
+  const date =
+    requestedDate === "all" ? "" : (parseDateOnly(requestedDate) ?? "");
   const trip = one(sp.trip);
   const tripFilter = trip === "round" || trip === "one" ? trip : null;
+  const tab = one(sp.tab) === "requests" ? "requests" : null;
+  if (
+    (Array.isArray(sp.date) || (requestedDate && requestedDate !== "all")) &&
+    !date
+  ) {
+    const clean = new URLSearchParams();
+    if (from) clean.set("from", from);
+    if (to) clean.set("to", to);
+    if (tripFilter) clean.set("trip", tripFilter);
+    if (tab) clean.set("tab", tab);
+    redirect(`/rides${clean.size ? `?${clean}` : ""}`);
+  }
 
   const { user } = await getCurrentUser();
   const supabase = await createClient();
 
   let dayRange: { gte: string; lt: string } | null = null;
   if (date) {
-    const start = new Date(`${date}T00:00:00`);
-    const end = new Date(start);
-    end.setDate(end.getDate() + 1);
-    dayRange = { gte: start.toISOString(), lt: end.toISOString() };
+    const start = dateOnlyToIso(date, "00:00");
+    const [year, month, day] = date.split("-").map(Number);
+    const nextDate = new Date(Date.UTC(year, month - 1, day + 1))
+      .toISOString()
+      .slice(0, 10);
+    dayRange = { gte: start, lt: dateOnlyToIso(nextDate, "00:00") };
   }
 
   const nowIso = now.toISOString();
@@ -73,34 +90,38 @@ export default async function RidesPage({
     : supabase.rpc("public_upcoming_rides", {
         p_from: from ?? null,
         p_to: to ?? null,
-        p_date: date ?? null,
+        p_date: date || null,
         p_limit: 100,
         p_round_trip: tripFilter === null ? null : tripFilter === "round",
       });
-  const requestsQuery = applyRequestFilters(
-      supabase
-        .from("ride_requests")
-        .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
-        .eq("status", "active")
-        .order("depart_at", { ascending: true }),
-  );
+  const requestsQuery = user
+    ? applyRequestFilters(
+        supabase
+          .from("ride_requests")
+          .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
+          .eq("status", "active")
+          .order("depart_at", { ascending: true }),
+      )
+    : Promise.resolve({ data: [], error: null });
 
-  const [
-    { data: ridesData },
-    { data: requestsData },
-    { count: requestCount },
-  ] = await Promise.all([
+  const [ridesResult, requestsResult, countResult] = await Promise.all([
     ridesQuery,
     requestsQuery,
-    supabase
-      .from("ride_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "active")
-      .gte("latest_date", today),
+    user
+      ? supabase
+          .from("ride_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "active")
+          .gte("latest_date", today)
+      : Promise.resolve({ count: 0, error: null }),
   ]);
+  throwReadError(ridesResult.error, "rides");
+  throwReadError(requestsResult.error, "ride requests");
+  throwReadError(countResult.error, "ride request count");
 
-  const rides = (ridesData as RideWithDriver[]) ?? [];
-  const requests = (requestsData as RideRequestWithRider[]) ?? [];
+  const rides = (ridesResult.data as RideWithDriver[]) ?? [];
+  const requests = (requestsResult.data as RideRequestWithRider[]) ?? [];
+  const requestCount = countResult.count ?? 0;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">

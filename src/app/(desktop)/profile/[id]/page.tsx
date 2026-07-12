@@ -3,6 +3,7 @@ import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { Phone, MessageCircle, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { GoogleSignInButton } from "@/components/auth-button";
 import { initials } from "@/lib/utils";
 import { RideCard, RequestCard } from "@/components/ride-card";
 import { openConversation } from "@/app/messages/actions";
@@ -10,6 +11,7 @@ import { getContact } from "@/lib/contact";
 import { getProfileContactContext } from "@/lib/profile-contact";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import type { Profile, RideWithDriver, RideRequestWithRider } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -67,14 +69,28 @@ export default async function PublicProfilePage({
   const tab: TabKey = (TABS.find((t) => t.key === rawTab)?.key ?? "all") as TabKey;
 
   const { user } = await getCurrentUser();
+  if (!user && tab === "requests") {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16 text-center">
+        <h1 className="text-2xl font-extrabold text-ink">
+          Sign in to view ride requests
+        </h1>
+        <p className="mt-2 text-sm text-stone-500">
+          Ride requests are available to signed-in community members.
+        </p>
+        <GoogleSignInButton className="mt-5" />
+      </div>
+    );
+  }
   const supabase = await createClient();
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", id)
-    .single<Profile>();
+    .maybeSingle<Profile>();
 
+  throwReadError(profileError, "profile");
   if (!profile) notFound();
 
   const isMe = user?.id === id;
@@ -92,34 +108,37 @@ export default async function PublicProfilePage({
   let rideRequests: RideRequestWithRider[] = [];
 
   if (tab === "all" || tab === "posted") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("rides")
       .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
       .eq("driver_id", id)
       .order("depart_at", { ascending: false });
+    throwReadError(error, "posted rides");
     postedRides = (data ?? []) as RideWithDriver[];
   }
 
   if (tab === "all" || tab === "joined") {
-    const { data: joinedRows } = await supabase
+    const { data: joinedRows, error } = await supabase
       .from("ride_passengers")
       .select(
         "*, ride:rides!ride_passengers_ride_id_fkey(*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug))"
       )
       .eq("passenger_id", id)
       .eq("status", "confirmed");
+    throwReadError(error, "joined rides");
     joinedRides = ((joinedRows as JoinedRideRow[] | null) ?? [])
       .map((p) => p.ride)
       .filter((ride): ride is RideWithDriver => Boolean(ride));
   }
 
-  if (tab === "requests") {
-    const { data } = await supabase
+  if (user && tab === "requests") {
+    const { data, error } = await supabase
       .from("ride_requests")
       .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
       .eq("rider_id", id)
       .gte("depart_at", nowIso)
       .order("depart_at", { ascending: true });
+    throwReadError(error, "ride requests");
     rideRequests = (data ?? []) as RideRequestWithRider[];
   }
 

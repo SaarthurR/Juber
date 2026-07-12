@@ -53,6 +53,18 @@ export function dateOnlyToIso(value: string, time = "12:00") {
   return date.toISOString();
 }
 
+export function parseDateOnly(value: string | null | undefined) {
+  if (!value) return null;
+  const year = Number(value.slice(0, 4));
+  if (year > 9998) return null;
+  try {
+    dateOnlyToIso(value);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
 function getDateTimeParts(date: Date) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: APP_TIME_ZONE,

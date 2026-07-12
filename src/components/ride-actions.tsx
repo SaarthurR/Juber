@@ -467,6 +467,9 @@ export function CancelSeatButton({
           setError(result.error);
           return;
         }
+        setOpen(false);
+        setMessage("");
+        setError(null);
         router.push(result.redirectTo);
         router.refresh();
       } catch (actionError) {

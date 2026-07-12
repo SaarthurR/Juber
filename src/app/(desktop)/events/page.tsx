@@ -10,6 +10,7 @@ import {
   loadEventSummaries,
 } from "@/lib/events";
 import type { EventRequest, EventRow } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -26,8 +27,9 @@ export default async function EventsPage() {
           .eq("requested_by", user.id)
           .order("created_at", { ascending: false })
           .limit(6)
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  throwReadError(requestRows.error, "event requests");
 
   const featured = summaries[0];
   const rest = summaries.slice(1);
@@ -67,7 +69,7 @@ export default async function EventsPage() {
                 {featured.event.venue_label ? ` · ${featured.event.venue_label}` : ""}
                 {featured.event.description ? ` · ${featured.event.description}` : ""}
               </p>
-              <div className="mt-6 flex flex-wrap items-center gap-x-7 gap-y-4"> 
+              <div className="mt-6 flex flex-wrap items-center gap-x-7 gap-y-4">
                 {eventStatsAreEmpty(featured.stats) ? (
                   <p className="text-[15px] font-bold text-white">
                     Be the first to offer a ride for this ride board.
