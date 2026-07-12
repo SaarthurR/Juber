@@ -1,11 +1,20 @@
 "use client";
 
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { useEffect, useReducer } from "react";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Car, MessagesSquare, Plus } from "lucide-react";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { RideCard, RequestCard } from "@/components/ride-card";
 import { RideFilters } from "@/components/ride-filters";
+import { RidesTabList, RidesTabPanels } from "@/components/rides-tabs";
+import {
+  commitRidesTabSelection,
+  getRidesTabFromSearch,
+  ridesTabReducer,
+  syncRidesTabFromHistory,
+  type RidesTab,
+} from "@/lib/rides-tab-state";
 import type { RideRequestWithRider, RideWithDriver } from "@/lib/types";
 
 export function RidesView({
@@ -20,40 +29,62 @@ export function RidesView({
   signedIn: boolean;
 }) {
   const params = useSearchParams();
-  const showRequests = params.get("tab") === "requests";
+  const paramsString = params.toString();
+  const pathname = usePathname();
+  const [tabState, dispatchTab] = useReducer(ridesTabReducer, {
+    visibleTab: getRidesTabFromSearch(paramsString),
+  });
   const hasFilters = Boolean(
     params.get("from") || params.get("to") || params.get("date") || params.get("trip"),
   );
 
-  function setTab(tab: "carpools" | "requests") {
-    const next = new URLSearchParams(params.toString());
-    if (tab === "requests") next.set("tab", "requests");
-    else next.delete("tab");
+  useEffect(() => {
+    syncRidesTabFromHistory(paramsString, (tab) => {
+      dispatchTab({ type: "select", tab });
+    });
+  }, [paramsString]);
 
-    const query = next.toString();
-    window.history.pushState(null, "", query ? `/rides?${query}` : "/rides");
+  useEffect(() => {
+    function syncFromHistory() {
+      syncRidesTabFromHistory(window.location.search, (tab) => {
+        dispatchTab({ type: "select", tab });
+      });
+    }
+
+    window.addEventListener("popstate", syncFromHistory);
+    return () => window.removeEventListener("popstate", syncFromHistory);
+  }, []);
+
+  function setTab(tab: RidesTab) {
+    commitRidesTabSelection({
+      currentTab: tabState.visibleTab,
+      nextTab: tab,
+      pathname: pathname || "/rides",
+      search: window.location.search,
+      commit: (nextTab) => dispatchTab({ type: "select", tab: nextTab }),
+      pushState: (state, href) => window.history.pushState(state, "", href),
+    });
   }
+
+  const carpoolsPanel = rides.length ? (
+    rides.map((ride) => <RideCard key={ride.id} ride={ride} />)
+  ) : (
+    <Empty kind="rides" signedIn={signedIn} hasFilters={hasFilters} />
+  );
+  const requestsPanel = requests.length ? (
+    requests.map((request) => <RequestCard key={request.id} request={request} />)
+  ) : (
+    <Empty kind="requests" signedIn={signedIn} hasFilters={hasFilters} />
+  );
 
   return (
     <>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-        <div
-          className="inline-flex gap-1 rounded-xl bg-[#f1e6d6] p-1.5"
-          role="tablist"
-          aria-label="Ride listings"
-        >
-          <TabButton
-            active={!showRequests}
-            label="Carpools"
-            onClick={() => setTab("carpools")}
-          />
-          <TabButton
-            active={showRequests}
-            label="Ride requests"
-            badge={requestCount}
-            onClick={() => setTab("requests")}
-          />
-        </div>
+        <RidesTabList
+          activeTab={tabState.visibleTab}
+          requestCount={requestCount}
+          onSelect={setTab}
+        />
 
         {signedIn ? (
           <Link
@@ -83,55 +114,12 @@ export function RidesView({
         </div>
       )}
 
-      <div className="mt-5 grid gap-4">
-        {showRequests
-          ? requests.length
-            ? requests.map((request) => (
-                <RequestCard key={request.id} request={request} />
-              ))
-            : <Empty kind="requests" signedIn={signedIn} hasFilters={hasFilters} />
-          : rides.length
-            ? rides.map((ride) => <RideCard key={ride.id} ride={ride} />)
-            : <Empty kind="rides" signedIn={signedIn} hasFilters={hasFilters} />}
-      </div>
+      <RidesTabPanels
+        activeTab={tabState.visibleTab}
+        carpools={carpoolsPanel}
+        requests={requestsPanel}
+      />
     </>
-  );
-}
-
-function TabButton({
-  active,
-  label,
-  badge,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  badge?: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className={`flex items-center justify-center gap-2 rounded-lg px-[18px] py-2 text-sm font-bold transition ${
-        active
-          ? "bg-brand-600 text-white"
-          : "text-[#a8927a] hover:text-brand-700"
-      }`}
-    >
-      {label}
-      {badge !== undefined && badge > 0 && (
-        <span
-          className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${
-            active ? "bg-white/25 text-white" : "bg-brand-600 text-white"
-          }`}
-        >
-          {badge}
-        </span>
-      )}
-    </button>
   );
 }
 
@@ -144,18 +132,29 @@ function Empty({
   signedIn: boolean;
   hasFilters: boolean;
 }) {
+  const Icon = kind === "rides" ? Car : MessagesSquare;
+  const title = kind === "requests" && !signedIn
+    ? "Sign in to view ride requests"
+    : hasFilters
+      ? `No ${kind === "rides" ? "carpools" : "requests"} match your search`
+    : kind === "rides"
+      ? "No carpools yet"
+      : "No ride requests yet";
+  const description = kind === "requests" && !signedIn
+    ? "Ride requests are available to signed-in community members."
+    : hasFilters
+      ? "Try clearing your filters, or check back later."
+    : kind === "rides"
+      ? "Be the first to offer a ride to JCNC. Your sangha will thank you."
+      : "When someone needs a ride to JCNC, it will show up here.";
+
   return (
     <div className="rounded-2xl border border-dashed border-[#e0d3bf] px-8 py-14 text-center">
-      <p className="font-semibold text-stone-700">
-        No {kind} match your search.
-      </p>
-      <p className="mt-1 text-sm text-stone-400">
-        {hasFilters
-          ? "Try clearing your filters, or check back later."
-          : kind === "rides"
-            ? "Be the first to offer a carpool."
-            : "No one is asking for a ride right now."}
-      </p>
+      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-tint">
+        <Icon size={36} className="text-brand-600" strokeWidth={1.8} />
+      </div>
+      <p className="mt-5 font-semibold text-stone-700">{title}</p>
+      <p className="mt-1 text-sm text-stone-400">{description}</p>
       {signedIn && (
         <Link
           href={kind === "rides" ? "/rides/new" : "/requests/new"}
@@ -164,6 +163,7 @@ function Empty({
           {kind === "rides" ? "Post a ride" : "Request a ride"}
         </Link>
       )}
+      {!signedIn && kind === "requests" && <GoogleSignInButton className="mt-5" />}
     </div>
   );
 }

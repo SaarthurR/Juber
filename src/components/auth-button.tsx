@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { authCallbackDestination } from "@/lib/route-targets";
 
 export function GoogleSignInButton({
-  next = "/rides",
+  next,
   className,
   googleBranding = false,
 }: {
@@ -17,12 +18,14 @@ export function GoogleSignInButton({
   async function signIn() {
     setLoading(true);
     const supabase = createClient();
+    const currentPath = `${window.location.pathname}${window.location.search}`;
+    const nextPath = authCallbackDestination(next ?? currentPath, "/rides");
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(nextPath)}`,
       },
     });
   }

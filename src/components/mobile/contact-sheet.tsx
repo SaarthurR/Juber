@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Phone, MessageCircle, X } from "lucide-react";
+import { Phone, MessageCircle } from "lucide-react";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { openConversation } from "@/app/messages/actions";
+import { PendingActionButton, PendingActionGroup, usePendingActionOpen } from "@/components/pending-action-button";
 
 type Method = "phone" | "whatsapp" | "message" | null;
 
@@ -38,7 +39,39 @@ export function ContactSheet({
   whatsapp: string | null;
   preferredContact: Method;
 }) {
-  const [open, setOpen] = useState(false);
+  return (
+    <PendingActionGroup>
+      <ContactSheetContent
+        driverId={driverId}
+        driverFullName={driverFullName}
+        rideId={rideId}
+        phone={phone}
+        whatsapp={whatsapp}
+        preferredContact={preferredContact}
+      />
+    </PendingActionGroup>
+  );
+}
+
+export function ContactSheetContent({
+  driverId,
+  driverFullName,
+  rideId,
+  phone,
+  whatsapp,
+  preferredContact,
+  defaultOpen = false,
+}: {
+  driverId: string;
+  driverFullName: string | null;
+  rideId: string;
+  phone: string | null;
+  whatsapp: string | null;
+  preferredContact: Method;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const pendingActionOpen = usePendingActionOpen();
   const firstName = driverFullName?.split(" ")[0] ?? "the driver";
   const whatsappHref = whatsapp ? `https://wa.me/${whatsapp.replace(/[^\d]/g, "")}` : null;
 
@@ -53,7 +86,13 @@ export function ContactSheet({
         Contact
       </button>
 
-      <BottomSheet open={open} onClose={() => setOpen(false)} labelledBy="contact-title">
+      <BottomSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        labelledBy="contact-title"
+        dismissDisabled={pendingActionOpen}
+        closeLabel="Close contact sheet"
+      >
         <div className="flex items-center gap-3 pb-4">
           <MAvatar name={driverFullName} seed={driverId} size={44} />
           <div className="min-w-0 flex-1">
@@ -62,14 +101,6 @@ export function ContactSheet({
             </p>
             <p className="text-xs text-muted-warm">Reach out to confirm your seat</p>
           </div>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={() => setOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-tint text-brand-700"
-          >
-            <X size={16} strokeWidth={2.5} />
-          </button>
         </div>
 
         <div className="space-y-2.5 pb-4">
@@ -97,6 +128,8 @@ export function ContactSheet({
             <input type="hidden" name="base" value="/m/messages" />
             <ContactRow
               as="button"
+              actionKey={`mobile-contact-message-${rideId}-${driverId}`}
+              pendingLabel="Opening chat..."
               icon={<MessageCircle size={17} className="text-brand-600" />}
               label="In-app message"
               value={`Message ${firstName} on Juber`}
@@ -104,6 +137,10 @@ export function ContactSheet({
             />
           </form>
         </div>
+
+        <p className="pb-1 text-[11px] leading-relaxed text-muted-warm">
+          In-app chat stays available after phone and WhatsApp access expires.
+        </p>
       </BottomSheet>
     </>
   );
@@ -113,6 +150,8 @@ function ContactRow({
   href,
   external,
   as = "a",
+  actionKey,
+  pendingLabel,
   icon,
   label,
   value,
@@ -121,6 +160,8 @@ function ContactRow({
   href?: string;
   external?: boolean;
   as?: "a" | "button";
+  actionKey?: string;
+  pendingLabel?: string;
   icon: React.ReactNode;
   label: string;
   value: string;
@@ -154,6 +195,18 @@ function ContactRow({
   }`;
 
   if (as === "button") {
+    if (actionKey && pendingLabel) {
+      return (
+        <PendingActionButton
+          actionKey={actionKey}
+          pendingLabel={pendingLabel}
+          className={`${className} disabled:cursor-not-allowed disabled:opacity-60`}
+        >
+          {inner}
+        </PendingActionButton>
+      );
+    }
+
     return (
       <button type="submit" className={className}>
         {inner}

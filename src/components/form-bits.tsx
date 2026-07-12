@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormStatus } from "react-dom";
+import { PendingActionButton } from "@/components/pending-action-button";
 import type { EventRow, Place } from "@/lib/types";
 
 export function FormField({
@@ -11,9 +11,11 @@ export function FormField({
   defaultValue,
   placeholder,
   min,
+  maxLength,
   list,
   textarea,
   hint,
+  ariaDescribedBy,
 }: {
   label: string;
   name: string;
@@ -22,9 +24,11 @@ export function FormField({
   defaultValue?: string;
   placeholder?: string;
   min?: number | string;
+  maxLength?: number;
   list?: string;
   textarea?: boolean;
   hint?: string;
+  ariaDescribedBy?: string;
 }) {
   const cls =
     "w-full rounded-xl border border-[#e2ddd5] px-3.5 py-3 text-[15px] outline-none placeholder:text-[#a8a29e] focus:border-brand-600 focus:ring-2 focus:ring-brand-100";
@@ -40,6 +44,8 @@ export function FormField({
           placeholder={placeholder}
           rows={3}
           defaultValue={defaultValue}
+          maxLength={maxLength}
+          aria-describedby={ariaDescribedBy}
           className={cls}
         />
       ) : (
@@ -50,7 +56,9 @@ export function FormField({
           defaultValue={defaultValue}
           placeholder={placeholder}
           min={min}
+          maxLength={maxLength}
           list={list}
+          aria-describedby={ariaDescribedBy}
           className={cls}
         />
       )}
@@ -100,15 +108,22 @@ export function PlacesDatalist({ places }: { places: Place[] }) {
   );
 }
 
-export function SubmitButton({ children }: { children: React.ReactNode }) {
-  const { pending } = useFormStatus();
+export function SubmitButton({
+  children,
+  actionKey = "submit",
+  pendingLabel = "Saving...",
+}: {
+  children: React.ReactNode;
+  actionKey?: string;
+  pendingLabel?: string;
+}) {
   return (
-    <button
-      type="submit"
-      disabled={pending}
+    <PendingActionButton
+      actionKey={actionKey}
+      pendingLabel={pendingLabel}
       className="w-full rounded-xl bg-brand-600 px-5 py-4 font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
     >
-      {pending ? "Saving…" : children}
-    </button>
+      {children}
+    </PendingActionButton>
   );
 }

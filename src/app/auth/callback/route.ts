@@ -1,17 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import {
+  DESKTOP_COOKIE,
+  authCallbackDestination,
+  authOnboardingDestination,
+  desktopAuthDestination,
+} from "@/lib/route-targets";
+import { hasContact } from "@/lib/contact-readiness";
 
 // Handles the OAuth redirect from Supabase, exchanging the code for a session.
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  // Only honor internal absolute paths — reject protocol-relative ("//evil")
-  // or backslash-prefixed values that some browsers treat as external.
-  const rawNext = searchParams.get("next") ?? "/rides";
-  const next =
-    rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.startsWith("/\\")
-      ? rawNext
-      : "/rides";
+  const isMobileUa = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(
+    request.headers.get("user-agent") ?? "",
+  );
+  const forceDesktop = request.cookies.get(DESKTOP_COOKIE)?.value === "1";
+  const fallback = isMobileUa && !forceDesktop ? "/m" : "/rides";
+  const nextValues = searchParams.getAll("next");
+  const next = authCallbackDestination(
+    nextValues.length === 1 ? nextValues[0] : null,
+    fallback,
+  );
+  const effectiveNext = forceDesktop
+    ? desktopAuthDestination(next, "/rides")
+    : next;
 
   if (code) {
     const supabase = await createClient();
@@ -21,19 +34,14 @@ export async function GET(request: Request) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const { data: contactReady } = await supabase.rpc("profile_has_contact", {
-        p_profile_id: user?.id ?? "",
-      });
-      if (!contactReady) {
-        const isMobile = /Mobi|Android|iPhone|iPod|Windows Phone/i.test(
-          request.headers.get("user-agent") ?? "",
-        );
-        const onboardingPath = isMobile
-          ? "/m/profile/edit?onboarding=1"
-          : "/profile?onboarding=1";
+      if (!(await hasContact(supabase, user?.id))) {
+        const onboardingPath = authOnboardingDestination(effectiveNext, {
+          fallback,
+          forceDesktop,
+        });
         return NextResponse.redirect(`${origin}${onboardingPath}`);
       }
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${origin}${effectiveNext}`);
     }
   }
 

@@ -1,5 +1,5 @@
-import { PageLoading } from "@/components/page-loading";
+import { PageSkeleton } from "@/components/page-skeleton";
 
-export default function Loading() {
-  return <PageLoading />;
+export default function MobileLoading() {
+  return <PageSkeleton />;
 }

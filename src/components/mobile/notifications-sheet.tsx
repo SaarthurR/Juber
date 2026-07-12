@@ -1,13 +1,43 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
+import { Bell, Car, Check, X, Ban, Handshake, MessageCircle, CalendarCheck } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { MAvatar } from "@/components/mobile/m-avatar";
-import { markNotificationsRead } from "@/app/messages/actions";
+import {
+  NotificationBulkReadControl,
+  NotificationBulkReadFeedback,
+  NotificationEvictedRowRetry,
+  NotificationRowActions,
+} from "@/components/notification-controls";
+import { markNotificationRead, markNotificationsRead } from "@/app/messages/actions";
+import { createClient } from "@/lib/supabase/client";
+import {
+  failClosedNotificationState,
+  loadVisibleNotificationIds,
+} from "@/lib/messages";
+import {
+  createNotificationControllerState,
+  createSurfaceRefreshDebouncer,
+  isCurrentNotificationRefresh,
+  notificationBulkControlStatus,
+  notificationCancellationReason,
+  notificationControllerKey,
+  notificationControllerReducer,
+  notificationEvictedRowRetry,
+  notificationRowPending,
+  notificationTitle,
+  notificationTriggersSurfaceRefresh,
+  notificationWriteErrorMessage,
+  notificationWritePending,
+  subscribeToNotificationChanges,
+  type NotificationRowContext,
+  type NotificationSnapshot,
+} from "@/lib/notifications-controller";
+import { mobileNotificationDestination } from "@/lib/route-targets";
+import { NOTIFICATION_SELECT, FALLBACK_NOTIFICATION_SELECT } from "@/lib/notifications-query";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
 
 const ICON: Record<NotificationType, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -16,57 +46,249 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   seat_declined: X,
   seat_cancelled: Ban,
   ride_cancelled: Ban,
+  ride_completed: Check,
   request_accepted: Handshake,
   new_message: MessageCircle,
+  event_request_approved: CalendarCheck,
+  event_request_rejected: X,
 };
-
-function firstName(name: string | null | undefined) {
-  return name?.split(" ")[0] ?? "Someone";
-}
-
-function titleFor(n: NotificationWithContext): string {
-  const who = firstName(n.actor?.full_name);
-  switch (n.type) {
-    case "seat_requested":
-      return `${who} reserved a seat in your ride`;
-    case "seat_confirmed":
-      return "Your seat was confirmed";
-    case "seat_declined":
-      return "Your seat request was declined";
-    case "seat_cancelled":
-      return `${who} cancelled their seat`;
-    case "ride_cancelled":
-      return "Your ride was cancelled";
-    case "request_accepted":
-      return `${who} accepted your ride request`;
-    case "new_message":
-      return `One new message from ${who}`;
-    default:
-      return "New activity";
-  }
-}
 
 export function MNotificationBell({
   notifications,
   unreadCount,
+  userId,
+  initialError = null,
 }: {
   notifications: NotificationWithContext[];
   unreadCount: number;
+  userId: string;
+  initialError?: string | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const initialSnapshot = {
+    items: notifications,
+    unread: unreadCount,
+    error: initialError,
+  };
+
+  return (
+    <MNotificationBellController
+      key={notificationControllerKey(initialSnapshot)}
+      userId={userId}
+      initialSnapshot={initialSnapshot}
+    />
+  );
+}
+
+function MNotificationBellController({
+  userId,
+  initialSnapshot,
+}: {
+  userId: string;
+  initialSnapshot: NotificationSnapshot;
+}) {
   const router = useRouter();
-  const hasUnread = unreadCount > 0;
+  const [state, dispatch] = useReducer(
+    notificationControllerReducer,
+    initialSnapshot,
+    createNotificationControllerState,
+  );
+  const refreshGeneration = useRef(0);
+  const operationSequence = useRef(0);
+  const active = useRef(true);
+  const surfaceRefreshRef = useRef(createSurfaceRefreshDebouncer(() => router.refresh()));
+
+  const refreshNotifications = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
+    const supabase = createClient();
+    function failClosed(message: string) {
+      const failed = failClosedNotificationState<NotificationWithContext>(message);
+      if (
+        isCurrentNotificationRefresh(
+          generation,
+          refreshGeneration.current,
+          active.current,
+        )
+      ) {
+        dispatch({ type: "reconcile-failed", error: failed.error });
+      }
+    }
+    try {
+      const [unreadResult, notificationResult] = await Promise.all([
+        loadVisibleNotificationIds(supabase, null, true),
+        loadVisibleNotificationIds(supabase, 8, false),
+      ]);
+      if (
+        !isCurrentNotificationRefresh(
+          generation,
+          refreshGeneration.current,
+          active.current,
+        )
+      ) {
+        return;
+      }
+      if (unreadResult.error || notificationResult.error) {
+        failClosed(unreadResult.error ?? notificationResult.error ?? "Could not refresh notifications.");
+        return;
+      }
+      const notificationIds = notificationResult.ids;
+      const notificationsResult = notificationIds.length
+        ? await supabase
+            .from("notifications")
+            .select(NOTIFICATION_SELECT)
+            .eq("recipient_id", userId)
+            .in("id", notificationIds)
+            .order("created_at", { ascending: false })
+        : { data: [] as NotificationWithContext[], error: null };
+      if (
+        !isCurrentNotificationRefresh(
+          generation,
+          refreshGeneration.current,
+          active.current,
+        )
+      ) {
+        return;
+      }
+
+      let data = notificationsResult.data;
+      if (notificationsResult.error) {
+        const fallback = await supabase
+          .from("notifications")
+          .select(FALLBACK_NOTIFICATION_SELECT)
+          .eq("recipient_id", userId)
+          .in("id", notificationIds)
+          .order("created_at", { ascending: false })
+          .limit(notificationIds.length);
+        if (fallback.error) throw new Error("Could not load notifications.");
+        data = fallback.data;
+      }
+      if (
+        !isCurrentNotificationRefresh(
+          generation,
+          refreshGeneration.current,
+          active.current,
+        )
+      ) {
+        return;
+      }
+      dispatch({
+        type: "reconcile",
+        snapshot: {
+          unread: unreadResult.ids.length,
+          unreadIds: unreadResult.ids,
+          items: ((data ?? []) as NotificationWithContext[]).map((n) => ({
+            ...n,
+            request: n.request ?? null,
+          })),
+          error: null,
+        },
+      });
+    } catch {
+      failClosed("Could not refresh notifications.");
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+      refreshGeneration.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    surfaceRefreshRef.current.cancel();
+    surfaceRefreshRef.current = createSurfaceRefreshDebouncer(() => router.refresh());
+    return () => {
+      surfaceRefreshRef.current.cancel();
+    };
+  }, [router, userId]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    return subscribeToNotificationChanges(
+      supabase,
+      "mobile-notifications",
+      userId,
+      ({ type }) => {
+        void refreshNotifications().then(() => {
+          if (!active.current) return;
+          if (notificationTriggersSurfaceRefresh(type)) {
+            surfaceRefreshRef.current.schedule();
+          }
+        });
+      },
+    );
+  }, [userId, refreshNotifications]);
 
   function open_() {
-    setOpen(true);
-    if (hasUnread) {
-      startTransition(async () => {
-        await markNotificationsRead();
-        router.refresh();
+    dispatch({ type: "open" });
+  }
+
+  async function markAllRead() {
+    if (state.unread === 0 || notificationWritePending(state)) return;
+    const operationId = ++operationSequence.current;
+    dispatch({ type: "mark-all-start", operationId });
+    try {
+      await markNotificationsRead();
+      if (!active.current) return;
+      dispatch({
+        type: "mark-all-success",
+        operationId,
+        readAt: new Date().toISOString(),
+      });
+    } catch {
+      if (!active.current) return;
+      dispatch({
+        type: "mark-all-failed",
+        operationId,
+        error: notificationWriteErrorMessage("bulk"),
       });
     }
   }
+
+  async function markOneAndNavigate(
+    context: NotificationRowContext,
+    alreadyRead: boolean,
+    retainFallback = false,
+  ) {
+    if (notificationWritePending(state)) return;
+    if (alreadyRead) {
+      dispatch({ type: "close" });
+      router.push(context.destination);
+      return;
+    }
+    const operationId = ++operationSequence.current;
+    dispatch({
+      type: "mark-one-start",
+      id: context.id,
+      operationId,
+      context,
+      retainFallback,
+    });
+    try {
+      await markNotificationRead(context.id);
+      if (!active.current) return;
+      dispatch({
+        type: "mark-one-success",
+        id: context.id,
+        operationId,
+        readAt: new Date().toISOString(),
+      });
+      dispatch({ type: "close" });
+      router.push(context.destination);
+      router.refresh();
+    } catch {
+      if (!active.current) return;
+      dispatch({
+        type: "mark-one-failed",
+        id: context.id,
+        operationId,
+        error: notificationWriteErrorMessage("row"),
+      });
+    }
+  }
+
+  const evictedRetry = notificationEvictedRowRetry(state);
 
   return (
     <>
@@ -74,28 +296,80 @@ export function MNotificationBell({
         type="button"
         aria-label="Notifications"
         onClick={open_}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-tint text-brand-700 active:scale-95"
+        className="relative flex h-11 w-11 items-center justify-center rounded-full bg-tint text-brand-700 active:scale-95"
       >
         <Bell size={18} strokeWidth={2.2} />
-        {hasUnread && (
+        {state.unread > 0 && (
           <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-[#C2410C] ring-2 ring-cream" />
         )}
       </button>
 
-      <BottomSheet open={open} onClose={() => setOpen(false)} labelledBy="notif-title">
+      <BottomSheet
+        open={state.open}
+        onClose={() => dispatch({ type: "close" })}
+        labelledBy="notif-title"
+        dismissDisabled={notificationWritePending(state)}
+        closeLabel="Close notifications"
+      >
         <div className="flex items-center justify-between pb-3">
           <p id="notif-title" className="text-[15px] font-extrabold text-ink">
             Notifications
           </p>
-          {pending && <span className="text-xs text-muted-warm">Marking read…</span>}
+          <NotificationBulkReadControl
+            unread={state.unread}
+            status={notificationBulkControlStatus(state)}
+            disabled={notificationWritePending(state)}
+            onActivate={() => void markAllRead()}
+          />
         </div>
+        <NotificationBulkReadFeedback
+          error={state.bulkError}
+          statusMessage={state.bulkStatusMessage}
+        />
+        {state.loadError ? (
+          <p role="alert" className="mb-2 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
+            {state.loadError}
+          </p>
+        ) : null}
+        {evictedRetry ? (
+          <NotificationEvictedRowRetry
+            title={evictedRetry.context.title}
+            error={evictedRetry.error}
+            pending={evictedRetry.pending}
+            onRetry={() =>
+              void markOneAndNavigate(evictedRetry.context, false, true)
+            }
+          />
+        ) : null}
 
-        {notifications.length === 0 ? (
+        {state.items.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-warm">You&apos;re all caught up.</p>
         ) : (
           <ul className="divide-y divide-border-soft pb-4">
-            {notifications.map((n) => (
-              <NotifRow key={n.id} n={n} onNavigate={() => setOpen(false)} />
+            {state.items.map((n) => (
+              <NotifRow
+                key={n.id}
+                n={n}
+                pending={notificationRowPending(state, n.id)}
+                disabled={notificationWritePending(state)}
+                error={
+                  evictedRetry?.context.id === n.id
+                    ? null
+                    : state.rowErrorId === n.id
+                      ? state.rowError
+                      : null
+                }
+                onNavigate={(href) =>
+                  void markOneAndNavigate(
+                    {
+                      id: n.id,
+                      title: notificationTitle(n),
+                      destination: href,
+                    },
+                    n.read_at !== null,
+                  )
+                }
+              />
             ))}
           </ul>
         )}
@@ -106,13 +380,20 @@ export function MNotificationBell({
 
 function NotifRow({
   n,
+  pending,
+  disabled,
+  error,
   onNavigate,
 }: {
   n: NotificationWithContext;
-  onNavigate: () => void;
+  pending: boolean;
+  disabled: boolean;
+  error: string | null;
+  onNavigate: (href: string) => void;
 }) {
   const Icon = ICON[n.type] ?? Bell;
   const unread = !n.read_at;
+  const title = notificationTitle(n);
   const route = n.ride
     ? `${n.ride.origin_label} → ${n.ride.destination_label}`
     : n.request
@@ -123,13 +404,8 @@ function NotifRow({
     : n.request
       ? format(new Date(n.request.depart_at), "EEE, MMM d")
       : null;
-  const href = n.ride_id
-    ? `/m/rides/${n.ride_id}`
-    : n.request_id
-      ? `/m/requests/${n.request_id}`
-      : n.conversation_id
-        ? `/m/messages/${n.conversation_id}`
-        : null;
+  const href = mobileNotificationDestination(n);
+  const cancellationReason = notificationCancellationReason(n);
 
   const body = (
     <div className="flex gap-3 py-3.5">
@@ -146,18 +422,18 @@ function NotifRow({
         </span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold text-ink">{titleFor(n)}</p>
+        <p className="text-[13px] font-semibold text-ink">{title}</p>
         {route && (
           <p className="truncate text-xs text-muted">
             {route}
             {departs && <span className="text-muted-warm"> · {departs}</span>}
           </p>
         )}
-        {n.type === "seat_cancelled" && n.message && (
+        {cancellationReason ? (
           <p className="mt-1.5 rounded-[10px] bg-tint px-3 py-2 text-xs text-muted">
-            “{n.message}”
+            “{cancellationReason}”
           </p>
-        )}
+        ) : null}
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1.5">
         <span className="whitespace-nowrap text-[11px] text-muted-warm">
@@ -171,9 +447,17 @@ function NotifRow({
   if (href) {
     return (
       <li>
-        <Link href={href} prefetch onClick={onNavigate} className="block active:opacity-70">
+        <NotificationRowActions
+          title={title}
+          unread={unread}
+          pending={pending}
+          disabled={disabled}
+          error={error}
+          onActivate={() => onNavigate(href)}
+          onRetry={() => onNavigate(href)}
+        >
           {body}
-        </Link>
+        </NotificationRowActions>
       </li>
     );
   }

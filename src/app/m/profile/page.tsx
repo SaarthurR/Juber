@@ -1,12 +1,16 @@
 import Link from "next/link";
-import { Phone, MessageCircle, Pencil, LogOut } from "lucide-react";
+import { Phone, MessageCircle, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getContact } from "@/lib/contact";
 import { MAvatar } from "@/components/mobile/m-avatar";
 import { ProfileTabs } from "@/components/mobile/profile-tabs";
 import { GoogleSignInButton } from "@/components/auth-button";
+import { PublicLegalLinks } from "@/components/landing-auth-gate";
+import { SignOutForm } from "@/components/sign-out-form";
 import type { RideWithDriver } from "@/lib/types";
+import { RIDE_WITH_JOIN, RIDE_NESTED_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -28,27 +32,32 @@ export default async function MobileProfilePage() {
         <GoogleSignInButton
           className="rounded-full bg-brand-600 px-6 py-3 text-[14px] font-bold text-white"
         />
+        <PublicLegalLinks />
       </div>
     );
   }
 
   const supabase = await createClient();
-  const [{ data: postedData }, { data: joinedData }] = await Promise.all([
+  const [postedResult, joinedResult] = await Promise.all([
     supabase
       .from("rides")
-      .select("*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug)")
+      .select(RIDE_WITH_JOIN)
       .eq("driver_id", user.id)
       .order("depart_at", { ascending: false }),
     supabase
       .from("ride_passengers")
       .select(
-        "ride:rides!ride_passengers_ride_id_fkey(*, driver:profiles!rides_driver_id_fkey(*), event:events(id,name,slug))",
+        `ride:rides!ride_passengers_ride_id_fkey(${RIDE_NESTED_JOIN})`,
       )
       .eq("passenger_id", user.id)
       .eq("status", "confirmed"),
   ]);
+  throwReadError(postedResult.error, "posted rides");
+  throwReadError(joinedResult.error, "joined rides");
+  const postedData = postedResult.data;
+  const joinedData = joinedResult.data;
 
-  const posted = (postedData as RideWithDriver[]) ?? [];
+  const posted = asRideWithDriverRows(postedData);
   const joined = ((joinedData as JoinedRideRow[] | null) ?? [])
     .map((r) => r.ride)
     .filter((r): r is RideWithDriver => Boolean(r));
@@ -67,23 +76,23 @@ export default async function MobileProfilePage() {
         </h1>
         {metaLine && <p className="mt-0.5 text-[13px] text-muted-warm">{metaLine}</p>}
 
-        <div className="mt-4 flex items-center gap-2.5">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
           <Link
             href="/m/profile/edit"
-            className="flex items-center gap-2 rounded-[13px] border-[1.5px] border-brand-600 px-5 py-2.5 text-[13px] font-bold text-brand-600 transition active:scale-95"
+            className="flex h-11 items-center gap-2 rounded-[13px] border-[1.5px] border-brand-600 px-5 text-[13px] font-bold text-brand-600 transition active:scale-95"
           >
             <Pencil size={15} strokeWidth={2.2} />
             Edit profile
           </Link>
-          <form action="/auth/signout" method="post">
-            <button
-              type="submit"
-              aria-label="Sign out"
-              className="flex h-[46px] w-[46px] items-center justify-center rounded-[13px] bg-tint text-brand-700 transition active:scale-95"
+          {profile?.is_admin && (
+            <Link
+              href="/m/admin"
+              className="flex h-11 items-center rounded-[13px] border border-brand-200 bg-white px-4 text-[13px] font-bold text-brand-700 transition active:scale-95"
             >
-              <LogOut size={18} strokeWidth={2.2} />
-            </button>
-          </form>
+              Admin
+            </Link>
+          )}
+          <SignOutForm variant="mobile" />
         </div>
       </header>
 
@@ -112,6 +121,20 @@ export default async function MobileProfilePage() {
         </div>
 
         <ProfileTabs posted={posted} joined={joined} now={new Date().getTime()} />
+
+        <section className="rounded-[18px] border border-border bg-white p-4">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-warm">
+            Legal
+          </p>
+          <div className="mt-3 flex gap-3 text-[13px] font-bold text-brand-700">
+            <Link href="/terms" className="rounded-full bg-tint px-4 py-2">
+              Terms
+            </Link>
+            <Link href="/privacy" className="rounded-full bg-tint px-4 py-2">
+              Privacy
+            </Link>
+          </div>
+        </section>
       </div>
     </div>
   );

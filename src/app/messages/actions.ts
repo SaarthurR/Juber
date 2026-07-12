@@ -4,6 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
+import { MESSAGE_BASE_TARGETS, contactActionReturnPath, contactSetupDestination, pickAllowed } from "@/lib/route-targets";
+import { messageMatchesRetry } from "@/lib/messages";
+import { CONTACT_SETUP_MESSAGE } from "@/lib/contact-setup";
+import { hasContact } from "@/lib/contact-readiness";
+import { requireNotificationWriteAuthentication } from "@/lib/notifications-controller";
+import { mapRateLimitError } from "@/lib/rate-limit";
+import type { Message } from "@/lib/types";
+
+function revalidateMessageRoutes() {
+  revalidatePath("/messages");
+  revalidatePath("/m/messages");
+  revalidatePath("/messages/[id]", "page");
+  revalidatePath("/m/messages/[id]", "page");
+}
 
 /**
  * Finds an existing 1:1 conversation between the current user and `otherUserId`,
@@ -13,59 +27,19 @@ export async function openConversation(otherUserId: string, formData?: FormData)
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
-  const selfBase =
-    formData?.get("base")?.toString() === "/m/messages" ? "/m/messages" : "/messages";
-  if (user.id === otherUserId) redirect(selfBase);
+  const base = pickAllowed(formData?.get("base")?.toString(), MESSAGE_BASE_TARGETS, "/messages");
+  if (user.id === otherUserId) redirect(base);
+
+  if (!(await hasContact(supabase, user.id))) {
+    const returnPath = contactActionReturnPath(formData, base);
+    const mobile = returnPath.startsWith("/m");
+    redirect(contactSetupDestination(returnPath, { mobile }));
+  }
 
   const rideId = formData?.get("ride_id")?.toString() || null;
   const requestId = formData?.get("request_id")?.toString() || null;
-  // Mobile callers pass base="/m/messages" so the chat opens inside the phone
-  // shell. Only an allow-listed prefix is honored to avoid open redirects.
-  const base = formData?.get("base")?.toString() === "/m/messages" ? "/m/messages" : "/messages";
   if (!rideId && !requestId) {
     throw new Error("Messaging unlocks after a ride is booked.");
-  }
-
-  if (rideId) {
-    const { data: bookings } = await supabase
-      .from("ride_passengers")
-      .select("passenger_id,ride:rides!ride_passengers_ride_id_fkey(driver_id,status)")
-      .eq("ride_id", rideId)
-      .eq("status", "confirmed")
-      .returns<Array<{
-        passenger_id: string;
-        ride: { driver_id: string; status: string } | null;
-      }>>();
-    const booking = bookings?.find((row) => {
-      const participants = new Set([row.passenger_id, row.ride?.driver_id]);
-      return participants.has(user.id) && participants.has(otherUserId);
-    });
-    const participants = new Set([booking?.passenger_id, booking?.ride?.driver_id]);
-    if (
-      booking?.ride?.status !== "active" ||
-      !participants.has(user.id) ||
-      !participants.has(otherUserId)
-    ) {
-      throw new Error("Messaging unlocks after this ride is booked.");
-    }
-  } else if (requestId) {
-    const { data: request } = await supabase
-      .from("ride_requests")
-      .select("rider_id,accepted_driver_id,status")
-      .eq("id", requestId)
-      .maybeSingle<{
-        rider_id: string;
-        accepted_driver_id: string | null;
-        status: string;
-      }>();
-    const participants = new Set([request?.rider_id, request?.accepted_driver_id]);
-    if (
-      request?.status !== "fulfilled" ||
-      !participants.has(user.id) ||
-      !participants.has(otherUserId)
-    ) {
-      throw new Error("Messaging unlocks after this request is accepted.");
-    }
   }
 
   const { data: conversationId, error } = await supabase.rpc("open_conversation", {
@@ -78,22 +52,41 @@ export async function openConversation(otherUserId: string, formData?: FormData)
     throw new Error(error?.message ?? "Could not start chat");
   }
 
+  revalidateMessageRoutes();
   redirect(`${base}/${conversationId}`);
 }
 
 /** Marks all of the current user's unread notifications as read. */
 export async function markNotificationsRead() {
   const supabase = await createClient();
-  const user = await getAuthUser(supabase);
-  if (!user) return;
+  const user = requireNotificationWriteAuthentication(await getAuthUser(supabase));
 
-  await supabase
+  const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .eq("recipient_id", user.id)
     .is("read_at", null);
+  if (error) throw new Error(error.message);
 
-  revalidatePath("/messages");
+  revalidateMessageRoutes();
+}
+
+/** Marks exactly one current-user notification as read. */
+export async function markNotificationRead(notificationId: string) {
+  const supabase = await createClient();
+  const user = requireNotificationWriteAuthentication(await getAuthUser(supabase));
+
+  const { data, error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", notificationId)
+    .eq("recipient_id", user.id)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Could not mark notification read.");
+
+  revalidateMessageRoutes();
 }
 
 export async function sendMessage(conversationId: string, formData: FormData) {
@@ -101,16 +94,65 @@ export async function sendMessage(conversationId: string, formData: FormData) {
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
 
-  const body = (formData.get("body") ?? "").toString().trim();
-  if (!body) return;
+  if (!(await hasContact(supabase, user.id))) {
+    const returnPath = contactActionReturnPath(
+      formData,
+      `/messages/${conversationId}`,
+    );
+    const mobile = returnPath.startsWith("/m");
+    return {
+      message: null,
+      error: CONTACT_SETUP_MESSAGE,
+      setupPath: contactSetupDestination(returnPath, { mobile }),
+    };
+  }
 
-  const { error } = await supabase.from("messages").insert({
-    conversation_id: conversationId,
-    sender_id: user.id,
-    body,
-  });
-  if (error) throw new Error(error.message);
-  revalidatePath(`/messages/${conversationId}`);
+  const body = (formData.get("body") ?? "").toString().trim();
+  if (!body) return { message: null, error: "Write a message before sending." };
+  const clientMessageId = (formData.get("client_message_id") ?? "").toString();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientMessageId)) {
+    return { message: null, error: "Could not send this message. Please try again." };
+  }
+
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      id: clientMessageId,
+      conversation_id: conversationId,
+      sender_id: user.id,
+      body,
+    })
+    .select("*")
+    .single<Message>();
+  if (error?.code === "23505") {
+    const { data: existing, error: readbackError } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("id", clientMessageId)
+      .maybeSingle<Message>();
+    if (
+      !readbackError &&
+      existing &&
+      messageMatchesRetry(existing, {
+        id: clientMessageId,
+        conversation_id: conversationId,
+        sender_id: user.id,
+        body,
+      })
+    ) {
+      revalidateMessageRoutes();
+      return { message: existing, error: null };
+    }
+  }
+  if (error || !data) {
+    const rateMsg = mapRateLimitError(error);
+    if (rateMsg) return { message: null, error: rateMsg };
+    console.error("send message failed", { code: error?.code, conversationId });
+    return { message: null, error: "Could not send this message. Please try again." };
+  }
+
+  revalidateMessageRoutes();
+  return { message: data, error: null };
 }
 
 export async function markConversationRead(conversationId: string) {
@@ -119,26 +161,39 @@ export async function markConversationRead(conversationId: string) {
   if (!user) return;
 
   const readAt = new Date().toISOString();
-  const { error } = await supabase
+  const { data: hide, error: hideError } = await supabase
+    .from("conversation_hides")
+    .select("hidden_at")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", user.id)
+    .maybeSingle<{ hidden_at: string }>();
+  if (hideError) throw new Error(hideError.message);
+
+  let messageUpdate = supabase
     .from("messages")
     .update({ read_at: readAt })
     .eq("conversation_id", conversationId)
     .neq("sender_id", user.id)
     .is("read_at", null);
+  if (hide?.hidden_at) messageUpdate = messageUpdate.gt("created_at", hide.hidden_at);
+  const { error } = await messageUpdate;
 
   if (error) throw new Error(error.message);
 
-  const { error: notificationError } = await supabase
+  let notificationUpdate = supabase
     .from("notifications")
     .update({ read_at: readAt })
     .eq("recipient_id", user.id)
     .eq("type", "new_message")
     .eq("conversation_id", conversationId)
     .is("read_at", null);
+  if (hide?.hidden_at) {
+    notificationUpdate = notificationUpdate.gt("created_at", hide.hidden_at);
+  }
+  const { error: notificationError } = await notificationUpdate;
   if (notificationError) throw new Error(notificationError.message);
 
-  revalidatePath("/messages");
-  revalidatePath(`/messages/${conversationId}`);
+  revalidateMessageRoutes();
 }
 
 export async function deleteConversation(conversationId: string) {
@@ -153,5 +208,5 @@ export async function deleteConversation(conversationId: string) {
   if (error) throw new Error(error.message);
   if (!deleted) throw new Error("Could not delete this chat.");
 
-  revalidatePath("/messages");
+  revalidateMessageRoutes();
 }

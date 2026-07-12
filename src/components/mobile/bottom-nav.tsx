@@ -6,10 +6,10 @@ import { useState } from "react";
 import { Car, MessageSquare, Calendar, User, Plus } from "lucide-react";
 
 const TABS = [
-  { href: "/m", label: "Rides", icon: Car },
-  { href: "/m/requests", label: "Requests", icon: MessageSquare },
-  { href: "/m/events", label: "Events", icon: Calendar },
-  { href: "/m/profile", label: "Profile", icon: User },
+  { href: "/m", label: "Rides", icon: Car, allowAnonymousBrowse: true },
+  { href: "/m/requests", label: "Requests", icon: MessageSquare, allowAnonymousBrowse: false },
+  { href: "/m/events", label: "Events", icon: Calendar, allowAnonymousBrowse: true },
+  { href: "/m/profile", label: "Profile", icon: User, allowAnonymousBrowse: true },
 ] as const;
 
 // Only the four tab roots show the bar; sub-pages (trip details, forms) use
@@ -26,10 +26,10 @@ export function BottomNav() {
   const pathname = usePathname();
   if (!pathname || !TAB_ROOTS.has(pathname)) return null;
 
-  return <VisibleBottomNav key={pathname} pathname={pathname} />;
+  return <BottomNavView key={pathname} pathname={pathname} />;
 }
 
-function VisibleBottomNav({ pathname }: { pathname: string }) {
+export function BottomNavView({ pathname }: { pathname: string }) {
   const [selectedPath, setSelectedPath] = useState(pathname);
 
   const [left, right] = [TABS.slice(0, 2), TABS.slice(2)];
@@ -57,7 +57,7 @@ function VisibleBottomNav({ pathname }: { pathname: string }) {
         {/* Center Post action — raised FAB */}
         <div className="flex justify-center">
           <Link
-            href="/rides/new"
+            href="/m/rides/new"
             aria-label="Post a ride"
             className="-mt-[22px] flex h-[58px] w-[58px] items-center justify-center rounded-[19px] bg-brand-600 text-white shadow-[0_14px_24px_-12px_rgba(166,83,41,0.7)] transition active:scale-95"
           >
@@ -83,12 +83,14 @@ function TabItem({
   label,
   icon: Icon,
   active,
+  allowAnonymousBrowse,
   onSelect,
 }: {
   href: string;
   label: string;
   icon: typeof Car;
   active: boolean;
+  allowAnonymousBrowse: boolean;
   onSelect: (href: string) => void;
 }) {
   return (
@@ -97,6 +99,7 @@ function TabItem({
       prefetch
       onClick={() => onSelect(href)}
       aria-current={active ? "page" : undefined}
+      data-auth-allowed={allowAnonymousBrowse ? "true" : undefined}
       className={`relative z-10 flex min-h-14 flex-col items-center justify-center gap-1 ${
         active ? "text-brand-600" : "text-muted-warm"
       }`}

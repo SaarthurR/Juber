@@ -32,10 +32,10 @@ export function Segmented<T extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(opt.value)}
-            className={`flex-1 rounded-[10px] px-3 py-2.5 text-[13px] font-bold ${
+            className={`flex min-h-11 flex-1 items-center justify-center rounded-[10px] px-3 py-2.5 text-[13px] font-bold ${
               active
                 ? "bg-white text-brand-600 shadow-[0_2px_6px_-2px_rgba(28,25,23,0.18)]"
-                : "text-[#8a7256]"
+                : "text-sand-text"
             }`}
           >
             {opt.label}

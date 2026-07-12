@@ -1,22 +1,37 @@
 import Link from "next/link";
 import { MessagesSquare, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { GoogleSignInButton } from "@/components/auth-button";
 import { SubHeader } from "@/components/mobile/sub-header";
 import { MRequestCard } from "@/components/mobile/mobile-cards";
 import type { RideRequestWithRider } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
 export default async function MobileRequestsPage() {
+  const { user } = await getCurrentUser();
+  if (!user) {
+    return (
+      <div className="px-4 py-16 text-center">
+        <MessagesSquare size={44} className="mx-auto text-brand-bright" />
+        <h1 className="mt-5 text-xl font-extrabold text-ink">Sign in to view ride requests</h1>
+        <p className="mt-2 text-sm text-muted-warm">Ride requests are available to signed-in community members.</p>
+        <GoogleSignInButton className="mt-5" />
+      </div>
+    );
+  }
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("ride_requests")
     .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
     .eq("status", "active")
     .gte("latest_date", today)
     .order("depart_at", { ascending: true });
+  throwReadError(error, "ride requests");
 
   const requests = (data as RideRequestWithRider[]) ?? [];
 

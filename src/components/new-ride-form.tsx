@@ -4,6 +4,7 @@ import { useActionState, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { postRide } from "@/app/rides/actions";
 import { JCNC_LABEL } from "@/lib/constants";
+import { COARSE_LABEL_HINT } from "@/lib/coarse-label";
 import { EventSelect, PlacesDatalist, SubmitButton } from "@/components/form-bits";
 import type { EventRow, Place } from "@/lib/types";
 
@@ -14,11 +15,13 @@ export function NewRideForm({
   places,
   defaultEventId,
   minDepartAt,
+  base = "/rides",
 }: {
   events: EventRow[];
   places: Place[];
   defaultEventId?: string;
   minDepartAt: string;
+  base?: "/rides" | "/m";
 }) {
   const [direction, setDirection] = useState<Direction | null>(null);
   const [routePlace, setRoutePlace] = useState("");
@@ -47,7 +50,9 @@ export function NewRideForm({
 
   const routeQuestion = direction === "from_jcnc" ? "To where?" : "From where?";
   const routePlaceholder =
-    direction === "from_jcnc" ? "Destination city / neighborhood" : "Starting city / neighborhood";
+    direction === "from_jcnc"
+      ? "Destination city or neighborhood, not a street address"
+      : "Starting city or neighborhood, not a street address";
 
   function scrollToField(field: HTMLElement, focusTarget = field) {
     field.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -108,6 +113,10 @@ export function NewRideForm({
       onSubmit={handleSubmit}
       onInvalid={handleInvalid}
     >
+      <input type="hidden" name="base" value={base} />
+      <p className="text-sm font-medium text-stone-500">
+        Add your car make and model in profile only if you plan to drive. It is optional.
+      </p>
       <div className="h-2 overflow-hidden rounded-full bg-[#efe9e1]">
         <div
           className="h-full rounded-full bg-brand-600 transition-all duration-300"
@@ -229,7 +238,7 @@ export function NewRideForm({
         name="dropoff_location"
         value={dropoffLocation}
         onChange={setDropoffLocation}
-        hint='This is where riders will be dropped off. If you do not have a specific location, feel free to put "flexible".'
+        hint={`${COARSE_LABEL_HINT} If you do not have a specific spot, use "flexible".`}
       />
 
       <LocationField
@@ -237,7 +246,7 @@ export function NewRideForm({
         name="pickup_location"
         value={pickupLocation}
         onChange={setPickupLocation}
-        hint='This is where riders will meet up with you. If you do not have a specific location, feel free to put "flexible".'
+        hint={`${COARSE_LABEL_HINT} If you do not have a specific spot, use "flexible".`}
       />
 
       <section className="grid grid-cols-2 gap-4">

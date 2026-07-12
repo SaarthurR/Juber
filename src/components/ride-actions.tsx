@@ -1,49 +1,43 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useFormStatus } from "react-dom";
+import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useScrollLock } from "@/lib/use-scroll-lock";
+import { CheckCircle2 } from "lucide-react";
+import { actionErrorMessage } from "@/lib/action-lifecycle";
+import { InlineActionError } from "@/components/inline-action-error";
+import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
+import { DesktopDialog } from "@/components/ui/desktop-dialog";
 import {
-  requestSeat,
   setPassengerStatus,
   cancelRide,
   closeRide,
   cancelSeat,
   cancelRideRequest,
+  acceptRideRequest,
 } from "@/app/rides/actions";
+import { openConversation } from "@/app/messages/actions";
 
-function PendingButton({
-  children,
-  pendingLabel,
-  className,
+import { ReserveSeatForm } from "@/components/reserve-seat-form";
+
+export function ReserveSeatButton({
+  rideId,
+  seatsAvailable,
+  savedHome,
+  label = "Reserve a seat",
 }: {
-  children: React.ReactNode;
-  pendingLabel: string;
-  className: string;
+  rideId: string;
+  seatsAvailable: number;
+  savedHome: string | null;
+  label?: string;
 }) {
-  const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className={className}
-    >
-      {pending ? pendingLabel : children}
-    </button>
-  );
-}
-
-export function ReserveSeatButton({ rideId }: { rideId: string }) {
-  return (
-    <form action={requestSeat.bind(null, rideId)}>
-      <PendingButton
-        pendingLabel="Reserving…"
-        className="w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-      >
-        Reserve a seat
-      </PendingButton>
-    </form>
+    <ReserveSeatForm
+      rideId={rideId}
+      seatsAvailable={seatsAvailable}
+      savedHome={savedHome}
+      label={label}
+      variant="desktop"
+    />
   );
 }
 
@@ -54,29 +48,127 @@ export function PassengerStatusButtons({
   passengerId: string;
   rideId: string;
 }) {
+  const [confirmState, confirmAction] = useActionState(
+    setPassengerStatus.bind(null, passengerId, rideId, "confirmed"),
+    null,
+  );
+  const [declineState, declineAction] = useActionState(
+    setPassengerStatus.bind(null, passengerId, rideId, "declined"),
+    null,
+  );
+  const error =
+    (confirmState && "error" in confirmState ? confirmState.error : undefined) ??
+    (declineState && "error" in declineState ? declineState.error : undefined);
+
   return (
-    <div className="flex gap-2">
-      <form action={setPassengerStatus.bind(null, passengerId, rideId, "confirmed")}>
-        <PendingButton
-          pendingLabel="…"
-          className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
+    <PendingActionGroup>
+      <div className="flex gap-2">
+        <form action={confirmAction}>
+          <PendingActionButton
+            actionKey={`confirm-${passengerId}`}
+            pendingLabel="Confirming..."
+            className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            Confirm
+          </PendingActionButton>
+        </form>
+        <form action={declineAction}>
+          <PendingActionButton
+            actionKey={`decline-${passengerId}`}
+            pendingLabel="Declining..."
+            className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-50 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            Decline
+          </PendingActionButton>
+        </form>
+      </div>
+      <InlineActionError
+        id={`passenger-${passengerId}-error`}
+        error={error}
+        className="mt-2 text-right text-xs font-semibold text-red-600"
+      />
+    </PendingActionGroup>
+  );
+}
+
+export function AcceptRequestButton({
+  requestId,
+  base,
+  actionKeyPrefix = "accept-request",
+}: {
+  requestId: string;
+  base?: "/messages" | "/m/messages";
+  actionKeyPrefix?: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [setupPath, setSetupPath] = useState<string | null>(null);
+
+  function submit() {
+    setError(null);
+    setSetupPath(null);
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set("request_id", requestId);
+        if (base) formData.set("base", base);
+        const result = await acceptRideRequest(requestId, formData);
+        if ("error" in result) {
+          setError(result.error);
+          setSetupPath(result.setupPath ?? null);
+          return;
+        }
+        setSetupPath(null);
+        router.push(result.redirectTo);
+        router.refresh();
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't accept this request. Please try again.",
+          ),
+        );
+      }
+    });
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={submit}
+        disabled={pending}
+        className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <CheckCircle2 size={17} />
+        {pending ? "Accepting..." : "Accept request"}
+      </button>
+      <InlineActionError
+        id={`${actionKeyPrefix}-${requestId}-error`}
+        error={error}
+        className="mt-2 text-center text-sm font-semibold text-red-600"
+      />
+      {setupPath && (
+        <a
+          href={setupPath}
+          className="mt-1 inline-flex min-h-11 w-full items-center justify-center text-sm font-semibold text-brand-600 underline-offset-2 hover:underline"
         >
-          Confirm
-        </PendingButton>
-      </form>
-      <form action={setPassengerStatus.bind(null, passengerId, rideId, "declined")}>
-        <PendingButton
-          pendingLabel="…"
-          className="rounded-full border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-600 hover:bg-stone-50 active:scale-[0.97] transition disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          Decline
-        </PendingButton>
-      </form>
+          Finish contact info in profile
+        </a>
+      )}
     </div>
   );
 }
 
-export function CancelRequestButton({ requestId }: { requestId: string }) {
+export function CancelRequestButton({
+  requestId,
+  base,
+}: {
+  requestId: string;
+  base?: "/rides" | "/m";
+}) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -85,11 +177,22 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
     setError(null);
     startTransition(async () => {
       try {
-        await cancelRideRequest(requestId);
-      } catch (e) {
-        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
-          setError(e.message);
+        const formData = new FormData();
+        if (base) formData.set("base", base);
+        const result = await cancelRideRequest(requestId, formData);
+        if ("error" in result) {
+          setError(result.error);
+          return;
         }
+        router.push(result.redirectTo);
+        router.refresh();
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't cancel this request. Please try again.",
+          ),
+        );
       }
     });
   }
@@ -105,20 +208,25 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setOpen(false)}
+        <DesktopDialog
+          open
+          onDismiss={() => setOpen(false)}
+          dismissDisabled={pending}
+          labelledBy="cancel-request-title"
+          closeLabel="Keep request"
         >
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold text-stone-900">Cancel this request?</h2>
+            <h2 id="cancel-request-title" className="pr-8 text-lg font-bold text-stone-900">Cancel this request?</h2>
             <p className="mt-1 text-sm text-stone-500">
               Drivers will no longer see it in ride requests. You can always post a new one.
             </p>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <p className="mt-2 text-sm text-stone-500">
+              To change trip details, cancel this post and create a new one.
+            </p>
+            <InlineActionError
+              id="cancel-request-error"
+              error={error}
+              className="mt-3 text-sm font-semibold text-red-600"
+            />
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -132,13 +240,13 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
                 type="button"
                 onClick={submit}
                 disabled={pending}
+                aria-describedby={error ? "cancel-request-error" : undefined}
                 className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {pending ? "Cancelling..." : "Cancel request"}
               </button>
             </div>
-          </div>
-        </div>
+        </DesktopDialog>
       )}
     </>
   );
@@ -147,17 +255,17 @@ export function CancelRequestButton({ requestId }: { requestId: string }) {
 export function CancelRideButton({
   rideId,
   confirmedRiderCount,
+  base = "/rides",
 }: {
   rideId: string;
   confirmedRiderCount: number;
+  base?: "/rides" | "/m";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  useScrollLock(open);
-
   function setDialogOpen(value: boolean) {
     setOpen(value);
     if (!value) setError(null);
@@ -171,16 +279,20 @@ export function CancelRideButton({
     setError(null);
     startTransition(async () => {
       try {
-        const result = await cancelRide(rideId, reason);
-        if (result?.error) {
+        const result = await cancelRide(rideId, reason, base);
+        if ("error" in result) {
           setError(result.error);
           return;
         }
-        router.push("/rides");
+        router.push(result.redirectTo);
         router.refresh();
-      } catch (e) {
-        console.error("Cancel ride failed", e);
-        setError("We couldn't cancel this ride. Please try again.");
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't cancel this ride. Please try again.",
+          ),
+        );
       }
     });
   }
@@ -196,21 +308,21 @@ export function CancelRideButton({
       </button>
 
       {open && (
-        <div
-          className="visible fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setDialogOpen(false)}
+        <DesktopDialog
+          open
+          onDismiss={() => setDialogOpen(false)}
+          dismissDisabled={pending}
+          labelledBy="cancel-ride-title"
+          closeLabel="Keep ride"
         >
-          <div className="absolute inset-0 bg-black/40" />
-
-          <div
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold text-stone-900">Cancel this ride?</h2>
+            <h2 id="cancel-ride-title" className="pr-8 text-lg font-bold text-stone-900">Cancel this ride?</h2>
             <p className="mt-1 text-sm text-stone-500">
               {confirmedRiderCount > 0
                 ? "Your confirmed riders will be notified with the reason below."
                 : "Are you sure? This ride will be removed from active listings."}
+            </p>
+            <p className="mt-2 text-sm text-stone-500">
+              To change trip details, cancel this post and create a new one.
             </p>
 
             {confirmedRiderCount > 0 && (
@@ -258,8 +370,7 @@ export function CancelRideButton({
                 {pending ? "Cancelling…" : "Cancel ride"}
               </button>
             </div>
-          </div>
-        </div>
+        </DesktopDialog>
       )}
     </div>
   );
@@ -267,14 +378,15 @@ export function CancelRideButton({
 
 export function CloseRideButton({
   rideId,
+  base,
 }: {
   rideId: string;
+  base?: "/rides" | "/m";
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  useScrollLock(open);
-
   function setDialogOpen(value: boolean) {
     setOpen(value);
     if (!value) setError(null);
@@ -284,11 +396,22 @@ export function CloseRideButton({
     setError(null);
     startTransition(async () => {
       try {
-        await closeRide(rideId);
-      } catch (e) {
-        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
-          setError(e.message);
+        const formData = new FormData();
+        if (base) formData.set("base", base);
+        const result = await closeRide(rideId, formData);
+        if ("error" in result) {
+          setError(result.error);
+          return;
         }
+        router.push(result.redirectTo);
+        router.refresh();
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't close this ride. Please try again.",
+          ),
+        );
       }
     });
   }
@@ -304,20 +427,23 @@ export function CloseRideButton({
       </button>
 
       {open && (
-        <div
-          className="visible fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setDialogOpen(false)}
+        <DesktopDialog
+          open
+          onDismiss={() => setDialogOpen(false)}
+          dismissDisabled={pending}
+          labelledBy="close-ride-title"
+          closeLabel="Keep open"
         >
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold text-stone-900">Close this ride?</h2>
+            <h2 id="close-ride-title" className="pr-8 text-lg font-bold text-stone-900">Close this ride?</h2>
             <p className="mt-1 text-sm text-stone-500">
-              This marks the ride completed, removes it from active listings, and clears its chat history.
+              This marks the ride completed and removes it from active listings. Chat history stays
+              available for lost items and follow-up.
             </p>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <InlineActionError
+              id="close-ride-error"
+              error={error}
+              className="mt-3 text-sm font-semibold text-red-600"
+            />
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -331,13 +457,13 @@ export function CloseRideButton({
                 type="button"
                 onClick={submit}
                 disabled={pending}
+                aria-describedby={error ? "close-ride-error" : undefined}
                 className="rounded-full bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {pending ? "Closing..." : "Close ride"}
               </button>
             </div>
-          </div>
-        </div>
+        </DesktopDialog>
       )}
     </>
   );
@@ -346,31 +472,58 @@ export function CloseRideButton({
 export function DriverRideActions({
   rideId,
   confirmedRiderCount,
+  base,
 }: {
   rideId: string;
   confirmedRiderCount: number;
+  base?: "/rides" | "/m";
 }) {
   return (
     <div className="grid grid-cols-2 gap-2">
-      <CloseRideButton rideId={rideId} />
-      <CancelRideButton rideId={rideId} confirmedRiderCount={confirmedRiderCount} />
+      <CloseRideButton rideId={rideId} base={base} />
+      <CancelRideButton rideId={rideId} confirmedRiderCount={confirmedRiderCount} base={base} />
     </div>
+  );
+}
+
+export function LostItemMessageButton({
+  rideId,
+  otherUserId,
+  base,
+  label = "Lost an item? Message about this ride",
+}: {
+  rideId: string;
+  otherUserId: string;
+  base?: "/messages" | "/m/messages";
+  label?: string;
+}) {
+  return (
+    <form action={openConversation.bind(null, otherUserId)}>
+      <input type="hidden" name="ride_id" value={rideId} />
+      {base && <input type="hidden" name="base" value={base} />}
+      <PendingActionButton
+        actionKey={`lost-item-${rideId}-${otherUserId}`}
+        pendingLabel="Opening chat..."
+        className="flex w-full items-center justify-center rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-bold text-stone-700 transition hover:bg-stone-50 active:scale-[0.98]"
+      >
+        {label}
+      </PendingActionButton>
+    </form>
   );
 }
 
 export function CancelSeatButton({
   rideId,
-  redirectTo,
+  base,
 }: {
   rideId: string;
-  redirectTo?: string;
+  base?: "/rides" | "/m";
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  useScrollLock(open);
-
   function submit() {
     if (!message.trim()) {
       setError("Please write a reason so the driver knows why you are cancelling.");
@@ -379,12 +532,23 @@ export function CancelSeatButton({
     setError(null);
     startTransition(async () => {
       try {
-        const result = await cancelSeat(rideId, message, redirectTo);
-        if (result?.error) setError(result.error);
-      } catch (e) {
-        if (e instanceof Error && e.message && !e.message.includes("NEXT_REDIRECT")) {
-          setError("We couldn't cancel your seat. Please try again.");
+        const result = await cancelSeat(rideId, message, base);
+        if ("error" in result) {
+          setError(result.error);
+          return;
         }
+        setOpen(false);
+        setMessage("");
+        setError(null);
+        router.push(result.redirectTo);
+        router.refresh();
+      } catch (actionError) {
+        setError(
+          actionErrorMessage(
+            actionError,
+            "We couldn't cancel your seat. Please try again.",
+          ),
+        );
       }
     });
   }
@@ -400,18 +564,19 @@ export function CancelSeatButton({
       </button>
 
       {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          onClick={() => !pending && setOpen(false)}
+        <DesktopDialog
+          open
+          onDismiss={() => setOpen(false)}
+          dismissDisabled={pending}
+          labelledBy="cancel-seat-title"
+          closeLabel="Keep seat"
         >
-          <div className="absolute inset-0 bg-black/40" />
-          <div
-            className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold text-stone-900">Cancel your seat?</h2>
+            <h2 id="cancel-seat-title" className="pr-8 text-lg font-bold text-stone-900">Cancel your seat?</h2>
             <p className="mt-1 text-sm text-stone-500">
               The driver will get a notification with your reason.
+            </p>
+            <p className="mt-2 text-sm text-stone-500">
+              To change trip details, cancel this post and create a new one.
             </p>
             <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-stone-500">
               Reason <span className="text-red-500">*</span>
@@ -429,11 +594,11 @@ export function CancelSeatButton({
               aria-describedby={error ? "cancel-seat-reason-error" : undefined}
               className="mt-1.5 w-full resize-none rounded-lg border border-stone-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
-            {error && (
-              <p id="cancel-seat-reason-error" role="alert" className="mt-2 text-sm text-red-600">
-                {error}
-              </p>
-            )}
+            <InlineActionError
+              id="cancel-seat-reason-error"
+              error={error}
+              className="mt-2 text-sm font-semibold text-red-600"
+            />
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -452,8 +617,7 @@ export function CancelSeatButton({
                 {pending ? "Cancelling..." : "Cancel seat"}
               </button>
             </div>
-          </div>
-        </div>
+        </DesktopDialog>
       )}
     </>
   );

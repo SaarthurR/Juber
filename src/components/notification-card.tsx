@@ -1,7 +1,8 @@
-import Link from "next/link";
-import { Bell, Car, Check, X, Ban, Handshake, MessageCircle } from "lucide-react";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
+import { Bell, Car, Check, X, Ban, Handshake, MessageCircle, CalendarCheck } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { Avatar } from "@/components/ui/avatar";
+import { desktopNotificationHref } from "@/lib/notification-href";
 import type { NotificationWithContext, NotificationType } from "@/lib/types";
 
 const ICON: Record<NotificationType, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -10,8 +11,11 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   seat_declined: X,
   seat_cancelled: Ban,
   ride_cancelled: Ban,
+  ride_completed: Check,
   request_accepted: Handshake,
   new_message: MessageCircle,
+  event_request_approved: CalendarCheck,
+  event_request_rejected: X,
 };
 
 function firstName(name: string | null | undefined) {
@@ -31,10 +35,16 @@ function titleFor(n: NotificationWithContext): string {
       return `${who} cancelled their seat`;
     case "ride_cancelled":
       return "Your ride was cancelled";
+    case "ride_completed":
+      return "Your ride was completed";
     case "request_accepted":
       return `${who} accepted your ride request`;
     case "new_message":
       return `One new message from ${who}`;
+    case "event_request_approved":
+      return "Your event board request was approved";
+    case "event_request_rejected":
+      return "Your event board request was not approved";
   }
 }
 
@@ -45,7 +55,9 @@ export function NotificationCard({ n }: { n: NotificationWithContext }) {
     ? `${n.ride.origin_label} → ${n.ride.destination_label}`
     : n.request
       ? `${n.request.origin_label} → ${n.request.destination_label}`
-    : null;
+      : n.event
+        ? n.event.name
+        : null;
   const departs = n.ride
     ? format(new Date(n.ride.depart_at), "EEE, MMM d · h:mm a")
     : n.request
@@ -95,23 +107,10 @@ export function NotificationCard({ n }: { n: NotificationWithContext }) {
     </div>
   );
 
-  if (n.ride_id) {
+  const href = desktopNotificationHref(n);
+  if (href) {
     return (
-      <Link href={`/rides/${n.ride_id}`} className="block">
-        {body}
-      </Link>
-    );
-  }
-  if (n.request_id) {
-    return (
-      <Link href={`/requests/${n.request_id}`} className="block">
-        {body}
-      </Link>
-    );
-  }
-  if (n.conversation_id) {
-    return (
-      <Link href={`/messages/${n.conversation_id}`} className="block">
+      <Link href={href} className="block">
         {body}
       </Link>
     );

@@ -1,15 +1,17 @@
 "use client";
 
 import { useDeferredValue, useState } from "react";
-import { ArrowLeftRight, CalendarDays, X } from "lucide-react";
+import { ArrowLeftRight, CalendarDays, Car, MessagesSquare, X } from "lucide-react";
 import { CityCombobox } from "@/components/city-combobox";
 import { Segmented } from "@/components/mobile/segmented";
 import { MRideCard, MRequestCard } from "@/components/mobile/mobile-cards";
+import { GoogleSignInButton } from "@/components/auth-button";
 import type { RideWithDriver, RideRequestWithRider } from "@/lib/types";
 
 export function HomeBoard({
   rides,
   requests,
+  signedIn,
   initialFrom,
   initialTo,
   initialDate,
@@ -17,6 +19,7 @@ export function HomeBoard({
 }: {
   rides: RideWithDriver[];
   requests: RideRequestWithRider[];
+  signedIn: boolean;
   initialFrom: string;
   initialTo: string;
   initialDate: string;
@@ -78,8 +81,8 @@ export function HomeBoard({
 
       <div hidden={tab !== "carpools"}>
         <List
+          kind="rides"
           label={`${filteredRides.length} matching ride${filteredRides.length === 1 ? "" : "s"}`}
-          empty="No carpools match yet. Be the first to offer one."
         >
           {filteredRides.map((ride) => (
             <MRideCard key={ride.id} ride={ride} />
@@ -87,28 +90,44 @@ export function HomeBoard({
         </List>
       </div>
       <div hidden={tab !== "requests"}>
-        <List
-          label={`${filteredRequests.length} matching request${filteredRequests.length === 1 ? "" : "s"}`}
-          empty="No one is asking for a ride right now."
-        >
-          {filteredRequests.map((request) => (
-            <MRequestCard key={request.id} request={request} />
-          ))}
-        </List>
+        {signedIn ? (
+          <List
+            kind="requests"
+            label={`${filteredRequests.length} matching request${filteredRequests.length === 1 ? "" : "s"}`}
+          >
+            {filteredRequests.map((request) => (
+              <MRequestCard key={request.id} request={request} />
+            ))}
+          </List>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center">
+            <MessagesSquare size={40} className="mx-auto text-brand-bright" strokeWidth={1.8} />
+            <h2 className="mt-5 text-[17px] font-extrabold text-ink">Sign in to view ride requests</h2>
+            <p className="mt-2 text-[13px] text-muted-warm">Ride requests are available to signed-in community members.</p>
+            <GoogleSignInButton className="mt-5" />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 function List({
+  kind,
   label,
-  empty,
   children,
 }: {
+  kind: "rides" | "requests";
   label: string;
-  empty: string;
   children: React.ReactNode[];
 }) {
+  const Icon = kind === "rides" ? Car : MessagesSquare;
+  const title = kind === "rides" ? "No carpools yet" : "No requests yet";
+  const description =
+    kind === "rides"
+      ? "Be the first to offer a ride to JCNC."
+      : "When someone needs a ride, it will show up here.";
+
   return (
     <div>
       <div className="mb-3 mt-1 flex items-center justify-between">
@@ -119,8 +138,12 @@ function List({
       {children.length ? (
         <div className="space-y-3">{children}</div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center text-[13px] text-muted-warm">
-          {empty}
+        <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center">
+          <div className="mx-auto flex h-[88px] w-[88px] items-center justify-center rounded-full bg-tint">
+            <Icon size={40} className="text-brand-bright" strokeWidth={1.8} />
+          </div>
+          <h2 className="mt-5 text-[17px] font-extrabold text-ink">{title}</h2>
+          <p className="mt-2 text-[13px] leading-relaxed text-muted-warm">{description}</p>
         </div>
       )}
     </div>
@@ -169,7 +192,7 @@ function SearchCard({
           onClick={() => {
             onChange({ from: to, to: from });
           }}
-          className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-tint text-brand-600 transition active:scale-95"
+          className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-tint text-brand-600 transition active:scale-95"
         >
           <ArrowLeftRight size={16} strokeWidth={2.2} />
         </button>
@@ -211,7 +234,7 @@ function SearchCard({
               data-auth-allowed="true"
               onClick={() => onChange({ date: "" })}
               aria-label="Clear date and show rides on all dates"
-              className="absolute right-2.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-white text-brand-500 transition active:bg-tint active:scale-95"
+              className="absolute right-2.5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white text-brand-500 transition active:bg-tint active:scale-95"
             >
               <X size={19} strokeWidth={2.4} />
             </button>
@@ -236,7 +259,7 @@ function SearchCard({
             data-auth-allowed="true"
             onClick={() => onChange({ trip: null })}
             aria-label="Clear trip type"
-            className="col-span-2 flex h-9 items-center justify-center gap-1.5 rounded-xl text-[12px] font-bold text-muted-warm transition active:bg-tint active:scale-[0.98]"
+            className="col-span-2 flex min-h-11 items-center justify-center gap-1.5 rounded-xl text-[12px] font-bold text-muted-warm transition active:bg-tint active:scale-[0.98]"
           >
             <X size={15} strokeWidth={2.4} />
             Clear trip type
@@ -266,7 +289,7 @@ function TripToggle({
       data-auth-allowed="true"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-[13px] px-3 py-2.5 text-[12px] font-bold active:scale-[0.98] ${
+      className={`min-h-11 rounded-[13px] px-3 py-2.5 text-[12px] font-bold active:scale-[0.98] ${
         active ? "bg-brand-600 text-white" : "bg-tint text-brand-700"
       }`}
     >

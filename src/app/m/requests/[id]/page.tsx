@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { format } from "date-fns";
-import { CheckCircle2, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { MAvatar } from "@/components/mobile/m-avatar";
@@ -8,10 +8,12 @@ import { SubHeader } from "@/components/mobile/sub-header";
 import { RouteTrack } from "@/components/route-track";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { openConversation } from "@/app/messages/actions";
-import { acceptRideRequest } from "@/app/rides/actions";
-import { CancelRequestButton } from "@/components/ride-actions";
+import { CancelRequestButton, AcceptRequestButton } from "@/components/ride-actions";
+import { ReportTargetButton } from "@/components/report-target-button";
+import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import { formatRideDateTime } from "@/lib/date-time";
 import type { EventRow, Profile, RideRequest } from "@/lib/types";
+import { throwReadError } from "@/lib/supabase/read-error";
 
 export const dynamic = "force-dynamic";
 
@@ -31,16 +33,27 @@ export default async function MobileRequestDetailPage({
 }) {
   const { id } = await params;
   const { user } = await getCurrentUser();
+  if (!user) {
+    return (
+      <div className="px-4 py-16 text-center">
+        <MessageCircle size={44} className="mx-auto text-brand-bright" />
+        <h1 className="mt-5 text-xl font-extrabold text-ink">Sign in to view ride requests</h1>
+        <p className="mt-2 text-sm text-muted-warm">Ride requests are available to signed-in community members.</p>
+        <GoogleSignInButton className="mt-5" />
+      </div>
+    );
+  }
   const supabase = await createClient();
 
-  const { data: request } = await supabase
+  const { data: request, error } = await supabase
     .from("ride_requests")
     .select(
       "*, rider:profiles!ride_requests_rider_id_fkey(*), accepted_driver:profiles!ride_requests_accepted_driver_id_fkey(*), event:events(id,name,slug)",
     )
     .eq("id", id)
-    .single<RequestDetail>();
+    .maybeSingle<RequestDetail>();
 
+  throwReadError(error, "ride request");
   if (!request) notFound();
 
   const isOwner = user?.id === request.rider_id;
@@ -59,6 +72,11 @@ export default async function MobileRequestDetailPage({
         title="Ride request"
         subtitle={`${request.origin_label} → ${request.destination_label}`}
         backFallback="/m/requests"
+        right={
+          user && !isOwner ? (
+            <ReportTargetButton targetType="ride_request" targetId={request.id} variant="mobile" />
+          ) : undefined
+        }
       />
 
       <div className="space-y-4 px-4 pt-1">
@@ -128,22 +146,18 @@ export default async function MobileRequestDetailPage({
               <GoogleSignInButton className="flex w-full items-center justify-center rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition active:scale-[0.98]" />
             ) : isOwner ? (
               isActive ? (
-                <CancelRequestButton requestId={request.id} />
+                <CancelRequestButton requestId={request.id} base="/m" />
               ) : request.accepted_driver_id ? (
                 <BookedMessageButton otherUserId={request.accepted_driver_id} requestId={request.id} />
               ) : (
                 <ClosedNote />
               )
             ) : isActive ? (
-              <form action={acceptRideRequest.bind(null, request.id)}>
-                <button
-                  type="submit"
-                  className="flex w-full items-center justify-center gap-2 rounded-full bg-brand-600 px-5 py-3 text-sm font-bold text-white transition active:scale-[0.98]"
-                >
-                  <CheckCircle2 size={17} />
-                  Accept request
-                </button>
-              </form>
+              <AcceptRequestButton
+                requestId={request.id}
+                base="/m/messages"
+                actionKeyPrefix="mobile-accept-request"
+              />
             ) : request.status === "fulfilled" && user.id === request.accepted_driver_id ? (
               <BookedMessageButton otherUserId={request.rider_id} requestId={request.id} />
             ) : (
@@ -181,16 +195,19 @@ function BookedMessageButton({
   requestId: string;
 }) {
   return (
-    <form action={openConversation.bind(null, otherUserId)}>
-      <input type="hidden" name="request_id" value={requestId} />
-      <input type="hidden" name="base" value="/m/messages" />
-      <button
-        type="submit"
-        className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-white px-5 py-3 text-sm font-bold text-brand-700 transition active:scale-[0.98]"
-      >
-        <MessageCircle size={17} />
-        Message ride partner
-      </button>
-    </form>
+    <PendingActionGroup>
+      <form action={openConversation.bind(null, otherUserId)}>
+        <input type="hidden" name="request_id" value={requestId} />
+        <input type="hidden" name="base" value="/m/messages" />
+        <PendingActionButton
+          actionKey={`mobile-message-request-${requestId}`}
+          pendingLabel="Opening chat..."
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-white px-5 py-3 text-sm font-bold text-brand-700 transition active:scale-[0.98]"
+        >
+          <MessageCircle size={17} />
+          Message ride partner
+        </PendingActionButton>
+      </form>
+    </PendingActionGroup>
   );
 }

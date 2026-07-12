@@ -2,13 +2,33 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Send } from "lucide-react";
+import { ReportTargetButton } from "@/components/report-target-button";
 import { createClient } from "@/lib/supabase/client";
-import { markConversationRead } from "@/app/messages/actions";
+import { markConversationRead, sendMessage } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import {
+  archiveRefreshDelay,
+  archiveTimeoutChunk,
+  isCurrentCatchUp,
+  lifecycleRefreshTarget,
+  mergeMessageWindow,
+  seatCancelRefreshTarget,
+} from "@/lib/messages";
+import type { ThreadContext } from "@/lib/messages";
 import type { Message, Profile } from "@/lib/types";
+
+type ProfileBase = "/profile" | "/m/profile";
+type SendState = {
+  pendingId: string;
+  body: string;
+  status: "sending" | "failed";
+  error: string | null;
+  setupPath?: string | null;
+};
 
 export function MessageThread({
   conversationId,
@@ -16,6 +36,13 @@ export function MessageThread({
   other,
   initialMessages,
   backHref = "/messages",
+  profileBase = "/profile",
+  archiveState,
+  hiddenAt,
+  departAt,
+  contextKind,
+  contextId,
+  reportVariant = "desktop",
 }: {
   conversationId: string;
   currentUserId: string;
@@ -23,15 +50,76 @@ export function MessageThread({
   initialMessages: Message[];
   /** Where the back arrow returns to — "/m/messages" on the mobile shell. */
   backHref?: string;
+  profileBase?: ProfileBase;
+  archiveState: "active" | "archived";
+  hiddenAt: string | null;
+  departAt: string | null;
+  contextKind: ThreadContext["kind"];
+  contextId: string;
+  reportVariant?: "desktop" | "mobile";
 }) {
+  const router = useRouter();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [draft, setDraft] = useState("");
+  const [sendState, setSendState] = useState<SendState | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const formRef = useRef<HTMLFormElement>(null);
+  const messagesRef = useRef(messages);
+  const sendStateRef = useRef(sendState);
+  const mountedRef = useRef(true);
+  const catchUpGeneration = useRef(0);
 
-  // Subscribe to new messages in this conversation via Supabase Realtime.
+  useEffect(() => {
+    sendStateRef.current = sendState;
+  }, [sendState]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      catchUpGeneration.current += 1;
+    };
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
+    function mergeIncoming(incoming: Message[]) {
+      if (!mountedRef.current) return;
+      const pendingId = sendStateRef.current?.pendingId ?? null;
+      const result = mergeMessageWindow(messagesRef.current, incoming, pendingId);
+      messagesRef.current = result.messages;
+      setMessages(result.messages);
+      if (result.pendingConfirmed && pendingId) {
+        sendStateRef.current = null;
+        setSendState(null);
+        setDraft("");
+      }
+    }
+    async function catchUp() {
+      const generation = ++catchUpGeneration.current;
+      let query = supabase
+        .from("messages")
+        .select("*")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (hiddenAt) query = query.gt("created_at", hiddenAt);
+      const { data, error } = await query;
+      if (
+        !mountedRef.current ||
+        !isCurrentCatchUp(generation, catchUpGeneration.current)
+      ) {
+        return;
+      }
+      if (error) {
+        setSyncError("Could not refresh recent messages.");
+        return;
+      }
+      mergeIncoming((data as Message[] | null) ?? []);
+      setSyncError(null);
+    }
+    let channel = supabase
       .channel(`messages:${conversationId}`)
       .on(
         "postgres_changes",
@@ -43,20 +131,7 @@ export function MessageThread({
         },
         (payload) => {
           const msg = payload.new as Message;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            const pendingIndex = prev.findIndex(
-              (m) =>
-                m.id.startsWith("pending:") &&
-                m.sender_id === msg.sender_id &&
-                m.body === msg.body,
-            );
-            if (pendingIndex === -1) return [...prev, msg];
-
-            const next = [...prev];
-            next[pendingIndex] = msg;
-            return next;
-          });
+          mergeIncoming([msg]);
         },
       )
       .on(
@@ -69,29 +144,124 @@ export function MessageThread({
         },
         (payload) => {
           const msg = payload.new as Message;
-          setMessages((prev) => prev.map((m) => (m.id === msg.id ? msg : m)));
+          mergeIncoming([msg]);
         },
-      )
-      .subscribe();
+      );
+    const lifecycleTarget = lifecycleRefreshTarget(contextKind, contextId);
+    if (lifecycleTarget) {
+      channel = channel.on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: lifecycleTarget.table,
+          filter: lifecycleTarget.filter,
+        },
+        () => router.refresh(),
+      );
+    }
+    const seatCancelTarget = seatCancelRefreshTarget(contextKind, contextId);
+    if (seatCancelTarget) {
+      channel = channel.on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: seatCancelTarget.table,
+          filter: seatCancelTarget.filter,
+        },
+        () => router.refresh(),
+      );
+    }
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        void catchUp();
+        router.refresh();
+      }
+    });
+
+    function onVisible() {
+      if (document.visibilityState === "visible") {
+        void catchUp();
+        router.refresh();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisible);
 
     return () => {
+      catchUpGeneration.current += 1;
+      document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
-  }, [conversationId]);
+  }, [contextId, contextKind, conversationId, hiddenAt, router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timeout: number | undefined;
+    function schedule() {
+      const remaining = archiveRefreshDelay(
+        departAt,
+        archiveState,
+        new Date().toISOString(),
+      );
+      if (cancelled || remaining === null) return;
+      const chunk = archiveTimeoutChunk(remaining);
+      timeout = window.setTimeout(() => {
+        if (cancelled) return;
+        if (chunk.refreshAtEnd) {
+          router.refresh();
+        } else {
+          schedule();
+        }
+      }, chunk.delay);
+    }
+    schedule();
+    return () => {
+      cancelled = true;
+      if (timeout !== undefined) window.clearTimeout(timeout);
+    };
+  }, [archiveState, departAt, router]);
 
   // Mark inbound messages read. Realtime pushes mutate `messages` frequently, so
   // guard with a ref to avoid overlapping calls, and don't let a failed update
   // throw an unhandled rejection.
   const markingReadRef = useRef(false);
+  const rerunMarkReadRef = useRef(false);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   useEffect(() => {
     const hasUnread = messages.some((m) => m.sender_id !== currentUserId && !m.read_at);
-    if (!hasUnread || markingReadRef.current) return;
-    markingReadRef.current = true;
-    markConversationRead(conversationId)
-      .catch((e) => console.error("Failed to mark conversation read:", e))
-      .finally(() => {
-        markingReadRef.current = false;
-      });
+    if (!hasUnread) return;
+    if (markingReadRef.current) {
+      rerunMarkReadRef.current = true;
+      return;
+    }
+
+    function runMarkRead() {
+      markingReadRef.current = true;
+      rerunMarkReadRef.current = false;
+      markConversationRead(conversationId)
+        .then(() => {
+          if (mountedRef.current) setReadError(null);
+        })
+        .catch(() => {
+          if (mountedRef.current) {
+            setReadError("Could not update read status. Messages remain available.");
+          }
+        })
+        .finally(() => {
+          markingReadRef.current = false;
+          const shouldRerun =
+            mountedRef.current &&
+            rerunMarkReadRef.current &&
+            messagesRef.current.some((m) => m.sender_id !== currentUserId && !m.read_at);
+          if (shouldRerun) runMarkRead();
+        });
+    }
+
+    runMarkRead();
   }, [conversationId, currentUserId, messages]);
 
   useEffect(() => {
@@ -103,12 +273,11 @@ export function MessageThread({
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const body = (formData.get("body") ?? "").toString().trim();
+    if (sendStateRef.current) return;
+    const body = draft.trim();
     if (!body) return;
 
-    const pendingId = `pending:${crypto.randomUUID()}`;
+    const pendingId = crypto.randomUUID();
     const pendingMessage: Message = {
       id: pendingId,
       conversation_id: conversationId,
@@ -118,35 +287,68 @@ export function MessageThread({
       read_at: null,
     };
 
-    formRef.current?.reset();
-    setMessages((prev) => [...prev, pendingMessage]);
-
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("messages")
-      .insert({
-        conversation_id: conversationId,
-        sender_id: currentUserId,
-        body,
-      })
-      .select()
-      .single<Message>();
-
-    if (error || !data) {
-      setMessages((prev) => prev.filter((m) => m.id !== pendingId));
-      window.alert(error?.message ?? "Could not send this message.");
-      return;
-    }
-
     setMessages((prev) => {
-      if (prev.some((m) => m.id === data.id)) {
-        return prev.filter((m) => m.id !== pendingId);
-      }
-      return prev.map((m) => (m.id === pendingId ? data : m));
+      const next = [...prev, pendingMessage];
+      messagesRef.current = next;
+      return next;
     });
+    await performSend(body, pendingId);
   }
 
-  const lastMessage = messages.at(-1);
+  async function performSend(body: string, pendingId: string) {
+    if (sendStateRef.current?.status === "sending") return;
+    const sending: SendState = { pendingId, body, status: "sending", error: null };
+    sendStateRef.current = sending;
+    setSendState(sending);
+    try {
+      const formData = new FormData();
+      formData.set("body", body);
+      formData.set("client_message_id", pendingId);
+      formData.set(
+        "return_to",
+        backHref.startsWith("/m")
+          ? `/m/messages/${conversationId}`
+          : `/messages/${conversationId}`,
+      );
+      const result = await sendMessage(conversationId, formData);
+      if (result.error || !result.message) {
+        if (sendStateRef.current?.pendingId !== pendingId) return;
+        const failed: SendState = {
+          pendingId,
+          body,
+          status: "failed",
+          error: result.error ?? "Could not send this message. Please try again.",
+          setupPath: "setupPath" in result ? result.setupPath ?? null : null,
+        };
+        sendStateRef.current = failed;
+        setSendState(failed);
+        return;
+      }
+
+      const merged = mergeMessageWindow(
+        messagesRef.current,
+        [result.message],
+        pendingId,
+      );
+      messagesRef.current = merged.messages;
+      setMessages(merged.messages);
+      sendStateRef.current = null;
+      setSendState(null);
+      setDraft("");
+    } catch {
+      if (sendStateRef.current?.pendingId !== pendingId) return;
+      const failed: SendState = {
+        pendingId,
+        body,
+        status: "failed",
+        error: "Could not send this message. Please try again.",
+      };
+      sendStateRef.current = failed;
+      setSendState(failed);
+    }
+  }
+
+  const lastMessage = messages.findLast((message) => message.id !== sendState?.pendingId);
   const receiptMessageId =
     lastMessage?.sender_id === currentUserId ? lastMessage.id : null;
 
@@ -161,10 +363,36 @@ export function MessageThread({
           <ArrowLeft size={20} />
         </Link>
         <Avatar src={other?.avatar_url} name={other?.full_name} size={40} />
-        <Link href={other ? `/profile/${other.id}` : "#"} className="font-semibold">
+        <Link href={other ? `${profileBase}/${other.id}` : "#"} className="min-w-0 flex-1 font-semibold">
           {other?.full_name ?? "Member"}
         </Link>
+        {other && other.id !== currentUserId && (
+          <ReportTargetButton
+            targetType="user"
+            targetId={other.id}
+            label="Report"
+            variant={reportVariant}
+          />
+        )}
       </div>
+
+      {archiveState === "archived" && (
+        <p className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Past ride — this chat stays available for lost items and follow-up. Phone and WhatsApp
+          access ends 24 hours after departure and ends immediately when a ride is closed or
+          cancelled.
+        </p>
+      )}
+      {readError && (
+        <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {readError}
+        </p>
+      )}
+      {syncError && (
+        <p role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {syncError}
+        </p>
+      )}
 
       <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto py-4">
         {messages.length === 0 && (
@@ -176,7 +404,7 @@ export function MessageThread({
           const mine = m.sender_id === currentUserId;
           return (
             <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
-              <div className="flex max-w-[75%] flex-col">
+              <div className="group relative flex max-w-[75%] flex-col">
                 <div
                   className={cn(
                     "rounded-2xl px-4 py-2 text-sm",
@@ -192,6 +420,22 @@ export function MessageThread({
                     {m.read_at ? "Read" : "Sent"}
                   </span>
                 )}
+                {m.id === sendState?.pendingId && (
+                  <span className="mt-1 self-end text-[11px] font-semibold text-stone-400">
+                    {sendState.status === "sending" ? "Sending…" : "Not sent"}
+                  </span>
+                )}
+                {!mine && (
+                  <div className="absolute left-full top-1/2 ml-1 -translate-y-1/2 opacity-70 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:opacity-0">
+                    <ReportTargetButton
+                      targetType="message"
+                      targetId={m.id}
+                      label="Report message"
+                      variant={reportVariant}
+                      compact
+                    />
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -199,22 +443,55 @@ export function MessageThread({
       </div>
 
       <form
-        ref={formRef}
         onSubmit={submitMessage}
-        className="flex items-center gap-2 border-t border-stone-200 py-4"
+        className="border-t border-stone-200 py-4"
       >
-        <input
-          name="body"
-          autoComplete="off"
-          placeholder="Type a message…"
-          className="flex-1 rounded-full border border-stone-300 px-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
-        />
-        <button
-          type="submit"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white hover:bg-brand-700"
-        >
-          <Send size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            name="body"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            disabled={sendState !== null}
+            autoComplete="off"
+            placeholder="Type a message…"
+            className="flex-1 rounded-full border border-stone-300 px-4 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-stone-100"
+          />
+          <button
+            type="submit"
+            disabled={sendState !== null || !draft.trim()}
+            aria-label="Send message"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Send size={18} />
+          </button>
+        </div>
+        {sendState?.status === "failed" && (
+          <div
+            role="alert"
+            className="mt-2 flex flex-col gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span>{sendState.error}</span>
+              {!sendState.setupPath && (
+                <button
+                  type="button"
+                  onClick={() => void performSend(sendState.body, sendState.pendingId)}
+                  className="shrink-0 font-bold underline underline-offset-2"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+            {sendState.setupPath && (
+              <Link
+                href={sendState.setupPath}
+                className="inline-flex min-h-11 items-center font-bold text-brand-700 underline-offset-2 hover:underline"
+              >
+                Finish contact info in profile
+              </Link>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );

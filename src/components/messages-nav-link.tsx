@@ -1,63 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { usePathname } from "next/navigation";
 import { MessageSquare } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { useNotifications } from "@/components/notifications-provider";
 
 /**
  * Messages nav item with a combined unread badge for notifications and chats.
  */
-export function MessagesNavLink({
-  userId,
-  initialUnread,
-}: {
-  userId: string;
-  initialUnread: number;
-}) {
+export function MessagesNavLink() {
   const pathname = usePathname();
-  const [unread, setUnread] = useState(initialUnread);
-  const [syncedTo, setSyncedTo] = useState(initialUnread);
-
-  if (syncedTo !== initialUnread) {
-    setSyncedTo(initialUnread);
-    setUnread(initialUnread);
-  }
-
-  const refreshUnread = useCallback(async () => {
-    const supabase = createClient();
-    const { count: notificationCount } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("recipient_id", userId)
-      .is("read_at", null);
-    setUnread(notificationCount ?? 0);
-  }, [userId]);
-
-  useEffect(() => {
-    const supabase = createClient();
-    const channel = supabase
-      .channel(`nav-unread:${userId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
-        () => void refreshUnread(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` },
-        () => void refreshUnread(),
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId, refreshUnread]);
-
+  const { state } = useNotifications();
   const active = pathname.startsWith("/messages");
-  const visibleUnread = unread;
+  const visibleUnread = state.unread;
 
   return (
     <Link
