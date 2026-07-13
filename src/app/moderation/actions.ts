@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import { actionErrorMessage } from "@/lib/action-lifecycle";
 import {
-  MODERATION_ACTION_INITIAL,
   moderationActionError,
   moderationActionInfo,
   moderationActionSuccess,
@@ -271,5 +270,3 @@ export async function adminResolveAppealAction(
     );
   }
 }
-
-export { MODERATION_ACTION_INITIAL };

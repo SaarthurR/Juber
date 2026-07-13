@@ -7,11 +7,9 @@ import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { FormField } from "@/components/form-bits";
 import { InlineActionError } from "@/components/inline-action-error";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
-import {
-  MODERATION_ACTION_INITIAL,
-  submitReportAction,
-} from "@/app/moderation/actions";
+import { submitReportAction } from "@/app/moderation/actions";
 import { REPORT_REASONS, type ReportTargetType } from "@/lib/moderation";
+import { MODERATION_ACTION_INITIAL } from "@/lib/moderation-action-state";
 
 export function ReportTargetButton({
   targetType,
@@ -84,18 +82,23 @@ function ReportTargetForm({
   targetType,
   targetId,
   onSuccess,
+  onPendingChange,
 }: {
   targetType: ReportTargetType;
   targetId: string;
   onSuccess: () => void;
+  onPendingChange: (pending: boolean) => void;
 }) {
-  const [state, formAction] = useActionState(submitReportAction, MODERATION_ACTION_INITIAL);
+  const [state, formAction, pending] = useActionState(
+    submitReportAction,
+    MODERATION_ACTION_INITIAL,
+  );
   const errorId = useId();
-  const pending = state.status === "success";
 
   useEffect(() => {
     if (state.status === "success") onSuccess();
   }, [onSuccess, state.status]);
+  useEffect(() => onPendingChange(pending), [onPendingChange, pending]);
 
   return (
     <PendingActionGroup>
@@ -138,7 +141,7 @@ function ReportTargetForm({
           className="text-sm font-semibold text-red-600"
         />
 
-        {pending ? (
+        {state.status === "success" ? (
           <p className="rounded-xl bg-emerald-50 px-3.5 py-3 text-sm font-semibold text-emerald-800" role="status">
             {state.message}
           </p>
@@ -169,14 +172,18 @@ function ReportTargetDialog({
 }) {
   const titleId = useId();
   const [submitted, setSubmitted] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  function close() {
+    setSubmitted(false);
+    onClose();
+  }
 
   return (
     <DesktopDialog
       open={open}
-      onDismiss={() => {
-        setSubmitted(false);
-        onClose();
-      }}
+      onDismiss={close}
+      dismissDisabled={pending}
       labelledBy={titleId}
       closeLabel="Close report dialog"
     >
@@ -191,11 +198,12 @@ function ReportTargetDialog({
           targetType={targetType}
           targetId={targetId}
           onSuccess={() => setSubmitted(true)}
+          onPendingChange={setPending}
         />
         {submitted && (
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             className="mt-3 flex h-11 w-full items-center justify-center rounded-xl border border-stone-200 text-sm font-bold text-stone-700"
           >
             Close
@@ -218,11 +226,13 @@ function ReportTargetSheet({
   targetId: string;
 }) {
   const titleId = useId();
+  const [pending, setPending] = useState(false);
 
   return (
     <BottomSheet
       open={open}
       onClose={onClose}
+      dismissDisabled={pending}
       labelledBy={titleId}
       closeLabel="Close report sheet"
     >
@@ -233,7 +243,12 @@ function ReportTargetSheet({
         Reports go to admins only. The other person will not see your name.
       </p>
       <div className="mt-5 pb-2">
-        <ReportTargetForm targetType={targetType} targetId={targetId} onSuccess={() => {}} />
+        <ReportTargetForm
+          targetType={targetType}
+          targetId={targetId}
+          onSuccess={() => {}}
+          onPendingChange={setPending}
+        />
       </div>
     </BottomSheet>
   );

@@ -130,6 +130,21 @@ test("accept creates the passenger and conversation after contact succeeds", asy
   ]);
 });
 
+test("accept retry migration preserves security and notifies only on first acceptance", () => {
+  const migration = readFileSync(
+    "supabase/migrations/20260713190208_accept_ride_request_idempotent_retry.sql",
+    "utf8",
+  );
+
+  assert.match(migration, /security definer\s+set search_path = public/);
+  assert.match(migration, /public\.is_banned\(auth\.uid\(\)\)/);
+  assert.match(migration, /status = 'active'[\s\S]+coalesce\(latest_date, depart_at::date\) >= current_date/);
+  assert.match(migration, /if found then[\s\S]+insert into public\.notifications[\s\S]+return true;\s+end if;/);
+  assert.match(migration, /status = 'fulfilled'\s+and accepted_driver_id = auth\.uid\(\)/);
+  assert.match(migration, /revoke all on function public\.accept_ride_request\(uuid\) from public, anon/);
+  assert.match(migration, /grant execute on function public\.accept_ride_request\(uuid\) to authenticated, service_role/);
+});
+
 test("acceptRideRequest maps contact-required to a typed setup outcome", () => {
   const source = readFileSync("src/app/rides/actions.ts", "utf8");
   const fn = source.slice(

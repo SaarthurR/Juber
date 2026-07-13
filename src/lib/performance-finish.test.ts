@@ -21,9 +21,13 @@ const rootLayout = readSrc("../app/layout.tsx");
 
 test("ride detail pages parallelize ride and passenger reads", () => {
   for (const source of [desktopRide, mobileRide]) {
+    const rideQuery = indexAfter(source, "const rideQuery");
+    const passengersQuery = indexAfter(source, "const passengersQuery", rideQuery);
     const rideAll = indexAfter(source, "await Promise.all([");
-    assert.match(source.slice(rideAll, rideAll + 500), /\.from\("rides"\)/);
-    assert.match(source.slice(rideAll, rideAll + 700), /\.from\("ride_passengers"\)/);
+    assert.ok(rideQuery < passengersQuery && passengersQuery < rideAll);
+    assert.match(source.slice(rideQuery, rideAll), /\.from\("rides"\)/);
+    assert.match(source.slice(passengersQuery, rideAll), /\.from\("ride_passengers"\)/);
+    assert.match(source.slice(rideAll, rideAll + 100), /rideQuery, passengersQuery/);
     assert.match(source.slice(rideAll, rideAll + 900), /throwReadError\(rideError/);
     assert.match(source.slice(rideAll, rideAll + 900), /notFound\(\)/);
     assert.match(source.slice(rideAll, rideAll + 900), /throwReadError\(passengersError/);

@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthUser } from "@/lib/auth";
 import {
-  ADMIN_ACTION_INITIAL,
   adminActionError,
   adminActionSuccess,
   type AdminActionState,
@@ -205,5 +204,3 @@ export async function importJcncEvents(
     return adminActionError(actionErrorMessage(error, "Could not import JCNC events."));
   }
 }
-
-export { ADMIN_ACTION_INITIAL };

@@ -51,6 +51,22 @@ test("request-only routes authenticate before creating a database client", () =>
   }
 });
 
+test("anonymous ride details use the privacy-safe RPC without passenger reads", () => {
+  for (const path of [
+    "src/app/(desktop)/rides/[id]/page.tsx",
+    "src/app/m/rides/[id]/page.tsx",
+  ]) {
+    const source = read(path);
+    assert.match(source, /supabase\.rpc\("public_ride_detail"/);
+    assert.match(source, /const passengersQuery = user[\s\S]+Promise\.resolve\(\{ data: \[\]/);
+  }
+
+  const sql = read("supabase/migrations/20260713175559_public_ride_detail.sql");
+  assert.match(sql, /where r\.id = p_ride_id[\s\S]+r\.status = 'active'[\s\S]+r\.depart_at >= now\(\)/i);
+  assert.match(sql, /null::text[\s\S]+null::text/);
+  assert.match(sql, /grant execute on function public\.public_ride_detail\(uuid\) to anon, authenticated/i);
+});
+
 test("successful seat cancellation closes and resets before navigation", () => {
   const source = read("src/components/ride-actions.tsx");
   const start = source.indexOf("export function CancelSeatButton");

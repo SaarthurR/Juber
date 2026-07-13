@@ -44,20 +44,25 @@ export default async function RideDetailPage({
   const { user } = await getCurrentUser();
   const supabase = await createClient();
 
-  const [{ data: ride, error: rideError }, { data: passengers, error: passengersError }] =
-    await Promise.all([
-      supabase
+  const rideQuery = user
+    ? supabase
         .from("rides")
         .select(RIDE_WITH_JOIN)
         .eq("id", id)
         .maybeSingle<
           Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }
-        >(),
-      supabase
+        >()
+    : supabase.rpc("public_ride_detail", { p_ride_id: id }).maybeSingle<
+        Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }
+      >();
+  const passengersQuery = user
+    ? supabase
         .from("ride_passengers")
         .select("*, passenger:profiles!ride_passengers_passenger_id_fkey(*)")
-        .eq("ride_id", id),
-    ]);
+        .eq("ride_id", id)
+    : Promise.resolve({ data: [] as PassengerRow[], error: null });
+  const [{ data: ride, error: rideError }, { data: passengers, error: passengersError }] =
+    await Promise.all([rideQuery, passengersQuery]);
 
   throwReadError(rideError, "ride");
   if (!ride) notFound();

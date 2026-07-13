@@ -99,6 +99,8 @@ test("moderation confirmation enters safely, traps Tab, escapes, and restores fo
 
   assert.equal(shouldDismissLayer({ pending: false, reason: "escape" }), true);
   assert.equal(shouldDismissLayer({ pending: true, reason: "escape" }), false);
+  assert.equal(shouldDismissLayer({ pending: true, reason: "backdrop" }), false);
+  assert.equal(shouldDismissLayer({ pending: true, reason: "close-button" }), false);
   assert.equal(nextFocusableIndex(1, 2, "forward"), 0);
   assert.equal(nextFocusableIndex(0, 2, "backward"), 1);
 
@@ -112,6 +114,38 @@ test("moderation confirmation enters safely, traps Tab, escapes, and restores fo
   assert.match(panelSource, /event\.key !== "Tab"/);
   assert.match(panelSource, /role="alertdialog"/);
   assert.match(panelSource, /aria-modal="true"/);
+});
+
+test("report layers retain pending submissions and desktop close resets success", () => {
+  const source = readFileSync("src/components/report-target-button.tsx", "utf8");
+
+  assert.match(source, /const \[state, formAction, pending\] = useActionState/);
+  assert.match(source, /onPendingChange\(pending\)/);
+  assert.equal(source.match(/dismissDisabled=\{pending\}/g)?.length, 2);
+  assert.equal(source.match(/onPendingChange=\{setPending\}/g)?.length, 2);
+  assert.match(source, /function close\(\) \{\s*setSubmitted\(false\);\s*onClose\(\);\s*\}/);
+  assert.match(source, /onDismiss=\{close\}/);
+  assert.match(source, /onClick=\{close\}/);
+});
+
+test("request and seat cancellation clear stale errors but retain the seat reason", () => {
+  const source = readFileSync("src/components/ride-actions.tsx", "utf8");
+  const request = source.slice(
+    source.indexOf("export function CancelRequestButton"),
+    source.indexOf("export function CancelRideButton"),
+  );
+  const seat = source.slice(source.indexOf("export function CancelSeatButton"));
+
+  for (const component of [request, seat]) {
+    assert.match(component, /function setDialogOpen\(value: boolean\) \{\s*setOpen\(value\);\s*if \(!value\) setError\(null\);\s*\}/);
+    assert.match(component, /onClick=\{\(\) => setDialogOpen\(true\)\}/);
+    assert.match(component, /onDismiss=\{\(\) => setDialogOpen\(false\)\}/);
+    assert.match(component, /onClick=\{\(\) => setDialogOpen\(false\)\}/);
+  }
+  assert.doesNotMatch(
+    seat.slice(seat.indexOf("function setDialogOpen"), seat.indexOf("function submit")),
+    /setMessage/,
+  );
 });
 
 test("mobile seat-request pickup note stacks below passenger identity", () => {

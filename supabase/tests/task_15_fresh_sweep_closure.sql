@@ -326,6 +326,19 @@ select public.task15_assert(
   'fresh request accept_ride_request succeeds',
   public.accept_ride_request(:'fresh_request')
 );
+select public.task15_assert(
+  'fresh request same-driver retry succeeds',
+  public.accept_ride_request(:'fresh_request')
+);
+select public.task15_assert(
+  'fresh request retry opens conversation',
+  public.open_conversation(:'rider', null, :'fresh_request') is not null
+);
+select set_config('request.jwt.claim.sub', :'driver', false);
+select public.task15_assert(
+  'fresh request other-driver retry stays rejected',
+  public.accept_ride_request(:'fresh_request') = false
+);
 reset role;
 insert into task15_failures
 select 'expired request request_accepted notification leaked', 'notification exists'
@@ -337,13 +350,13 @@ where exists (
 )
 on conflict do nothing;
 select public.task15_assert(
-  'fresh request request_accepted notification created',
-  exists (
-    select 1
+  'fresh request created exactly one acceptance notification',
+  (
+    select count(*) = 1
+       and bool_and(actor_id = :'accepter'::uuid)
     from public.notifications
     where request_id = :'fresh_request'
       and type = 'request_accepted'
-      and actor_id = :'accepter'::uuid
   )
 );
 set role authenticated;

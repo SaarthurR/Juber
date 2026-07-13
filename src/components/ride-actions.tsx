@@ -172,6 +172,10 @@ export function CancelRequestButton({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  function setDialogOpen(value: boolean) {
+    setOpen(value);
+    if (!value) setError(null);
+  }
 
   function submit() {
     setError(null);
@@ -201,7 +205,7 @@ export function CancelRequestButton({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setDialogOpen(true)}
         className="w-full rounded-full border border-red-200 px-5 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50 active:scale-[0.98]"
       >
         Cancel request
@@ -210,7 +214,7 @@ export function CancelRequestButton({
       {open && (
         <DesktopDialog
           open
-          onDismiss={() => setOpen(false)}
+          onDismiss={() => setDialogOpen(false)}
           dismissDisabled={pending}
           labelledBy="cancel-request-title"
           closeLabel="Keep request"
@@ -230,7 +234,7 @@ export function CancelRequestButton({
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => setDialogOpen(false)}
                 disabled={pending}
                 className="rounded-full px-4 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
               >
@@ -524,6 +528,10 @@ export function CancelSeatButton({
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  function setDialogOpen(value: boolean) {
+    setOpen(value);
+    if (!value) setError(null);
+  }
   function submit() {
     if (!message.trim()) {
       setError("Please write a reason so the driver knows why you are cancelling.");
@@ -557,7 +565,7 @@ export function CancelSeatButton({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setDialogOpen(true)}
         className="mt-3 w-full rounded-full border border-red-200 px-5 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50 active:scale-[0.98]"
       >
         Cancel my seat
@@ -566,7 +574,7 @@ export function CancelSeatButton({
       {open && (
         <DesktopDialog
           open
-          onDismiss={() => setOpen(false)}
+          onDismiss={() => setDialogOpen(false)}
           dismissDisabled={pending}
           labelledBy="cancel-seat-title"
           closeLabel="Keep seat"
@@ -602,7 +610,7 @@ export function CancelSeatButton({
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => setDialogOpen(false)}
                 disabled={pending}
                 className="rounded-full px-4 py-2 text-sm font-semibold text-stone-600 transition hover:bg-stone-100 disabled:opacity-60"
               >

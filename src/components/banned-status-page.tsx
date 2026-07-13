@@ -7,13 +7,11 @@ import { FormField } from "@/components/form-bits";
 import { InlineActionError } from "@/components/inline-action-error";
 import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
 import { signOutAction } from "@/app/auth/actions";
-import {
-  MODERATION_ACTION_INITIAL,
-  submitAppealAction,
-} from "@/app/moderation/actions";
+import { submitAppealAction } from "@/app/moderation/actions";
 import { TempleLogo } from "@/components/temple-logo";
 import { APP_NAME } from "@/lib/constants";
 import { formatBanExpiry, type ModerationBan } from "@/lib/moderation";
+import { MODERATION_ACTION_INITIAL } from "@/lib/moderation-action-state";
 
 export function BannedStatusView({
   ban,
