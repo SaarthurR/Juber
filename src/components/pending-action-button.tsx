@@ -69,22 +69,10 @@ export function getPendingActionButtonView({
   };
 }
 
-export function getPendingActionClickDecision({
-  defaultPrevented,
-  formIsValid,
-  lockedByOther,
-}: {
-  defaultPrevented: boolean;
-  formIsValid: boolean;
-  lockedByOther: boolean;
-}) {
-  if (lockedByOther) {
-    return { preventDefault: true, start: false };
-  }
-  return {
-    preventDefault: false,
-    start: !defaultPrevented && formIsValid,
-  };
+export function getPendingActionTransition(wasPending: boolean, pending: boolean) {
+  if (!wasPending && pending) return "start";
+  if (wasPending && !pending) return "finish";
+  return null;
 }
 
 export function PendingActionButtonPresentation({
@@ -127,6 +115,7 @@ export function PendingActionButton({
   children: React.ReactNode;
 }) {
   const group = useContext(PendingActionContext);
+  const groupDispatch = group?.dispatch;
   const { pending } = useFormStatus();
   const pendingKey = group?.state.pendingKey ?? null;
   const view = getPendingActionButtonView({
@@ -139,38 +128,23 @@ export function PendingActionButton({
   const sawPending = useRef(false);
 
   useEffect(() => {
-    if (pending) {
-      sawPending.current = true;
-    } else if (sawPending.current && pendingKey === actionKey) {
-      sawPending.current = false;
-      group?.dispatch({ type: "finish", key: actionKey });
-    }
-  }, [actionKey, group, pending, pendingKey]);
+    const transition = getPendingActionTransition(sawPending.current, pending);
+    sawPending.current = pending;
+    if (transition) groupDispatch?.({ type: transition, key: actionKey });
+  }, [actionKey, groupDispatch, pending]);
+
+  useEffect(
+    () => () => {
+      groupDispatch?.({ type: "finish", key: actionKey });
+    },
+    [actionKey, groupDispatch],
+  );
 
   return (
     <PendingActionButtonPresentation
       view={view}
       formAction={formAction}
-      onClick={(event) => {
-        if (view.lockedByOther) {
-          const decision = getPendingActionClickDecision({
-            defaultPrevented: event.defaultPrevented,
-            formIsValid: true,
-            lockedByOther: true,
-          });
-          if (decision.preventDefault) event.preventDefault();
-          return;
-        }
-
-        onClick?.(event);
-        const decision = getPendingActionClickDecision({
-          defaultPrevented: event.defaultPrevented,
-          formIsValid: event.currentTarget.form?.checkValidity() ?? true,
-          lockedByOther: false,
-        });
-        if (decision.preventDefault) event.preventDefault();
-        if (decision.start) group?.dispatch({ type: "start", key: actionKey });
-      }}
+      onClick={onClick}
       className={className}
     />
   );

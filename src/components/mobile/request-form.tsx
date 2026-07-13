@@ -1,8 +1,9 @@
 "use client";
 
 import { useActionState } from "react";
-import { ChevronDown, CalendarDays } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { postRequestMobile } from "@/app/m/actions";
+import { PlacesDatalist } from "@/components/form-bits";
 import { SubHeader } from "@/components/mobile/sub-header";
 import { DirectionToggle } from "@/components/mobile/direction-toggle";
 import { Stepper } from "@/components/mobile/stepper";
@@ -64,22 +65,14 @@ export function MobileRequestForm({
           <p className="mb-2 text-[12px] leading-relaxed text-muted-warm">
             City or neighborhood, not a street address.
           </p>
-          <div className="relative">
-            <select name="neighborhood" required defaultValue="" className={`${inputCls} appearance-none pr-10`}>
-              <option value="" disabled>
-                Choose your neighborhood
-              </option>
-              {options.map((p) => (
-                <option key={p.id} value={p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown
-              size={18}
-              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-warm"
-            />
-          </div>
+          <input
+            name="neighborhood"
+            list="places"
+            required
+            placeholder="City or neighborhood"
+            className={inputCls}
+          />
+          <PlacesDatalist places={options} />
         </label>
 
         <div>

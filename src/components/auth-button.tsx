@@ -4,6 +4,8 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { authCallbackDestination } from "@/lib/route-targets";
 
+export const GOOGLE_SIGN_IN_ERROR = "Sign-in unavailable. Try again.";
+
 export function GoogleSignInButton({
   next,
   className,
@@ -14,35 +16,53 @@ export function GoogleSignInButton({
   googleBranding?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function signIn() {
+    setError(null);
     setLoading(true);
-    const supabase = createClient();
-    const currentPath = `${window.location.pathname}${window.location.search}`;
-    const nextPath = authCallbackDestination(next ?? currentPath, "/rides");
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(nextPath)}`,
-      },
-    });
+    try {
+      const supabase = createClient();
+      const currentPath = `${window.location.pathname}${window.location.search}`;
+      const nextPath = authCallbackDestination(next ?? currentPath, "/rides");
+      const siteUrl =
+        process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
+      const { error: signInError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+        },
+      });
+      if (signInError) throw signInError;
+    } catch {
+      setError(GOOGLE_SIGN_IN_ERROR);
+      setLoading(false);
+    }
   }
 
   return (
-    <button
-      onClick={signIn}
-      disabled={loading}
-      data-auth-allowed="true"
-      className={
-        className ??
-        "inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-800 shadow-sm transition hover:bg-stone-50 hover:border-stone-400 active:scale-[0.97] active:bg-stone-100 disabled:opacity-60 disabled:cursor-not-allowed"
-      }
-    >
-      {loading ? <Spinner /> : googleBranding ? <GoogleIcon /> : null}
-      {loading ? "Signing in…" : googleBranding ? "Sign in with Google" : "Sign in"}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={signIn}
+        disabled={loading}
+        data-auth-allowed="true"
+        className={
+          className ??
+          "inline-flex items-center gap-2 rounded-full border border-stone-300 bg-white px-5 py-2.5 text-sm font-medium text-stone-800 shadow-sm transition hover:bg-stone-50 hover:border-stone-400 active:scale-[0.97] active:bg-stone-100 disabled:opacity-60 disabled:cursor-not-allowed"
+        }
+      >
+        {loading ? <Spinner /> : googleBranding && !error ? <GoogleIcon /> : null}
+        {loading
+          ? "Signing in…"
+          : error ?? (googleBranding ? "Sign in with Google" : "Sign in")}
+      </button>
+      {error && (
+        <span role="alert" className="sr-only">
+          {error}
+        </span>
+      )}
+    </>
   );
 }
 

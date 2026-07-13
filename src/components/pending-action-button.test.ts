@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  getPendingActionClickDecision,
   getPendingActionButtonView,
+  getPendingActionTransition,
   PendingActionButtonPresentation,
   pendingActionReducer,
 } from "./pending-action-button";
@@ -15,6 +15,7 @@ const profilePage = readFileSync(new URL("../app/(desktop)/profile/[id]/page.tsx
 const editProfilePage = readFileSync(new URL("../app/(desktop)/profile/page.tsx", import.meta.url), "utf8");
 const contactModal = readFileSync(new URL("./contact-modal.tsx", import.meta.url), "utf8");
 const contactSheet = readFileSync(new URL("./mobile/contact-sheet.tsx", import.meta.url), "utf8");
+const pendingButton = readFileSync(new URL("./pending-action-button.tsx", import.meta.url), "utf8");
 
 test("pendingActionReducer locks on the first submitted key", () => {
   const state = pendingActionReducer({ pendingKey: null }, { type: "start", key: "confirm" });
@@ -28,7 +29,7 @@ test("pendingActionReducer ignores competing starts while locked", () => {
   assert.deepEqual(state, { pendingKey: "confirm" });
 });
 
-test("pendingActionReducer releases only the active key", () => {
+test("unmount finish releases only the matching active key", () => {
   const stillLocked = pendingActionReducer(
     { pendingKey: "confirm" },
     { type: "finish", key: "decline" },
@@ -42,52 +43,22 @@ test("pendingActionReducer releases only the active key", () => {
   assert.deepEqual(released, { pendingKey: null });
 });
 
-test("pending action click starts only for an unblocked valid submission", () => {
-  assert.deepEqual(
-    getPendingActionClickDecision({
-      defaultPrevented: false,
-      formIsValid: true,
-      lockedByOther: false,
-    }),
-    { preventDefault: false, start: true },
-  );
+test("pending action transitions follow native form pending edges only", () => {
+  assert.equal(getPendingActionTransition(false, false), null);
+  assert.equal(getPendingActionTransition(false, true), "start");
+  assert.equal(getPendingActionTransition(true, true), null);
+  assert.equal(getPendingActionTransition(true, false), "finish");
 });
 
-test("custom default prevention does not start or strand the group lock", () => {
-  assert.deepEqual(
-    getPendingActionClickDecision({
-      defaultPrevented: true,
-      formIsValid: true,
-      lockedByOther: false,
-    }),
-    { preventDefault: false, start: false },
+test("PendingActionButton never starts the group from click timing", () => {
+  assert.match(pendingButton, /const \{ pending \} = useFormStatus\(\)/);
+  assert.match(pendingButton, /const groupDispatch = group\?\.dispatch/);
+  assert.match(pendingButton, /getPendingActionTransition\(sawPending\.current, pending\)/);
+  assert.match(
+    pendingButton,
+    /groupDispatch\?\.\(\{ type: "finish", key: actionKey \}\)/,
   );
-});
-
-test("failed native validation does not start or strand the group lock", () => {
-  assert.deepEqual(
-    getPendingActionClickDecision({
-      defaultPrevented: false,
-      formIsValid: false,
-      lockedByOther: false,
-    }),
-    { preventDefault: false, start: false },
-  );
-});
-
-test("a competing group action suppresses submission without changing the active key", () => {
-  const decision = getPendingActionClickDecision({
-    defaultPrevented: false,
-    formIsValid: true,
-    lockedByOther: true,
-  });
-  const state = pendingActionReducer(
-    { pendingKey: "approve" },
-    decision.start ? { type: "start", key: "reject" } : { type: "finish", key: "reject" },
-  );
-
-  assert.deepEqual(decision, { preventDefault: true, start: false });
-  assert.deepEqual(state, { pendingKey: "approve" });
+  assert.doesNotMatch(pendingButton, /setTimeout|decision\.start|form\?\.checkValidity/);
 });
 
 test("a settled action releases the group so another action can start", () => {
