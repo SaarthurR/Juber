@@ -35,6 +35,14 @@ test("message report is an accessible absolute context action without row bulk",
   assert.match(reportButton, /\{!compact && label\}/);
 });
 
+test("open report layers escape transformed message actions", () => {
+  const source = readFileSync("src/components/report-target-button.tsx", "utf8");
+
+  assert.match(source, /import \{ createPortal \} from "react-dom"/);
+  assert.equal(source.match(/if \(!open\) return null;\s*\n\s*return createPortal\(/g)?.length, 2);
+  assert.equal(source.match(/document\.body,/g)?.length, 2);
+});
+
 test("ride report is de-emphasized without losing header access", () => {
   const desktopRide = readFileSync("src/app/(desktop)/rides/[id]/page.tsx", "utf8");
   const mobileRide = readFileSync("src/app/m/rides/[id]/page.tsx", "utf8");

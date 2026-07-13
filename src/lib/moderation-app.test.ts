@@ -119,6 +119,7 @@ test("rapid report selection keeps evidence and action target bound to the lates
     reporter_id: "reporter-a",
     reason: "Reason A",
     status: "pending",
+    resolution: null,
     created_at: "2026-07-12T00:00:00.000Z",
   };
   const reportB: ReportRow = {
@@ -129,6 +130,7 @@ test("rapid report selection keeps evidence and action target bound to the lates
     reporter_id: "reporter-b",
     reason: "Reason B",
     status: "pending",
+    resolution: null,
     created_at: "2026-07-12T00:01:00.000Z",
   };
   const evidenceA = moderationEvidence("report-a", "Evidence A");
@@ -189,7 +191,6 @@ function moderationEvidence(id: string, body: string): ModerationEvidence {
       status: "pending",
     },
     evidence: { body },
-    thread: [],
   };
 }
 

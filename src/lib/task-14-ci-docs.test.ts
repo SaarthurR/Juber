@@ -34,7 +34,7 @@ test("npm test discovers nested src tests without shell globstar", () => {
   })
     .trim()
     .split("\n");
-  assert.equal(listed.length, 52);
+  assert.equal(listed.length, 53);
   assert.ok(listed.includes("src/components/fallback-reliability.test.ts"));
   assert.ok(listed.includes("src/components/mobile/back-button.test.ts"));
   assert.ok(listed.includes("src/components/onboarding-wizard.test.ts"));

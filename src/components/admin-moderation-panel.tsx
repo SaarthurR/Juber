@@ -64,14 +64,16 @@ export function AdminModerationPanel({
   reports,
   appeals,
   error,
+  initialReport,
 }: {
   reports: ReportRow[];
   appeals: AppealRow[];
   error: string | null;
+  initialReport: ReportRow | null;
 }) {
   const [evidenceState, dispatchEvidence] = useReducer(
     moderationEvidenceReducer,
-    reports[0]?.id ?? null,
+    initialReport?.id ?? reports[0]?.id ?? null,
     createModerationEvidenceState,
   );
   const confirmId = useId();
@@ -99,10 +101,14 @@ export function AdminModerationPanel({
     })();
   }, [requestToken, selectedReportId]);
 
-  const selectedReport = reports.find((report) => report.id === selectedReportId) ?? null;
+  const selectedReport =
+    reports.find((report) => report.id === selectedReportId)
+    ?? (initialReport?.id === selectedReportId ? initialReport : null);
   const evidenceLoading = evidenceState.loading;
   const evidence = visibleModerationEvidence(evidenceState);
   const actionTarget = bindModerationActionTarget(evidenceState, selectedReport);
+  const isTerminal =
+    selectedReport?.status === "actioned" || selectedReport?.status === "dismissed";
 
   return (
     <section className="space-y-8">
@@ -115,8 +121,8 @@ export function AdminModerationPanel({
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="space-y-6">
           <QueueList
-            title="Pending reports"
-            empty="No pending reports."
+            title="Open reports"
+            empty="No open reports."
             items={reports.map((report) => ({
               id: report.id,
               primary: `${report.target_type.replace("_", " ")} · ${report.reason}`,
@@ -146,6 +152,15 @@ export function AdminModerationPanel({
                 )}
               </div>
 
+              {selectedReport.status === "actioned" && selectedReport.resolution && (
+                <p
+                  className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-bold text-green-800"
+                  role="status"
+                >
+                  Resolved · {selectedReport.resolution}
+                </p>
+              )}
+
               {evidenceState.error && (
                 <p className="mt-4 text-sm font-semibold text-red-600" role="alert">
                   {evidenceState.error}
@@ -166,15 +181,21 @@ export function AdminModerationPanel({
                     </div>
                   )}
 
-                  <EvidenceSnapshot evidence={evidence.evidence} thread={evidence.thread} />
+                  <EvidenceSnapshot evidence={evidence.evidence} />
                 </div>
               )}
 
-              <ReportReviewActions
-                key={selectedReport.id}
-                actionTarget={actionTarget}
-                confirmId={confirmId}
-              />
+              {isTerminal ? (
+                <p className="mt-5 border-t border-stone-100 pt-5 text-sm font-semibold text-stone-500">
+                  This resolved report is read-only.
+                </p>
+              ) : (
+                <ReportReviewActions
+                  key={selectedReport.id}
+                  actionTarget={actionTarget}
+                  confirmId={confirmId}
+                />
+              )}
             </>
           )}
         </div>
@@ -298,42 +319,62 @@ function IdentityBlock({
   person,
 }: {
   title: string;
-  person?: { full_name?: string | null; email?: string | null; phone?: string | null };
+  person?: { full_name?: string | null };
 }) {
   if (!person) return null;
   return (
     <div className="rounded-xl bg-stone-50 px-4 py-3">
       <p className="text-sm font-bold text-ink">{title}</p>
       <p className="mt-1 text-sm text-stone-700">{person.full_name ?? "Unknown member"}</p>
-      {person.email && <p className="mt-1 text-sm text-stone-600">{person.email}</p>}
-      {person.phone && <p className="mt-1 text-sm text-stone-600">{person.phone}</p>}
     </div>
   );
 }
 
-function EvidenceSnapshot({
-  evidence,
-  thread,
-}: {
-  evidence?: Record<string, unknown>;
-  thread?: ModerationEvidence["thread"];
-}) {
-  if (thread?.length) {
+function EvidenceSnapshot({ evidence }: { evidence?: Record<string, unknown> }) {
+  const body = typeof evidence?.body === "string" ? evidence.body : null;
+  const messageId = typeof evidence?.message_id === "string" ? evidence.message_id : null;
+  const reportedSenderId =
+    typeof evidence?.sender_id === "string" ? evidence.sender_id : null;
+  const context = Array.isArray(evidence?.context)
+    ? evidence.context.flatMap((entry) => {
+        const message = entry as Record<string, unknown>;
+        if (typeof message.body !== "string") return [];
+        return [{
+          id: typeof message.id === "string" ? message.id : null,
+          senderId: typeof message.sender_id === "string" ? message.sender_id : null,
+          body: message.body,
+          createdAt: typeof message.created_at === "string" ? message.created_at : null,
+        }];
+      }).filter((message) => !messageId || message.id !== messageId)
+    : [];
+
+  if (body) {
     return (
-      <div>
-        <p className="text-sm font-bold text-ink">Message thread</p>
-        <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto rounded-xl border border-stone-200 p-3">
-          {thread.map((message, index) => (
-            <li key={message.id ?? index} className="rounded-lg bg-stone-50 px-3 py-2 text-sm">
-              <p className="text-xs font-semibold text-stone-400">
-                {message.created_at
-                  ? format(new Date(message.created_at), "MMM d h:mm a")
-                  : "Message"}
-              </p>
-              <p className="mt-1 whitespace-pre-wrap text-stone-700">{message.body}</p>
-            </li>
-          ))}
-        </ul>
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm font-bold text-ink">Reported message</p>
+          <p className="mt-2 whitespace-pre-wrap rounded-xl border-2 border-brand-200 bg-brand-50 px-4 py-3 text-sm text-stone-800">
+            {body}
+          </p>
+        </div>
+        {context.length > 0 && (
+          <div>
+            <p className="text-sm font-bold text-ink">Reporter-shared context</p>
+            <ul className="mt-2 max-h-72 space-y-2 overflow-y-auto rounded-xl border border-stone-200 p-3">
+              {context.map((message, index) => (
+                <li key={message.id ?? index} className="rounded-lg bg-stone-50 px-3 py-2 text-sm">
+                  <p className="text-xs font-semibold text-stone-400">
+                    {message.senderId === reportedSenderId ? "Reported member" : "Reporter"}
+                    {message.createdAt
+                      ? ` · ${format(new Date(message.createdAt), "MMM d h:mm a")}`
+                      : ""}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-stone-700">{message.body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }
@@ -419,7 +460,7 @@ function ReportReviewActions({
           next = await adminBanUserAction(
             actionTarget.reportedUserId!,
             note || actionTarget.reason,
-            new Date(Date.now() + Number(banDays) * 86400000).toISOString(),
+            Number(banDays) as 1 | 7 | 30,
             actionTarget.reportId,
             feedbackState,
           );
@@ -437,6 +478,7 @@ function ReportReviewActions({
           next = await adminUnbanUserAction(
             actionTarget.reportedUserId!,
             note || "Manual unban",
+            actionTarget.reportId,
             feedbackState,
           );
           break;
@@ -534,6 +576,7 @@ function ReportReviewActions({
         <ModerationConfirmDialog
           action={confirmAction}
           actionReady={Boolean(actionTarget)}
+          banDays={Number(banDays) as 1 | 7 | 30}
           confirmId={confirmId}
           pending={pending}
           returnFocusRef={confirmTriggerRef}
@@ -548,6 +591,7 @@ function ReportReviewActions({
 function ModerationConfirmDialog({
   action,
   actionReady,
+  banDays,
   confirmId,
   pending,
   returnFocusRef,
@@ -556,6 +600,7 @@ function ModerationConfirmDialog({
 }: {
   action: string;
   actionReady: boolean;
+  banDays: 1 | 7 | 30;
   confirmId: string;
   pending: boolean;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
@@ -622,11 +667,19 @@ function ModerationConfirmDialog({
       <p id={`${confirmId}-title`} className="text-sm font-bold text-ink">
         {action === "ban-perm"
           ? "Permanently ban this member?"
-          : `Confirm ${action.replace("-", " ")}?`}
+          : action === "ban-temp"
+            ? `Ban this member for ${banDays} ${banDays === 1 ? "day" : "days"}?`
+            : `Confirm ${action.replace("-", " ")}?`}
       </p>
+      {action === "ban-temp" && (
+        <p className="mt-1 text-xs font-semibold text-amber-900">
+          The database will compute the exact expiry and action this report atomically.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
+          data-autofocus="true"
           disabled={!actionReady || pending}
           onClick={onConfirm}
           className={`h-11 rounded-xl px-4 text-sm font-bold text-white disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 ${
@@ -635,11 +688,10 @@ function ModerationConfirmDialog({
               : "bg-brand-600 hover:bg-brand-700"
           }`}
         >
-          {moderationConfirmLabel(action)}
+          {moderationConfirmLabel(action, banDays)}
         </button>
         <button
           type="button"
-          data-autofocus="true"
           disabled={pending}
           onClick={onDismiss}
           className="h-11 rounded-xl border border-stone-200 px-4 text-sm font-bold text-stone-700 disabled:cursor-not-allowed disabled:opacity-60"

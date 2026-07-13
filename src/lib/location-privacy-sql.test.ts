@@ -65,6 +65,15 @@ const coarseLabelPermissionFix = readFileSync(
   ),
   "utf8",
 );
+const ridePickupRequestHardening = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../../supabase/migrations/20260713212336_ride_pickup_request_hardening.sql",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 
 test("0034 adds guest_count and swaps seat math to sum(1+guest_count)", () => {
   assert.match(migration34, /guest_count int not null default 0/i);
@@ -214,6 +223,22 @@ test("coarse-label trigger wrappers execute as their owner", () => {
   );
 });
 
+test("ride pickup hardening makes request_seat authoritative", () => {
+  assert.match(ridePickupRequestHardening, /create or replace function public\.request_seat/i);
+  assert.match(ridePickupRequestHardening, /v_pickup_note is null/i);
+  assert.match(ridePickupRequestHardening, /for update/i);
+  assert.match(ridePickupRequestHardening, /public\.is_banned/i);
+  assert.match(
+    ridePickupRequestHardening,
+    /revoke insert on table public\.ride_passengers from authenticated/i,
+  );
+  assert.match(
+    ridePickupRequestHardening,
+    /grant execute on function public\.request_seat\(uuid, integer, text\) to authenticated/i,
+  );
+  assert.doesNotMatch(ridePickupRequestHardening, /ride_meetup_locations[\s\S]*grant/i);
+});
+
 test("task24 exercises duplicate-ignore exploit closure and label enforcement", () => {
   assert.match(task24, /duplicate-ignore leaves victim side row byte-identical/i);
   assert.match(task24, /conflict update blocked by rides_update_own/i);
@@ -232,10 +257,16 @@ test("task16 exercises confirmation-time party capacity atomically", () => {
   assert.match(task16, /bool_and\(pickup_location is null\)/i);
   assert.match(task16, /unrelated cannot read another passenger pickup via gated RPC/i);
   assert.match(task16, /banned pending passenger is denied meetup RPC/i);
-  assert.match(task16, /public\.request_seat\(:'race_ride', 1\) = 'requested'/i);
-  assert.match(task16, /public\.request_seat\(:'race_ride', 0\) = 'requested'/i);
+  assert.match(task16, /pickup-less request_seat is rejected/i);
+  assert.match(task16, /blank pickup request_seat is rejected/i);
+  assert.match(task16, /public\.request_seat\(:'race_ride', 1, 'Other pickup'\) = 'requested'/i);
+  assert.match(task16, /public\.request_seat\(:'race_ride', 0, 'Rider pickup'\) = 'requested'/i);
   assert.match(task16, /sum\(1 \+ guest_count\) = 3/i);
   assert.match(task16, /public\.confirm_passenger\(:'other', :'race_ride'\)/i);
+  assert.match(task16, /driver retains confirmed rider pickup and guest count/i);
+  assert.match(task16, /meetup\.pickup_note = 'Rider home snapshot 42'/i);
+  assert.match(task16, /passenger\.status = 'confirmed'/i);
+  assert.match(task16, /passenger\.guest_count = 1/i);
   assert.match(task16, /later confirmation that would oversell is rejected/i);
   assert.match(task16, /oversell rejection leaves booking and seat state unchanged/i);
   assert.match(task16, /cancellation restores the full party of 2/i);

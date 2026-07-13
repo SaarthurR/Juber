@@ -422,20 +422,22 @@ function DriverPanel({
   meetupByPassenger: Map<string, { pickup_note: string | null }>;
   confirmedRiderCount: number;
 }) {
-  const pendingRequests = passengerRows.filter((p) => p.status === "pending");
+  const activeBookings = passengerRows.filter(
+    (p) => p.status === "pending" || p.status === "confirmed",
+  );
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-5">
       <div className="mb-3">
         <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
-          Seat requests
+          Riders
         </h2>
       </div>
-      {pendingRequests.length === 0 ? (
-        <p className="text-sm text-stone-500">No requests yet.</p>
+      {activeBookings.length === 0 ? (
+        <p className="text-sm text-stone-500">No riders yet.</p>
       ) : (
         <ul className="space-y-3">
-          {pendingRequests.map((p) => (
+          {activeBookings.map((p) => (
             <li key={p.id} className="flex items-center justify-between">
               <Link
                 href={`/profile/${p.passenger_id}`}
@@ -454,7 +456,7 @@ function DriverPanel({
                   )}
                 </div>
               </Link>
-              {ride.status === "active" && (
+              {ride.status === "active" && p.status === "pending" && (
                 <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
               )}
             </li>

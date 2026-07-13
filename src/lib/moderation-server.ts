@@ -44,14 +44,20 @@ export async function requireAdminProfile() {
   return { supabase, user, profile };
 }
 
-export async function loadAdminModerationQueue() {
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export async function loadAdminModerationQueue(requestedReportId?: string | string[]) {
   const { supabase } = await requireAdminProfile();
+  const reportId =
+    typeof requestedReportId === "string" && UUID.test(requestedReportId)
+      ? requestedReportId
+      : null;
 
   const [{ data: reports, error: reportsError }, { data: appeals, error: appealsError }] =
     await Promise.all([
       supabase
         .from("reports")
-        .select("id, target_type, target_id, target_user_id, reporter_id, reason, status, created_at")
+        .select("id, target_type, target_id, target_user_id, reporter_id, reason, status, resolution, created_at")
         .in("status", ["pending", "reviewing"])
         .order("created_at", { ascending: false }),
       supabase
@@ -61,9 +67,29 @@ export async function loadAdminModerationQueue() {
         .order("created_at", { ascending: false }),
     ]);
 
+  const openReports = (reports ?? []) as ReportRow[];
+  let selectedReport = reportId
+    ? openReports.find((report) => report.id === reportId) ?? null
+    : null;
+  let selectedReportError: string | null = null;
+
+  if (reportId && !selectedReport) {
+    const { data, error } = await supabase
+      .from("reports")
+      .select("id, target_type, target_id, target_user_id, reporter_id, reason, status, resolution, created_at")
+      .eq("id", reportId)
+      .maybeSingle();
+    selectedReport = (data as ReportRow | null) ?? null;
+    selectedReportError = error?.message ?? null;
+  }
+
   return {
-    reports: ((reports ?? []) as ReportRow[]),
+    reports: openReports,
     appeals: ((appeals ?? []) as AppealRow[]),
-    error: reportsError?.message ?? appealsError?.message ?? null,
+    selectedReport: selectedReport ?? openReports[0] ?? null,
+    error:
+      reportsError?.message
+      ?? appealsError?.message
+      ?? selectedReportError,
   };
 }

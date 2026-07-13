@@ -144,7 +144,8 @@ export type NotificationType =
   | "request_accepted"
   | "new_message"
   | "event_request_approved"
-  | "event_request_rejected";
+  | "event_request_rejected"
+  | "moderation_report_submitted";
 
 export type Notification = {
   id: string;
@@ -155,6 +156,7 @@ export type Notification = {
   request_id: string | null;
   conversation_id: string | null;
   event_id: string | null;
+  report_id: string | null;
   message: string | null;
   read_at: string | null;
   created_at: string;

@@ -28,6 +28,7 @@ test("notificationTriggersSurfaceRefresh truth table", () => {
     "request_accepted",
     "event_request_approved",
     "event_request_rejected",
+    "moderation_report_submitted",
   ] as const) {
     assert.equal(notificationTriggersSurfaceRefresh(type), true, type);
   }

@@ -536,7 +536,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
 select public.task24_assert(
   'request_seat locking contract preserved',
-  public.request_seat(:'request_ride', 0) = 'requested'
+  public.request_seat(:'request_ride', 0, 'Request pickup') = 'requested'
 );
 reset role;
 

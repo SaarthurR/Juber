@@ -23,6 +23,7 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   new_message: MessageCircle,
   event_request_approved: CalendarCheck,
   event_request_rejected: X,
+  moderation_report_submitted: Bell,
 };
 
 // Warm per-type chip colors, echoing the mock's varied avatars.
@@ -37,6 +38,7 @@ const CHIP: Record<NotificationType, string> = {
   new_message: "bg-[#e0f2fe] text-[#0369a1]",
   event_request_approved: "bg-[#dcfce7] text-[#15803d]",
   event_request_rejected: "bg-[#fee2e2] text-[#b91c1c]",
+  moderation_report_submitted: "bg-[#fef3c7] text-[#92400e]",
 };
 
 function firstName(name: string | null | undefined) {
@@ -91,6 +93,8 @@ function copyFor(n: NotificationWithContext) {
       return <>Your event board request was approved.</>;
     case "event_request_rejected":
       return <>Your event board request was not approved.</>;
+    case "moderation_report_submitted":
+      return <>A new report needs review.</>;
   }
 }
 

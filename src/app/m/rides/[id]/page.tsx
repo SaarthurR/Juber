@@ -73,6 +73,9 @@ export default async function MobileTripPage({
   const isDriver = user?.id === ride.driver_id;
   const myJoin = passengerRows.find((p) => p.passenger_id === user?.id);
   const confirmed = passengerRows.filter((p) => p.status === "confirmed");
+  const activeBookings = passengerRows.filter(
+    (p) => p.status === "pending" || p.status === "confirmed",
+  );
   const confirmedCount = Math.max(
     confirmedSeatTotal(passengerRows),
     ride.seats_total - ride.seats_available,
@@ -248,16 +251,14 @@ export default async function MobileTripPage({
           <div className="rounded-[16px] border border-border bg-white p-4">
             <div className="mb-3">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-muted-warm">
-                Seat requests
+                Riders
               </p>
             </div>
-            {passengerRows.filter((p) => p.status === "pending").length === 0 ? (
-              <p className="text-[13px] text-muted-warm">No requests yet.</p>
+            {activeBookings.length === 0 ? (
+              <p className="text-[13px] text-muted-warm">No riders yet.</p>
             ) : (
               <ul className="space-y-3">
-                {passengerRows
-                  .filter((p) => p.status === "pending")
-                  .map((p) => (
+                {activeBookings.map((p) => (
                     <li key={p.id} className="flex items-center justify-between gap-2">
                       <Link href={`/m/profile/${p.passenger_id}`} className="flex min-w-0 items-center gap-2.5">
                         <MAvatar src={p.passenger?.avatar_url} name={p.passenger?.full_name} seed={p.passenger_id} size={34} />
@@ -265,6 +266,7 @@ export default async function MobileTripPage({
                           <p className="truncate text-[13px] font-semibold text-ink">
                             {passengerDisplayName(p.passenger?.full_name, p.guest_count ?? 0)}
                           </p>
+                          <p className="text-[11px] capitalize text-muted-warm">{p.status}</p>
                           {meetupByPassenger.get(p.passenger_id)?.pickup_note && (
                             <p className="mt-0.5 truncate text-[11px] text-muted-warm">
                               Pickup: {meetupByPassenger.get(p.passenger_id)?.pickup_note}
@@ -272,7 +274,7 @@ export default async function MobileTripPage({
                           )}
                         </div>
                       </Link>
-                      {ride.status === "active" && (
+                      {ride.status === "active" && p.status === "pending" && (
                         <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
                       )}
                     </li>

@@ -11,6 +11,7 @@ import {
   type ModerationActionState,
 } from "@/lib/moderation-action-state";
 import {
+  formatBanExpiry,
   mapAppealSubmitError,
   mapReportSubmitError,
   moderationActionMessage,
@@ -48,6 +49,9 @@ export async function submitReportAction(
     const targetId = str(formData.get("target_id"));
     const reason = str(formData.get("reason"));
     const details = str(formData.get("details"));
+    const includeMessageContext =
+      targetType === "message"
+      && formData.get("include_message_context") === "on";
 
     if (!targetType || !targetId || !reason) {
       return moderationActionError("Choose a reason before submitting.");
@@ -58,6 +62,7 @@ export async function submitReportAction(
       p_target_id: targetId,
       p_reason: reason,
       p_details: details,
+      p_include_message_context: includeMessageContext,
     });
 
     if (error) {
@@ -180,24 +185,40 @@ export async function adminWarnUserAction(
 export async function adminBanUserAction(
   targetUserId: string,
   reason: string,
-  expiresAt: string | null,
+  durationDays: 1 | 7 | 30 | null,
   reportId: string | null,
   previousState: ModerationActionState,
 ): Promise<ModerationActionState> {
-  void previousState;
   try {
+    if (durationDays !== null && ![1, 7, 30].includes(durationDays)) {
+      return moderationActionError("Choose a valid ban duration.");
+    }
     const { supabase } = await requireAdminProfile();
-    const { error } = await supabase.rpc("admin_ban_user", {
+    const { data, error } = await supabase.rpc("admin_ban_user", {
       p_target_user_id: targetUserId,
       p_reason: reason,
-      p_expires_at: expiresAt,
+      p_duration_days: durationDays,
       p_report_id: reportId,
     });
     if (error) return moderationActionError(error.message);
 
+    const payload = data as {
+      outcome?: string;
+      expires_at?: string | null;
+      report_status?: string | null;
+    } | null;
+    if (payload?.outcome !== "applied") {
+      return moderationActionError("Could not confirm the ban state.");
+    }
+
     revalidateModerationPaths();
-    return moderationActionInfo(
-      "Ban applied. The user keeps access until their session expires; database lockout is immediate.",
+    const duration = payload.expires_at
+      ? `Temporary ban active until ${formatBanExpiry(payload.expires_at)}`
+      : "Permanent ban active";
+    const reportState = payload.report_status ? " · Report actioned" : "";
+    return moderationActionSuccess(
+      `${duration}${reportState}. Database lockout is immediate.`,
+      previousState,
     );
   } catch (error) {
     return moderationActionError(
@@ -209,6 +230,7 @@ export async function adminBanUserAction(
 export async function adminUnbanUserAction(
   targetUserId: string,
   note: string | null,
+  reportId: string,
   previousState: ModerationActionState,
 ): Promise<ModerationActionState> {
   try {
@@ -216,6 +238,7 @@ export async function adminUnbanUserAction(
     const { data, error } = await supabase.rpc("admin_unban_user", {
       p_target_user_id: targetUserId,
       p_note: note,
+      p_report_id: reportId,
     });
     if (error) return moderationActionError(error.message);
     if (data === false) {

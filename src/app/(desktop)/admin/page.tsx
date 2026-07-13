@@ -9,16 +9,23 @@ import {
   AdminEventRequestCard,
   AdminJcncImportForm,
 } from "@/components/admin-forms";
+import { AdminModerationPanel } from "@/components/admin-moderation-panel";
+import { loadAdminModerationQueue } from "@/lib/moderation-server";
 import type { EventRequestWithRequester, EventRow, Place } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ report?: string | string[] }>;
+}) {
   const { user, profile } = await getCurrentUser();
   if (!user || !profile?.is_admin) redirect("/");
 
+  const { report } = await searchParams;
   const supabase = await createClient();
-  const [{ data: events }, { data: places }, { data: eventRequests }] =
+  const [{ data: events }, { data: places }, { data: eventRequests }, queue] =
     await Promise.all([
       supabase.from("events").select("*").order("start_date"),
       supabase.from("places").select("*").order("name"),
@@ -27,6 +34,7 @@ export default async function AdminPage() {
         .select("*, requester:profiles!event_requests_requested_by_fkey(id,full_name)")
         .eq("status", "pending")
         .order("created_at", { ascending: false }),
+      loadAdminModerationQueue(report),
     ]);
 
   const eventList = (events as EventRow[]) ?? [];
@@ -52,6 +60,13 @@ export default async function AdminPage() {
             Open moderation queue
           </a>
         </div>
+        <AdminModerationPanel
+          key={queue.selectedReport?.id ?? "none"}
+          reports={queue.reports}
+          appeals={queue.appeals}
+          error={queue.error}
+          initialReport={queue.selectedReport}
+        />
       </section>
 
       <section className="mb-8">
@@ -80,8 +95,14 @@ export default async function AdminPage() {
 
       <div className="grid gap-8 md:grid-cols-2">
         <section>
-          <h2 className="mb-4 text-lg font-bold">Create event</h2>
-          <AdminCreateEventForm />
+          <details className="rounded-2xl border border-stone-200 bg-white">
+            <summary className="cursor-pointer px-5 py-4 text-lg font-bold">
+              Create event
+            </summary>
+            <div className="border-t border-stone-100 p-4">
+              <AdminCreateEventForm />
+            </div>
+          </details>
 
           <ul className="mt-5 space-y-2">
             {eventList.map((event) => (
@@ -97,8 +118,14 @@ export default async function AdminPage() {
         </section>
 
         <section>
-          <h2 className="mb-4 text-lg font-bold">Add preset location</h2>
-          <AdminCreatePlaceForm events={eventList} />
+          <details className="rounded-2xl border border-stone-200 bg-white">
+            <summary className="cursor-pointer px-5 py-4 text-lg font-bold">
+              Add preset location
+            </summary>
+            <div className="border-t border-stone-100 p-4">
+              <AdminCreatePlaceForm events={eventList} />
+            </div>
+          </details>
 
           <ul className="mt-5 space-y-2">
             {placeList.map((place) => (

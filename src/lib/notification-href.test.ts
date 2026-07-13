@@ -18,6 +18,7 @@ function eventNotification(
     request_id: null,
     conversation_id: null,
     event_id: "event-1",
+    report_id: null,
     message: null,
     read_at: null,
     created_at: "2026-07-11T12:00:00.000Z",
@@ -73,4 +74,23 @@ test("rejected event request notifications fall back to events status page", () 
 
 test("mobile href mirrors desktop event slug routes", () => {
   assert.equal(mobileNotificationHref(eventNotification()), "/m/events/paryushan-2026");
+});
+
+test("moderation reports deep-link to the selected report on each surface", () => {
+  const notification = eventNotification({
+    type: "moderation_report_submitted",
+    event_id: null,
+    event: null,
+    actor_id: null,
+    actor: null,
+    report_id: "00000000-0000-4000-8000-000000000123",
+  });
+  assert.equal(
+    desktopNotificationHref(notification),
+    "/admin/moderation?report=00000000-0000-4000-8000-000000000123",
+  );
+  assert.equal(
+    mobileNotificationHref(notification),
+    "/m/admin?report=00000000-0000-4000-8000-000000000123",
+  );
 });

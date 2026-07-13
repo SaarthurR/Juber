@@ -28,6 +28,7 @@ export type ReportRow = {
   reporter_id: string;
   reason: string;
   status: "pending" | "reviewing" | "actioned" | "dismissed";
+  resolution: string | null;
   created_at: string;
 };
 
@@ -42,20 +43,10 @@ export type ModerationEvidence = {
   evidence?: Record<string, unknown>;
   reporter?: {
     full_name?: string | null;
-    email?: string | null;
-    phone?: string | null;
   };
   reported?: {
     full_name?: string | null;
-    email?: string | null;
-    phone?: string | null;
   };
-  thread?: Array<{
-    id?: string;
-    sender_id?: string;
-    body?: string;
-    created_at?: string;
-  }>;
 };
 
 export type ModerationEvidenceState = {
