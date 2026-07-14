@@ -34,7 +34,7 @@ test("npm test discovers nested src tests without shell globstar", () => {
   })
     .trim()
     .split("\n");
-  assert.equal(listed.length, 53);
+  assert.equal(listed.length, 54);
   assert.ok(listed.includes("src/components/fallback-reliability.test.ts"));
   assert.ok(listed.includes("src/components/mobile/back-button.test.ts"));
   assert.ok(listed.includes("src/components/onboarding-wizard.test.ts"));
@@ -113,12 +113,12 @@ test("rides board empty states use warmer icon-led JCNC copy", () => {
   assert.match(homeBoard, /No requests yet/);
 });
 
-test("post-booking guidance tells confirmed riders to use in-app chat", () => {
+test("post-booking guidance tells confirmed riders to use in-app chat for the ride endpoint", () => {
   const desktopRide = readRepo("src/app/(desktop)/rides/[id]/page.tsx");
   const mobileRide = readRepo("src/app/m/rides/[id]/page.tsx");
 
-  assert.match(desktopRide, /Use in-app chat to confirm pickup details/);
-  assert.match(mobileRide, /Use in-app chat to confirm pickup details/);
+  assert.match(desktopRide, /Use in-app chat to confirm \{endpointLabel\?\.toLowerCase\(\) \?\? "ride"\} details/);
+  assert.match(mobileRide, /Use in-app chat to confirm \{endpointLabel\?\.toLowerCase\(\) \?\? "ride"\} details/);
   assert.match(desktopRide, /myJoin\.status === "confirmed"/);
   assert.match(mobileRide, /myJoin\.status === "confirmed"/);
 });

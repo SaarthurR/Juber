@@ -34,6 +34,7 @@ import { acceptRideRequestForUser } from "@/lib/accept-ride-request";
 import { CONTACT_SETUP_MESSAGE } from "@/lib/contact-setup";
 import { hasContact } from "@/lib/contact-readiness";
 import { getHomeAddress } from "@/lib/home-address";
+import { requireGoogleAddressSelection, riderEndpointLabel } from "@/lib/driver-route";
 import {
   mapCoarseLabelDbError,
   validateCoarseLabel,
@@ -356,34 +357,49 @@ export async function requestSeat(
 
     const { data: ride, error: rideError } = await supabase
       .from("rides")
-      .select("seats_available,status")
+      .select("seats_available,status,origin_label,destination_label")
       .eq("id", rideId)
-      .maybeSingle<{ seats_available: number; status: string }>();
+      .maybeSingle<{
+        seats_available: number;
+        status: string;
+        origin_label: string;
+        destination_label: string;
+      }>();
     if (rideError) throw new Error(rideError.message);
     if (!ride || ride.status !== "active") {
       throw new Error("This ride is not accepting reservations.");
     }
 
+    const endpointLabel =
+      riderEndpointLabel(ride.origin_label, ride.destination_label) ?? "Ride location";
+    const endpointLower = endpointLabel.toLowerCase();
     const guestCount = parseGuestCount(formData.get("guest_count"), ride.seats_available);
     const pickupSource = parsePickupSource(formData.get("pickup_source"));
     if (!pickupSource) {
-      throw new Error("Enter a pickup location or choose your saved home.");
+      throw new Error(`Enter a ${endpointLower} or choose your saved home.`);
     }
     let pickupNote: string | null = null;
 
     if (pickupSource === "home") {
       pickupNote = await getHomeAddress(supabase);
       if (!pickupNote) {
-        throw new Error("Add a saved home address in your profile, or enter a custom pickup.");
+        throw new Error(`Add a saved home address in your profile, or enter a custom ${endpointLower}.`);
       }
     } else if (pickupSource === "custom") {
       pickupNote = trimPickupNote(formData.get("pickup_note"));
       if (!pickupNote) {
-        throw new Error("Enter a pickup location or choose your saved home.");
+        throw new Error(`Enter a ${endpointLower} or choose your saved home.`);
       }
       if (pickupNote.length > 500) {
-        throw new Error("Pickup location must be 500 characters or fewer.");
+        throw new Error(`${endpointLabel} must be 500 characters or fewer.`);
       }
+      requireGoogleAddressSelection({
+        address: pickupNote,
+        placeId: formData.get("pickup_note_place_id"),
+        placeType: formData.get("pickup_note_place_type"),
+        enabled: Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_PLACES_KEY?.trim()),
+        label: `the ${endpointLower} address`,
+      });
     }
 
     const { error } = await supabase.rpc("request_seat", {
@@ -408,7 +424,7 @@ export async function requestSeat(
 export async function setPassengerStatus(
   passengerId: string,
   rideId: string,
-  status: "confirmed" | "declined",
+  status: string,
   _previousState: RideActionState,
   formData: FormData,
 ): Promise<RideActionState> {
@@ -416,6 +432,9 @@ export async function setPassengerStatus(
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/");
+  if (status !== "confirmed" && status !== "declined") {
+    return { error: "Invalid passenger status." };
+  }
 
   const [{ data: ride }, { data: passenger, error: passengerError }] = await Promise.all([
     supabase

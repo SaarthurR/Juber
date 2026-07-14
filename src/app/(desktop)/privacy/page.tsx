@@ -17,7 +17,7 @@ export default function PrivacyPage() {
         Privacy Policy
       </h1>
       <p className="mt-3 text-sm text-stone-500">
-        Last updated: June 16, 2026
+        Last updated: July 13, 2026
       </p>
 
       <div className="mt-8 space-y-7 text-[15px] leading-7 text-stone-700">
@@ -28,8 +28,19 @@ export default function PrivacyPage() {
           <p className="mt-2">
             {APP_NAME} collects the information needed to help community members
             coordinate rides, including your name, email address, profile
-            details, ride posts, ride requests, messages, notifications, and
+            details, saved home and ride addresses, ride posts, ride requests, messages, notifications, and
             basic sign-in information from Google when you choose Google sign-in.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-bold text-stone-950">Address and Map Services</h2>
+          <p className="mt-2">
+            Your saved home address is private to your account. When you use it
+            for a seat request, the driver receives a ride-specific copy needed
+            to review and coordinate the trip. Google Maps receives address
+            information when address suggestions or a route preview are opened,
+            subject to Google&apos;s privacy policy.
           </p>
         </section>
 

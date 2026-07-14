@@ -22,7 +22,6 @@ import {
 } from "@/components/meetup-locations";
 import {
   ReserveSeatButton,
-  PassengerStatusButtons,
   CancelSeatButton,
   DriverRideActions,
   LostItemMessageButton,
@@ -30,6 +29,12 @@ import {
 import { PendingActionGroup } from "@/components/pending-action-button";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
 import { throwReadError } from "@/lib/supabase/read-error";
+import { RiderDecisionDialog } from "@/components/rider-decision-dialog";
+import {
+  driverRouteEmbedUrl,
+  riderEndpointLabel,
+  type RiderEndpointLabel,
+} from "@/lib/driver-route";
 
 export const dynamic = "force-dynamic";
 
@@ -94,8 +99,7 @@ export default async function RideDetailPage({
     ride.seats_total - ride.seats_available,
   );
   const meetupPromise = user ? getRideMeetup(supabase, id) : Promise.resolve([]);
-  const homePromise =
-    user && !isDriver ? getHomeAddress(supabase) : Promise.resolve(null);
+  const homePromise = user ? getHomeAddress(supabase) : Promise.resolve(null);
   const [meetupRows, savedHome] = await Promise.all([meetupPromise, homePromise]);
   const meetup = resolveMeetupLabels({
     coarsePickup: ride.origin_label,
@@ -108,6 +112,10 @@ export default async function RideDetailPage({
     meetupRows
       .filter((row) => row.passenger_id)
       .map((row) => [row.passenger_id as string, row]),
+  );
+  const endpointLabel = riderEndpointLabel(
+    ride.origin_label,
+    ride.destination_label,
   );
 
   // phone/whatsapp aren't on the profile join anymore (column-level RLS); read
@@ -189,8 +197,6 @@ export default async function RideDetailPage({
             <MeetupLocations
               pickupLabel={meetup.pickupLabel}
               dropoffLabel={meetup.dropoffLabel}
-              pickupMapsUrl={meetup.pickupMapsUrl}
-              dropoffMapsUrl={meetup.dropoffMapsUrl}
               variant="desktop"
             />
           </div>
@@ -309,6 +315,8 @@ export default async function RideDetailPage({
               passengerRows={passengerRows}
               meetupByPassenger={meetupByPassenger}
               confirmedRiderCount={confirmedCount}
+              driverHome={savedHome}
+              endpointLabel={endpointLabel}
             />
           ) : terminal ? (
             <div className="rounded-lg bg-stone-100 px-6 py-4 text-center text-base font-bold text-stone-500">
@@ -327,12 +335,13 @@ export default async function RideDetailPage({
                   <PassengerPickupNote
                     note={meetup.selfPickupNote}
                     mapsUrl={meetup.selfPickupMapsUrl}
+                    endpointLabel={endpointLabel}
                   />
                 </div>
               )}
               {myJoin.status === "confirmed" && !meetup.selfPickupNote && (
                 <p className="mt-3 text-center text-sm text-stone-600">
-                  Use in-app chat to confirm pickup details with your driver.
+                  Use in-app chat to confirm {endpointLabel?.toLowerCase() ?? "ride"} details with your driver.
                 </p>
               )}
               {ride.status === "active" &&
@@ -345,6 +354,7 @@ export default async function RideDetailPage({
               rideId={ride.id}
               seatsAvailable={ride.seats_available}
               savedHome={savedHome}
+              endpointLabel={endpointLabel}
               label={myJoin ? "Request a seat again" : undefined}
             />
           ) : (
@@ -416,11 +426,15 @@ function DriverPanel({
   passengerRows,
   meetupByPassenger,
   confirmedRiderCount,
+  driverHome,
+  endpointLabel,
 }: {
   ride: Ride;
   passengerRows: PassengerRow[];
   meetupByPassenger: Map<string, { pickup_note: string | null }>;
   confirmedRiderCount: number;
+  driverHome: string | null;
+  endpointLabel: RiderEndpointLabel | null;
 }) {
   const activeBookings = passengerRows.filter(
     (p) => p.status === "pending" || p.status === "confirmed",
@@ -451,13 +465,32 @@ function DriverPanel({
                   <p className="text-xs capitalize text-stone-400">{p.status}</p>
                   {meetupByPassenger.get(p.passenger_id)?.pickup_note && (
                     <p className="mt-0.5 text-xs text-stone-500">
-                      Pickup: {meetupByPassenger.get(p.passenger_id)?.pickup_note}
+                      {endpointLabel ?? "Location"}: {meetupByPassenger.get(p.passenger_id)?.pickup_note}
                     </p>
                   )}
                 </div>
               </Link>
               {ride.status === "active" && p.status === "pending" && (
-                <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
+                <RiderDecisionDialog
+                  variant="desktop"
+                  passengerId={p.id}
+                  rideId={ride.id}
+                  riderId={p.passenger_id}
+                  riderName={p.passenger?.full_name ?? "Member"}
+                  riderAvatar={p.passenger?.avatar_url ?? null}
+                  guestCount={p.guest_count ?? 0}
+                  endpointLabel={endpointLabel}
+                  endpointAddress={meetupByPassenger.get(p.passenger_id)?.pickup_note ?? null}
+                  embedUrl={driverRouteEmbedUrl({
+                    apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY,
+                    originLabel: ride.origin_label,
+                    destinationLabel: ride.destination_label,
+                    driverHome,
+                    riderEndpoint: meetupByPassenger.get(p.passenger_id)?.pickup_note ?? null,
+                  })}
+                  missingHome={!driverHome}
+                  mapsConfigured={Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY?.trim())}
+                />
               )}
             </li>
           ))}
