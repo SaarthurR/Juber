@@ -121,6 +121,7 @@ export function ReserveSeatForm({
             name="pickup_note"
             label={`${locationLabel} address`}
             required
+            manualFallback
             maxLength={500}
             placeholder={`Search for the ${endpointLabel?.toLowerCase() ?? "ride"} address`}
             className={`${inputCls} mt-2`}

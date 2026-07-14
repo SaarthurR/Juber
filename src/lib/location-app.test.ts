@@ -215,6 +215,7 @@ test("shared booking form gates required fields behind accessible intent layers"
   assert.match(form, /pickup_source/);
   assert.match(form, /pickup_note/);
   assert.match(form, /GooglePlaceInput/);
+  assert.match(form, /name="pickup_note"[\s\S]*manualFallback/);
   assert.match(form, /type="button"[\s\S]*aria-haspopup="dialog"[\s\S]*aria-expanded=\{open\}/);
   assert.match(form, /DesktopDialog/);
   assert.match(form, /BottomSheet/);
