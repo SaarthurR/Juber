@@ -155,18 +155,15 @@ export default async function MobileHomePage({
         {/* Hero band */}
         <section className="relative overflow-hidden rounded-[22px] bg-brand-600 p-[22px] text-white">
           <TempleLogo
-            size={150}
-            className="pointer-events-none absolute -bottom-6 -right-4 text-white/[0.13]"
+            size={120}
+            className="pointer-events-none absolute bottom-1 right-1 text-white/[0.1]"
           />
           <div className="relative">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#fbe8d2]">
-              Ahimsa on the road
-            </p>
-            <h1 className="mt-2 text-[25px] font-extrabold leading-[1.12]">
-              Share a ride to temple &amp; events
+            <h1 className="text-[25px] font-extrabold leading-[1.12]">
+              Find or offer a ride to JCNC
             </h1>
             <p className="mt-2 max-w-[260px] text-[13.5px] text-[#fbe8d2]">
-              Carpools from your neighborhood to JCNC, Milpitas.
+              Coordinate carpools with JCNC community members for temple visits and events.
             </p>
           </div>
         </section>

@@ -54,23 +54,18 @@ export default async function HomePage() {
   const content = (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
       {/* Hero band */}
-      <section className="relative overflow-hidden rounded-3xl bg-brand-600 px-7 py-12 text-white shadow-[0_24px_50px_-28px_rgba(92,59,46,0.55)] sm:px-12 sm:py-16">
+      <section className="relative overflow-hidden rounded-3xl bg-brand-600 px-7 py-12 text-white shadow-[0_18px_38px_-30px_rgba(92,59,46,0.45)] sm:px-12 sm:py-16">
         {/* faint temple silhouette */}
         <TempleLogo
-          size={280}
-          className="pointer-events-none absolute -bottom-16 -right-10 text-white/[0.08]"
+          size={232}
+          className="pointer-events-none absolute bottom-2 right-2 text-white/[0.07]"
         />
         <div className="relative">
-          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#fbe8d2]">
-            Ahimsa on the road
-          </p>
-          <h1 className="mt-3 max-w-2xl text-4xl font-extrabold leading-[1.08] sm:text-5xl lg:text-[52px]">
-            Fewer cars.{" "}
-            <span className="text-[#fbe8d2]">Less harm.</span>
+          <h1 className="max-w-2xl text-4xl font-extrabold leading-[1.08] sm:text-5xl lg:text-[52px]">
+            Find or offer a ride to JCNC
           </h1>
           <p className="mt-4 max-w-lg text-[16px] leading-relaxed text-[#fbe8d2]">
-            Share rides to JCNC with the sangha you already trust — especially
-            during Paryushan and big events.
+            Coordinate carpools with JCNC community members for temple visits and events.
           </p>
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <Link

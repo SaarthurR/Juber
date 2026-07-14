@@ -17,7 +17,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: `${APP_NAME} — Carpool to the temple`,
+  title: `${APP_NAME} | Community carpools to JCNC`,
   description: APP_TAGLINE,
 };
 
