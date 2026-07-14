@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { DemoControls } from "@/components/demo-controls";
+import { DemoRuntimeProvider } from "@/components/demo-runtime-provider";
 import { ModerationBannedGate } from "@/components/moderation-banned-gate";
+import { ModerationStateProvider } from "@/components/moderation-state-provider";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
-import { getAuthUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
+import { getDemoRuntime } from "@/lib/demo/runtime";
 import { loadModerationSnapshot } from "@/lib/moderation-server";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -33,8 +36,8 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const supabase = await createClient();
-  const user = await getAuthUser(supabase);
+  const runtime = await getDemoRuntime();
+  const { user } = await getCurrentUser();
   const moderation = user ? await loadModerationSnapshot() : null;
 
   return (
@@ -44,9 +47,16 @@ export default async function RootLayout({
       data-scroll-behavior="smooth"
     >
       <body className="flex min-h-full flex-col">
-        <ModerationBannedGate banned={Boolean(moderation?.banned)}>
-          {children}
-        </ModerationBannedGate>
+        <DemoRuntimeProvider value={{ enabled: Boolean(runtime), actorId: runtime?.activeActorId ?? null, revision: runtime?.revision ?? null }}>
+          {runtime ? <DemoControls session={runtime} /> : null}
+          <ModerationStateProvider
+            key={`${user?.id ?? "anonymous"}:${runtime?.revision ?? "live"}`}
+            userId={user?.id ?? null}
+            initial={moderation}
+          >
+            <ModerationBannedGate>{children}</ModerationBannedGate>
+          </ModerationStateProvider>
+        </DemoRuntimeProvider>
       </body>
     </html>
   );

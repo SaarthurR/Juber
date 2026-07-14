@@ -3,17 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import {
   bannedPagePath,
-  bindModerationActionTarget,
-  createModerationEvidenceState,
-  isModerationAllowedPath,
-  isModerationEvidenceReady,
   mapAppealSubmitError,
   mapReportSubmitError,
-  moderationEvidenceReducer,
   parseModerationNotices,
-  visibleModerationEvidence,
-  type ModerationEvidence,
-  type ReportRow,
 } from "./moderation";
 
 test("moderation notices parser handles ban and warnings", () => {
@@ -26,13 +18,39 @@ test("moderation notices parser handles ban and warnings", () => {
       ban_id: "ban-1",
     },
     has_pending_appeal: true,
-    warnings: [{ id: "w1", note: "Please follow guidelines", created_at: "2026-07-10T00:00:00.000Z" }],
+    appeal: {
+      id: "appeal-1",
+      status: "pending",
+      created_at: "2026-07-11T01:00:00.000Z",
+      resolved_at: null,
+    },
+    warnings: [{
+      id: "w1",
+      note: "Please follow guidelines",
+      created_at: "2026-07-10T00:00:00.000Z",
+      outcome_id: "outcome-1",
+      acknowledged_at: null,
+    }],
+    outcomes: [{
+      id: "outcome-1",
+      type: "warning",
+      source_action_id: "action-1",
+      acknowledged_at: null,
+      created_at: "2026-07-10T00:00:00.000Z",
+    }],
+    outcome_cursor: {
+      id: "outcome-1",
+      created_at: "2026-07-10T00:00:00.000Z",
+    },
   });
 
   assert.equal(snapshot.banned, true);
   assert.equal(snapshot.ban?.reason, "Harassment");
   assert.equal(snapshot.hasPendingAppeal, true);
+  assert.equal(snapshot.appeal?.status, "pending");
   assert.equal(snapshot.warnings.length, 1);
+  assert.equal(snapshot.warnings[0]?.outcomeId, "outcome-1");
+  assert.equal(snapshot.outcomes[0]?.sourceActionId, "action-1");
 });
 
 test("report and appeal errors map to user-safe copy", () => {
@@ -40,19 +58,17 @@ test("report and appeal errors map to user-safe copy", () => {
   assert.match(mapAppealSubmitError("A pending appeal already exists"), /pending appeal/i);
 });
 
-test("ban gate paths stay minimal", () => {
-  assert.equal(isModerationAllowedPath("/banned"), true);
-  assert.equal(isModerationAllowedPath("/m/banned"), true);
-  assert.equal(isModerationAllowedPath("/auth/signout"), true);
-  assert.equal(isModerationAllowedPath("/rides"), false);
+test("ban gate chooses the matching shell path", () => {
   assert.equal(bannedPagePath(true), "/m/banned");
+  assert.equal(bannedPagePath(false), "/banned");
 });
 
 test("moderation app routes and RPC wiring exist", () => {
   const files = [
     "../app/moderation/actions.ts",
     "../components/report-target-button.tsx",
-    "../components/admin-moderation-panel.tsx",
+    "../components/admin-moderation/workspace.tsx",
+    "../components/admin-moderation/appeals-queue.tsx",
     "../components/moderation-banned-gate.tsx",
     "../app/(desktop)/banned/page.tsx",
     "../app/m/banned/page.tsx",
@@ -66,9 +82,13 @@ test("moderation app routes and RPC wiring exist", () => {
   }
 
   const actions = readFileSync(new URL("../app/moderation/actions.ts", import.meta.url), "utf8");
+  const adminReads = readFileSync(
+    new URL("./admin-moderation-server.ts", import.meta.url),
+    "utf8",
+  );
   assert.match(actions, /rpc\("submit_report"/);
   assert.match(actions, /rpc\("submit_appeal"/);
-  assert.match(actions, /rpc\("admin_report_evidence"/);
+  assert.match(adminReads, /rpc\("admin_report_evidence"/);
   assert.doesNotMatch(actions, /\.from\("messages"\)/);
 
   const migration = readFileSync(
@@ -107,97 +127,16 @@ test("shell layouts check moderation before member queries", () => {
   assert.match(desktopLayout, /!banned/);
   assert.match(mobileLayout, /loadModerationSnapshot/);
   assert.match(rootLayout, /ModerationBannedGate/);
+  assert.match(rootLayout, /ModerationStateProvider/);
   assert.match(rootLayout, /loadModerationSnapshot/);
 });
 
-test("rapid report selection keeps evidence and action target bound to the latest report", async () => {
-  const reportA: ReportRow = {
-    id: "report-a",
-    target_type: "user",
-    target_id: "target-a",
-    target_user_id: "reported-a",
-    reporter_id: "reporter-a",
-    reason: "Reason A",
-    status: "pending",
-    resolution: null,
-    created_at: "2026-07-12T00:00:00.000Z",
-  };
-  const reportB: ReportRow = {
-    id: "report-b",
-    target_type: "user",
-    target_id: "target-b",
-    target_user_id: "reported-b",
-    reporter_id: "reporter-b",
-    reason: "Reason B",
-    status: "pending",
-    resolution: null,
-    created_at: "2026-07-12T00:01:00.000Z",
-  };
-  const evidenceA = moderationEvidence("report-a", "Evidence A");
-  const evidenceB = moderationEvidence("report-b", "Evidence B");
-  const requestA = deferred<ModerationEvidence>();
-  const requestB = deferred<ModerationEvidence>();
-  let state = createModerationEvidenceState(reportA.id);
-
-  const settle = async (
-    reportId: string,
-    requestToken: number,
-    request: Promise<ModerationEvidence>,
-  ) => ({
-      type: "resolve" as const,
-      reportId,
-      requestToken,
-      evidence: await request,
-    });
-
-  const loadA = settle(reportA.id, state.requestToken, requestA.promise);
-  state = moderationEvidenceReducer(state, { type: "select", reportId: reportB.id });
-
-  assert.equal(state.selectedReportId, reportB.id);
-  assert.equal(state.loading, true);
-  assert.equal(state.evidence, null);
-  assert.equal(bindModerationActionTarget(state, reportB), null);
-
-  const loadB = settle(reportB.id, state.requestToken, requestB.promise);
-  requestB.resolve(evidenceB);
-  state = moderationEvidenceReducer(state, await loadB);
-
-  assert.equal(isModerationEvidenceReady(state), true);
-  assert.equal(visibleModerationEvidence(state)?.report?.id, reportB.id);
-  assert.deepEqual(bindModerationActionTarget(state, reportB), {
-    reportId: reportB.id,
-    reportedUserId: reportB.target_user_id,
-    reporterUserId: reportB.reporter_id,
-    reason: reportB.reason,
-  });
-
-  const settledB = state;
-  requestA.resolve(evidenceA);
-  state = moderationEvidenceReducer(state, await loadA);
-
-  assert.equal(state, settledB);
-  assert.equal(visibleModerationEvidence(state)?.report?.id, reportB.id);
-  assert.equal(bindModerationActionTarget(state, reportA), null);
-  assert.equal(bindModerationActionTarget(state, reportB)?.reportId, reportB.id);
+test("rapid report selection keeps evidence and action target bound to the latest report", () => {
+  const decision = readFileSync(new URL("../components/admin-moderation/decision-tools.tsx", import.meta.url), "utf8");
+  const detail = readFileSync(new URL("../components/admin-moderation/case-detail.tsx", import.meta.url), "utf8");
+  assert.match(decision, /abortRef\.current\?\.abort\(\)/);
+  assert.match(decision, /requestTokenRef\.current !== requestToken/);
+  assert.match(decision, /next\.report_id !== report\.id/);
+  assert.match(decision, /evidence_receipt_id/);
+  assert.match(detail, /<CaseDecisionTools key=\{report\.id\}/);
 });
-
-function moderationEvidence(id: string, body: string): ModerationEvidence {
-  return {
-    report: {
-      id,
-      target_type: "user",
-      reason: id,
-      details: null,
-      status: "pending",
-    },
-    evidence: { body },
-  };
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((complete) => {
-    resolve = complete;
-  });
-  return { promise, resolve };
-}

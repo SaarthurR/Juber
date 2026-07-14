@@ -8,6 +8,8 @@ import { LandingAuthGate } from "@/components/landing-auth-gate";
 import { EventSourceLink } from "@/components/event-source-link";
 import { MRideCard, MRequestCard } from "@/components/mobile/mobile-cards";
 import { SubHeader } from "@/components/mobile/sub-header";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { demoEventBoard } from "@/lib/demo-page-data";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +20,10 @@ export default async function MobileEventPage({
 }) {
   const { slug } = await params;
   const { user } = await getCurrentUser();
-  const supabase = await createClient();
-
-  const board = await loadEventBoard(supabase, slug, Boolean(user));
+  const demo = await getDemoRuntime();
+  const board = demo
+    ? demoEventBoard(demo.state, slug)
+    : await loadEventBoard(await createClient(), slug, Boolean(user));
   if (!board) notFound();
 
   const { event, rides, requests } = board;

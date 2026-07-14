@@ -188,16 +188,8 @@ select public.task17_assert(
   public.is_banned('00000000-0000-4000-8000-000000000099'::uuid) = false
 );
 
--- Seed ban for banned user
-set role authenticated;
-select set_config('request.jwt.claim.sub', :'admin', false);
-select public.admin_ban_user(
-  :'banned'::uuid,
-  'Task 17 contract ban',
-  now() + interval '1 day',
-  null
-);
-reset role;
+insert into public.user_bans (user_id, banned_by, reason, expires_at)
+values (:'banned'::uuid, :'admin'::uuid, 'Task 17 contract ban', now() + interval '1 day');
 
 -- Banned lockout: SELECT on member tables
 set role authenticated;
@@ -274,9 +266,10 @@ reset role;
 -- Appeal carve-out
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'banned', false);
+select public.submit_appeal('Please review my ban') as appeal_id \gset banned_
 select public.task17_assert(
   'banned can submit appeal via rpc',
-  public.submit_appeal('Please review my ban') is not null
+  :'banned_appeal_id'::uuid is not null
 );
 select public.task17_assert(
   'banned cannot submit second pending appeal',
@@ -359,12 +352,13 @@ select public.task17_assert(
   ) <> '00000'
 );
 select public.task17_assert(
-  'admin evidence includes reporter/reported email and phone',
+  'admin evidence excludes contacts and internal linkage',
   (
-    select (payload->'reporter'->>'email') is not null
-       and (payload->'reporter'->>'phone') is not null
-       and (payload->'reported'->>'email') is not null
-       and (payload->'reported'->>'phone') is not null
+    select not (payload::text like '%email%')
+       and not (payload::text like '%phone%')
+       and not (payload::text like '%conversation_id%')
+       and not (payload::text like '%message_id%')
+       and (payload->>'receipt_id') is not null
     from (
       select public.admin_report_evidence(r.id) as payload
       from public.reports r
@@ -380,8 +374,12 @@ reset role;
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'admin', false);
 select public.task17_assert(
-  'admin_unban_user succeeds',
-  public.admin_unban_user(:'banned'::uuid, 'appeal granted via test')
+  'exact appeal grant succeeds',
+  public.admin_resolve_appeal(
+    :'banned_appeal_id'::uuid,
+    'granted',
+    'appeal granted via test'
+  ) ->> 'unbanned' = 'true'
 );
 reset role;
 

@@ -2,6 +2,20 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { GOOGLE_ADDRESS_TYPES } from "@/lib/driver-route";
+import { DemoPlaceInput } from "@/components/demo-place-input";
+import { useDemoRuntime } from "@/components/demo-runtime-provider";
+
+type GooglePlaceInputProps = {
+  name: string;
+  initialValue?: string;
+  placeholder: string;
+  label: string;
+  maxLength?: number;
+  required?: boolean;
+  className: string;
+  ariaDescribedBy?: string;
+  manualFallback?: boolean;
+};
 
 type PlaceAutocompleteElement = HTMLElement & {
   description: string;
@@ -54,7 +68,15 @@ function loadPlaces(key: string) {
   return placesPromise;
 }
 
-export function GooglePlaceInput({
+export function GooglePlaceInput(props: GooglePlaceInputProps) {
+  const demo = useDemoRuntime();
+  if (demo.enabled) {
+    return <DemoPlaceInput {...props} />;
+  }
+  return <LiveGooglePlaceInput {...props} />;
+}
+
+function LiveGooglePlaceInput({
   name,
   initialValue = "",
   placeholder,
@@ -64,17 +86,7 @@ export function GooglePlaceInput({
   className,
   ariaDescribedBy,
   manualFallback = false,
-}: {
-  name: string;
-  initialValue?: string;
-  placeholder: string;
-  label: string;
-  maxLength?: number;
-  required?: boolean;
-  className: string;
-  ariaDescribedBy?: string;
-  manualFallback?: boolean;
-}) {
+}: GooglePlaceInputProps) {
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_PLACES_KEY ?? "";
   const messageId = useId();
   const hostRef = useRef<HTMLDivElement>(null);

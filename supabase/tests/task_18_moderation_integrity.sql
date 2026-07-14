@@ -59,6 +59,8 @@ select dblink_exec(
   'task18_seed',
   format(
     $sql$
+      delete from public.moderation_outcomes
+      where recipient_id in (%L::uuid, %L::uuid, %L::uuid);
       set session_replication_role = replica;
       delete from public.moderation_actions
       where actor_id in (
@@ -85,6 +87,7 @@ select dblink_exec(
         %L::uuid, %L::uuid, %L::uuid
       )
     $sql$,
+    :'race_user', :'concurrent_user', :'exact_user',
     :'reporter', :'reported', :'outsider', :'admin_one', :'admin_two',
     :'race_user', :'concurrent_user', :'exact_user',
     :'race_user', :'concurrent_user', :'exact_user',
@@ -258,32 +261,32 @@ select dblink_exec(
   format('set request.jwt.claim.sub = %L', :'admin_one')
 );
 
-select result
-from dblink(
+select dblink_exec('task18_seed', 'reset role');
+select dblink_exec(
   'task18_seed',
   format(
-    'select public.admin_ban_user(%L::uuid, ''old race ban'', null, null)',
-    :'race_user'
+    $sql$insert into public.user_bans (user_id, banned_by, reason)
+      values (%L::uuid, %L::uuid, 'old race ban')$sql$,
+    :'race_user', :'admin_one'
   )
-) as response(result boolean);
-
-select result
-from dblink(
+);
+select dblink_exec(
   'task18_seed',
   format(
-    'select public.admin_ban_user(%L::uuid, ''concurrent ban'', null, null)',
-    :'concurrent_user'
+    $sql$insert into public.user_bans (user_id, banned_by, reason)
+      values (%L::uuid, %L::uuid, 'concurrent ban')$sql$,
+    :'concurrent_user', :'admin_one'
   )
-) as response(result boolean);
-
-select result
-from dblink(
+);
+select dblink_exec(
   'task18_seed',
   format(
-    'select public.admin_ban_user(%L::uuid, ''exact ban'', null, null)',
-    :'exact_user'
+    $sql$insert into public.user_bans (user_id, banned_by, reason)
+      values (%L::uuid, %L::uuid, 'exact ban')$sql$,
+    :'exact_user', :'admin_one'
   )
-) as response(result boolean);
+);
+select dblink_exec('task18_seed', 'set role authenticated');
 
 select dblink_exec(
   'task18_seed',
@@ -328,6 +331,7 @@ select dblink_exec(
   'task18_reban',
   format('set request.jwt.claim.sub = %L', :'admin_one')
 );
+select dblink_exec('task18_reban', 'reset role');
 select ban_id
 from dblink(
   'task18_reban',
@@ -359,7 +363,16 @@ select result
 from dblink(
   'task18_reban',
   format(
-    'select public.admin_ban_user(%L::uuid, ''new race ban'', null, null)',
+    $sql$update public.user_bans
+      set ban_id = gen_random_uuid(),
+          banned_by = %L::uuid,
+          reason = 'new race ban',
+          report_id = null,
+          created_at = now(),
+          expires_at = null
+      where user_id = %L::uuid
+      returning true$sql$,
+    :'admin_one',
     :'race_user'
   )
 ) as response(result boolean);
@@ -497,6 +510,8 @@ select dblink_exec(
   'task18_seed',
   format(
     $sql$
+      delete from public.moderation_outcomes
+      where recipient_id in (%L::uuid, %L::uuid, %L::uuid);
       set session_replication_role = replica;
       delete from public.moderation_actions
       where actor_id in (
@@ -521,6 +536,7 @@ select dblink_exec(
         %L::uuid, %L::uuid, %L::uuid
       )
     $sql$,
+    :'race_user', :'concurrent_user', :'exact_user',
     :'reporter', :'reported', :'outsider', :'admin_one', :'admin_two',
     :'race_user', :'concurrent_user', :'exact_user',
     :'race_user', :'concurrent_user', :'exact_user',

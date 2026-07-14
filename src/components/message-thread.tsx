@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Send } from "lucide-react";
 import { ReportTargetButton } from "@/components/report-target-button";
 import { createClient } from "@/lib/supabase/client";
+import { useDemoRuntime } from "@/components/demo-runtime-provider";
 import { markConversationRead, sendMessage } from "@/app/messages/actions";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -59,6 +60,7 @@ export function MessageThread({
   reportVariant?: "desktop" | "mobile";
 }) {
   const router = useRouter();
+  const { enabled: demoEnabled } = useDemoRuntime();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [draft, setDraft] = useState("");
   const [sendState, setSendState] = useState<SendState | null>(null);
@@ -83,6 +85,9 @@ export function MessageThread({
   }, []);
 
   useEffect(() => {
+    if (demoEnabled) {
+      return undefined;
+    }
     const supabase = createClient();
     function mergeIncoming(incoming: Message[]) {
       if (!mountedRef.current) return;
@@ -193,7 +198,7 @@ export function MessageThread({
       document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
-  }, [contextId, contextKind, conversationId, hiddenAt, router]);
+  }, [contextId, contextKind, conversationId, demoEnabled, hiddenAt, router]);
 
   useEffect(() => {
     let cancelled = false;

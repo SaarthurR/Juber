@@ -27,7 +27,7 @@ import {
   LostItemMessageButton,
 } from "@/components/ride-actions";
 import { PendingActionGroup } from "@/components/pending-action-button";
-import type { Profile, Ride, RidePassenger } from "@/lib/types";
+import type { Profile, Ride, RideMeetup, RidePassenger } from "@/lib/types";
 import { throwReadError } from "@/lib/supabase/read-error";
 import { RiderDecisionDialog } from "@/components/rider-decision-dialog";
 import {
@@ -35,6 +35,8 @@ import {
   riderEndpointLabel,
   type RiderEndpointLabel,
 } from "@/lib/driver-route";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { queryDemoRide } from "@/lib/demo/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -46,51 +48,70 @@ export default async function RideDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { user } = await getCurrentUser();
-  const supabase = await createClient();
+  const demo = await getDemoRuntime();
+  let user: { id: string } | null;
+  let ride: Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null };
+  let passengerRows: PassengerRow[];
+  let loadedMeetupRows: RideMeetup[];
+  let loadedSavedHome: string | null;
+  let driverContact: { phone: string | null; whatsapp: string | null };
 
-  const rideQuery = user
-    ? supabase
-        .from("rides")
-        .select(RIDE_WITH_JOIN)
-        .eq("id", id)
-        .maybeSingle<
-          Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }
-        >()
-    : supabase.rpc("public_ride_detail", { p_ride_id: id }).maybeSingle<
-        Ride & { driver: Profile | null; event: { id: string; name: string; slug: string } | null }
-      >();
-  const passengersQuery = user
-    ? supabase
-        .from("ride_passengers")
-        .select("*, passenger:profiles!ride_passengers_passenger_id_fkey(*)")
-        .eq("ride_id", id)
-    : Promise.resolve({ data: [] as PassengerRow[], error: null });
-  const [{ data: ride, error: rideError }, { data: passengers, error: passengersError }] =
-    await Promise.all([rideQuery, passengersQuery]);
-
-  throwReadError(rideError, "ride");
-  if (!ride) notFound();
-  throwReadError(passengersError, "ride passengers");
-
-  let passengerRows = (passengers as PassengerRow[]) ?? [];
-  const missingProfileIds = passengerRows
-    .filter((p) => !p.passenger && p.passenger_id)
-    .map((p) => p.passenger_id);
-  if (missingProfileIds.length) {
-    const { data: fallbackProfiles, error: fallbackError } = await supabase
-      .from("profiles")
-      .select("*")
-      .in("id", missingProfileIds);
-    throwReadError(fallbackError, "passenger profiles");
-    const profilesById = new Map(
-      ((fallbackProfiles as Profile[] | null) ?? []).map((profile) => [profile.id, profile]),
-    );
-    passengerRows = passengerRows.map((p) => ({
-      ...p,
-      passenger: p.passenger ?? profilesById.get(p.passenger_id) ?? null,
+  if (demo) {
+    const detail = queryDemoRide(demo.state, id, demo.activeActorId);
+    if (!detail) notFound();
+    user = { id: demo.activeActorId };
+    ride = detail.ride;
+    passengerRows = detail.passengers.map((passenger) => ({
+      ...passenger,
+      passenger: demo.state.profiles[passenger.passenger_id] ?? null,
     }));
+    loadedMeetupRows = detail.passengers.map((passenger) => ({
+      pickup_location: passenger.pickupLocation,
+      dropoff_location: passenger.dropoffLocation,
+      pickup_note: passenger.pickupLocation,
+      passenger_id: passenger.passenger_id,
+    }));
+    loadedSavedHome = demo.state.contacts[demo.activeActorId]?.homeAddress ?? null;
+    driverContact = { phone: null, whatsapp: null };
+  } else {
+    const current = await getCurrentUser();
+    user = current.user;
+    const supabase = await createClient();
+    const rideQuery = user
+      ? supabase.from("rides").select(RIDE_WITH_JOIN).eq("id", id).maybeSingle<typeof ride>()
+      : supabase.rpc("public_ride_detail", { p_ride_id: id }).maybeSingle<typeof ride>();
+    const passengersQuery = user
+      ? supabase.from("ride_passengers").select("*, passenger:profiles!ride_passengers_passenger_id_fkey(*)").eq("ride_id", id)
+      : Promise.resolve({ data: [] as PassengerRow[], error: null });
+    const [
+      { data: rideData, error: rideError },
+      { data: passengersData, error: passengersError },
+    ] = await Promise.all([rideQuery, passengersQuery]);
+    throwReadError(rideError, "ride");
+    if (!rideData) notFound();
+    throwReadError(passengersError, "ride passengers");
+    ride = rideData;
+    passengerRows = (passengersData as PassengerRow[]) ?? [];
+    const missingProfileIds = passengerRows.filter((p) => !p.passenger && p.passenger_id).map((p) => p.passenger_id);
+    if (missingProfileIds.length) {
+      const { data: fallbackProfiles, error: fallbackError } = await supabase.from("profiles").select("*").in("id", missingProfileIds);
+      throwReadError(fallbackError, "passenger profiles");
+      const profilesById = new Map(((fallbackProfiles as Profile[] | null) ?? []).map((profile) => [profile.id, profile]));
+      passengerRows = passengerRows.map((p) => ({ ...p, passenger: p.passenger ?? profilesById.get(p.passenger_id) ?? null }));
+    }
+    const meetupPromise = user ? getRideMeetup(supabase, id) : Promise.resolve([]);
+    const homePromise = user ? getHomeAddress(supabase) : Promise.resolve(null);
+    const [meetupRows, savedHome] = await Promise.all([meetupPromise, homePromise]);
+    loadedMeetupRows = meetupRows;
+    loadedSavedHome = savedHome;
+    const isDriver = user?.id === ride.driver_id;
+    const myJoin = passengerRows.find((p) => p.passenger_id === user?.id);
+    driverContact = user && !isDriver && ride.status === "active" && myJoin?.status === "confirmed"
+      ? await getContact(supabase, ride.driver_id)
+      : { phone: null, whatsapp: null };
   }
+  const meetupRows = loadedMeetupRows;
+  const savedHome = loadedSavedHome;
   const isDriver = user?.id === ride.driver_id;
   const myJoin = passengerRows.find((p) => p.passenger_id === user?.id);
   const confirmed = passengerRows.filter((p) => p.status === "confirmed");
@@ -98,9 +119,6 @@ export default async function RideDetailPage({
     confirmedSeatTotal(passengerRows),
     ride.seats_total - ride.seats_available,
   );
-  const meetupPromise = user ? getRideMeetup(supabase, id) : Promise.resolve([]);
-  const homePromise = user ? getHomeAddress(supabase) : Promise.resolve(null);
-  const [meetupRows, savedHome] = await Promise.all([meetupPromise, homePromise]);
   const meetup = resolveMeetupLabels({
     coarsePickup: ride.origin_label,
     coarseDropoff: ride.destination_label,
@@ -117,13 +135,6 @@ export default async function RideDetailPage({
     ride.origin_label,
     ride.destination_label,
   );
-
-  // phone/whatsapp aren't on the profile join anymore (column-level RLS); read
-  // the driver's numbers through the booking-scoped RPC, only when entitled.
-  const driverContact =
-    user && !isDriver && ride.status === "active" && myJoin?.status === "confirmed"
-      ? await getContact(supabase, ride.driver_id)
-      : { phone: null, whatsapp: null };
 
   const price = ride.gas_contribution
     ? `$${Number(ride.gas_contribution).toFixed(0)}`
@@ -481,6 +492,7 @@ function DriverPanel({
                   guestCount={p.guest_count ?? 0}
                   endpointLabel={endpointLabel}
                   endpointAddress={meetupByPassenger.get(p.passenger_id)?.pickup_note ?? null}
+                  driverHome={driverHome}
                   embedUrl={driverRouteEmbedUrl({
                     apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY,
                     originLabel: ride.origin_label,

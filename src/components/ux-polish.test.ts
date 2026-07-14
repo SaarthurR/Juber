@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import {
-  MODERATION_ACTION_GROUPS,
-  moderationActionButtonClass,
-  moderationConfirmLabel,
-} from "@/lib/moderation-admin-ui";
+import { ADMIN_DECISION_OPTIONS } from "@/lib/admin-moderation";
 import {
   getInitialFocusTarget,
   nextFocusableIndex,
@@ -54,28 +50,21 @@ test("ride report is de-emphasized without losing header access", () => {
   }
 });
 
-test("admin moderation actions group by role and severity", () => {
-  assert.deepEqual(
-    MODERATION_ACTION_GROUPS.map((group) => group.title),
-    ["Report status", "Reported member", "Reporter"],
-  );
+test("admin moderation decisions constrain enforcement by verdict", () => {
+  assert.deepEqual(ADMIN_DECISION_OPTIONS.violation, [
+    "none",
+    "warn_reported",
+    "temporary_ban",
+    "permanent_ban",
+  ]);
+  assert.deepEqual(ADMIN_DECISION_OPTIONS.no_violation, ["none", "warn_reporter"]);
+  assert.deepEqual(ADMIN_DECISION_OPTIONS.inconclusive, ["none"]);
 
-  const reported = MODERATION_ACTION_GROUPS.find((group) => group.title === "Reported member");
-  assert.deepEqual(
-    reported?.actions.map((action) => action.id),
-    ["warn-reported", "ban-temp", "ban-perm", "unban"],
-  );
-
-  assert.match(moderationActionButtonClass("benign"), /border-stone-200/);
-  assert.match(moderationActionButtonClass("warning"), /border-amber-200/);
-  assert.match(moderationActionButtonClass("temp-ban"), /border-orange-200/);
-  assert.match(moderationActionButtonClass("permanent-ban"), /border-red-300/);
-  assert.equal(moderationConfirmLabel("ban-perm"), "Permanent ban");
-
-  const panel = readFileSync("src/components/admin-moderation-panel.tsx", "utf8");
-  assert.match(panel, /bg-red-600 hover:bg-red-700/);
-  assert.match(panel, /Permanently ban this member\?/);
-  assert.match(panel, /Actions unlock after matching evidence loads/);
+  const decision = readFileSync("src/components/admin-moderation/decision-tools.tsx", "utf8");
+  assert.match(decision, /Open evidence/);
+  assert.match(decision, /Actions? allowed|adminDecisionOptions/);
+  assert.match(decision, /Review decision/);
+  assert.match(decision, /bg-red-700/);
 });
 
 test("moderation confirmation enters safely, traps Tab, escapes, and restores focus", () => {
@@ -112,16 +101,13 @@ test("moderation confirmation enters safely, traps Tab, escapes, and restores fo
   assert.equal(nextFocusableIndex(1, 2, "forward"), 0);
   assert.equal(nextFocusableIndex(0, 2, "backward"), 1);
 
-  const panelSource = readFileSync("src/components/admin-moderation-panel.tsx", "utf8");
-  assert.match(panelSource, /confirmTriggerRef\.current = event\.currentTarget/);
-  assert.match(panelSource, /data-autofocus="true"/);
-  assert.match(panelSource, /getInitialFocusTarget\(panel\)\.focus\(\)/);
-  assert.match(panelSource, /const returnFocus = returnFocusRef\.current/);
-  assert.match(panelSource, /restoreFocus\(returnFocus\)/);
-  assert.match(panelSource, /event\.key === "Escape"/);
-  assert.match(panelSource, /event\.key !== "Tab"/);
-  assert.match(panelSource, /role="alertdialog"/);
-  assert.match(panelSource, /aria-modal="true"/);
+  const panelSource = readFileSync("src/components/admin-moderation/decision-tools.tsx", "utf8");
+  assert.match(panelSource, /dialog\.showModal\(\)/);
+  assert.match(panelSource, /cancelRef\.current\?\.focus\(\)/);
+  assert.match(panelSource, /if \(pending\) event\.preventDefault\(\)/);
+  assert.match(panelSource, /disabled=\{pending\}/);
+  assert.match(panelSource, /aria-labelledby/);
+  assert.match(panelSource, /<dialog/);
 });
 
 test("report layers retain pending submissions and desktop close resets success", () => {

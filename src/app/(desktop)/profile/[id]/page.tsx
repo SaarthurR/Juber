@@ -14,6 +14,12 @@ import { ReportTargetButton } from "@/components/report-target-button";
 import type { Profile, RideWithDriver, RideRequestWithRider } from "@/lib/types";
 import { RIDE_WITH_JOIN, RIDE_NESTED_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
 import { throwReadError } from "@/lib/supabase/read-error";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import {
+  queryDemoIdentity,
+  queryDemoRides,
+} from "@/lib/demo/queries";
+import { demoRequests } from "@/lib/demo-page-data";
 
 export const dynamic = "force-dynamic";
 
@@ -84,70 +90,105 @@ export default async function PublicProfilePage({
       </div>
     );
   }
-  const supabase = await createClient();
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle<Profile>();
-
-  throwReadError(profileError, "profile");
-  if (!profile) notFound();
-
-  const isMe = user?.id === id;
-  const { canViewContact, messagingRideId } = await getProfileContactContext(
-    supabase,
-    user?.id,
-    id,
-  );
-
-  const nowIso = new Date().toISOString();
-
-  // --- Tab data queries ---
+  const demo = await getDemoRuntime();
+  let profile: Profile | null;
+  let canViewContact: boolean;
+  let messagingRideId: string | null;
+  let contact: { phone: string | null; whatsapp: string | null };
   let postedRides: RideWithDriver[] = [];
   let joinedRides: RideWithDriver[] = [];
   let rideRequests: RideRequestWithRider[] = [];
+  const nowIso = demo?.state.now ?? new Date().toISOString();
 
-  if (tab === "all" || tab === "posted") {
+  if (demo) {
+    profile = queryDemoIdentity(demo.state, id);
+    const rides = queryDemoRides(demo.state);
+    const confirmed = Object.values(demo.state.passengers).filter(
+      (passenger) => passenger.status === "confirmed",
+    );
+    const viewerBooking = confirmed.find((passenger) => {
+      const ride = demo.state.rides[passenger.ride_id];
+      return passenger.passenger_id === user?.id && ride?.driver_id === id && ride.status === "active";
+    });
+    const profileBooking = confirmed.find((passenger) => {
+      const ride = demo.state.rides[passenger.ride_id];
+      return passenger.passenger_id === id && ride?.driver_id === user?.id && ride.status === "active";
+    });
+    canViewContact = user?.id === id || Boolean(viewerBooking);
+    messagingRideId = viewerBooking?.ride_id ?? profileBooking?.ride_id ?? null;
+    const demoContact = canViewContact ? demo.state.contacts[id] : null;
+    contact = {
+      phone: demoContact?.phone ?? null,
+      whatsapp: demoContact?.whatsapp ?? null,
+    };
+    if (tab === "all" || tab === "posted") {
+      postedRides = rides
+        .filter((ride) => ride.driver_id === id)
+        .sort((a, b) => b.depart_at.localeCompare(a.depart_at));
+    }
+    if (tab === "all" || tab === "joined") {
+      const joinedIds = new Set(
+        confirmed
+          .filter((passenger) => passenger.passenger_id === id)
+          .map((passenger) => passenger.ride_id),
+      );
+      joinedRides = rides.filter((ride) => joinedIds.has(ride.id));
+    }
+    if (user && tab === "requests") {
+      rideRequests = demoRequests(demo.state)
+        .filter((request) => request.rider_id === id && request.depart_at >= nowIso)
+        .sort((a, b) => a.depart_at.localeCompare(b.depart_at));
+    }
+  } else {
+    const supabase = await createClient();
     const { data, error } = await supabase
-      .from("rides")
-      .select(RIDE_WITH_JOIN)
-      .eq("driver_id", id)
-      .order("depart_at", { ascending: false });
-    throwReadError(error, "posted rides");
-    postedRides = asRideWithDriverRows(data);
+      .from("profiles")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle<Profile>();
+    throwReadError(error, "profile");
+    profile = data;
+    const context = await getProfileContactContext(supabase, user?.id, id);
+    canViewContact = context.canViewContact;
+    messagingRideId = context.messagingRideId;
+    if (tab === "all" || tab === "posted") {
+      const { data: posted, error: postedError } = await supabase
+        .from("rides")
+        .select(RIDE_WITH_JOIN)
+        .eq("driver_id", id)
+        .order("depart_at", { ascending: false });
+      throwReadError(postedError, "posted rides");
+      postedRides = asRideWithDriverRows(posted);
+    }
+    if (tab === "all" || tab === "joined") {
+      const { data: joinedRows, error: joinedError } = await supabase
+        .from("ride_passengers")
+        .select(`*, ride:rides!ride_passengers_ride_id_fkey(${RIDE_NESTED_JOIN})`)
+        .eq("passenger_id", id)
+        .eq("status", "confirmed");
+      throwReadError(joinedError, "joined rides");
+      joinedRides = ((joinedRows as JoinedRideRow[] | null) ?? [])
+        .map((passenger) => passenger.ride)
+        .filter((ride): ride is RideWithDriver => Boolean(ride));
+    }
+    if (user && tab === "requests") {
+      const { data: requests, error: requestError } = await supabase
+        .from("ride_requests")
+        .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
+        .eq("rider_id", id)
+        .gte("depart_at", nowIso)
+        .order("depart_at", { ascending: true });
+      throwReadError(requestError, "ride requests");
+      rideRequests = (requests ?? []) as RideRequestWithRider[];
+    }
+    contact = canViewContact
+      ? await getContact(supabase, id)
+      : { phone: null, whatsapp: null };
   }
 
-  if (tab === "all" || tab === "joined") {
-    const { data: joinedRows, error } = await supabase
-      .from("ride_passengers")
-      .select(
-        `*, ride:rides!ride_passengers_ride_id_fkey(${RIDE_NESTED_JOIN})`
-      )
-      .eq("passenger_id", id)
-      .eq("status", "confirmed");
-    throwReadError(error, "joined rides");
-    joinedRides = ((joinedRows as JoinedRideRow[] | null) ?? [])
-      .map((p) => p.ride)
-      .filter((ride): ride is RideWithDriver => Boolean(ride));
-  }
+  if (!profile) notFound();
 
-  if (user && tab === "requests") {
-    const { data, error } = await supabase
-      .from("ride_requests")
-      .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
-      .eq("rider_id", id)
-      .gte("depart_at", nowIso)
-      .order("depart_at", { ascending: true });
-    throwReadError(error, "ride requests");
-    rideRequests = (data ?? []) as RideRequestWithRider[];
-  }
-
-  // Numbers come from the booking-scoped RPC, not the profile row.
-  const contact = canViewContact
-    ? await getContact(supabase, id)
-    : { phone: null, whatsapp: null };
+  const isMe = user?.id === id;
 
   // Merge + deduplicate for "all" tab, then split live vs past
   let liveRides: RideWithDriver[] = [];

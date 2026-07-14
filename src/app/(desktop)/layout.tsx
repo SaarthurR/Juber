@@ -4,12 +4,10 @@ import { Navbar } from "@/components/navbar";
 import { NotificationsProvider } from "@/components/notifications-provider";
 import { RouteProgress } from "@/components/route-progress";
 import { TempleLogo } from "@/components/temple-logo";
-import { ModerationNoticeBanner } from "@/components/moderation-notice-banner";
-import { getAuthUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { loadDesktopNotificationSnapshot } from "@/lib/notifications-server";
 import { loadModerationSnapshot } from "@/lib/moderation-server";
-import { createClient } from "@/lib/supabase/server";
 
 function FooterTagline() {
   return (
@@ -91,27 +89,17 @@ function DesktopFooter() {
 }
 
 export default async function DesktopLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient();
-  const user = await getAuthUser(supabase);
+  const { user, profile } = await getCurrentUser();
   const moderation = user ? await loadModerationSnapshot() : null;
   const banned = Boolean(moderation?.banned);
 
-  let profile = null;
   let notificationSnapshot = null;
   if (user && !banned) {
-    const [{ data }, notification] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", user.id).single(),
-      loadDesktopNotificationSnapshot(user.id),
-    ]);
-    profile = data;
-    notificationSnapshot = notification;
+    notificationSnapshot = await loadDesktopNotificationSnapshot(user.id);
   }
 
   const shell = (
     <div className="desktop-shell contents">
-      {!banned && moderation?.warnings.length ? (
-        <ModerationNoticeBanner warnings={moderation.warnings} variant="desktop" />
-      ) : null}
       {!banned ? <Navbar user={user} profile={profile} /> : null}
       <main className="flex-1">{children}</main>
       {!banned ? <DesktopFooter /> : null}

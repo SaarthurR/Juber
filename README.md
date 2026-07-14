@@ -19,6 +19,7 @@ deployed on **Vercel**.
 - Realtime in-app messaging plus booking-scoped phone/WhatsApp contact
 - First-class public events with their own ride boards
 - Admin tools: approve event requests, create events/places, JCNC calendar import
+- Resettable admin demo mode with baked rides, requests, messages, maps, and moderation cases
 
 ## Setup
 
@@ -31,14 +32,15 @@ deployed on **Vercel**.
    supabase link --project-ref YOUR-PROJECT-REF
    ```
 
-3. Apply every migration (`0001` through `0032`):
+3. Apply every migration (`0001` through `0032`, then all timestamped migrations):
 
    ```bash
    supabase db push
    supabase migration list --linked
    ```
 
-   Local and remote histories should match through `0032`. Optionally run
+   Local and remote histories should match through the latest migration, including
+   `20260714050000_demo_sessions.sql`. Optionally run
    `supabase/seed.sql` in the SQL editor for default JCNC places.
 
 4. Enable **Google** auth: Authentication → Providers → Google. Add your Google OAuth
@@ -66,6 +68,9 @@ Copy `.env.local.example` to `.env.local` and fill in values from Supabase
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes | Browser, server, middleware |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Browser, server, middleware |
 | `NEXT_PUBLIC_SITE_URL` | Yes | OAuth redirect origin |
+| `DEMO_SESSION_SECRET` | Hosted demo | Signs the isolated demo-session cookie |
+| `DEMO_ADMIN_PASSCODE` | Local demo | Unlocks the offline presenter workspace |
+| `DEMO_SQLITE_PATH` | Local demo | Stores offline demo state; never set this on Vercel |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only | Best-effort cancellation SMS |
 | `TWILIO_ACCOUNT_SID` | Optional | Cancellation SMS |
 | `TWILIO_AUTH_TOKEN` | Optional | Cancellation SMS |
@@ -96,7 +101,24 @@ where id = (select id from auth.users where email = 'you@example.com');
 The **Admin** link appears in the navbar. Admins can approve event requests, create
 events/places, and run **JCNC import** to seed likely high-traffic calendar items.
 
-## Demo walkthrough
+## Built-in demo mode
+
+The admin page includes a **Demo mode** switch. It loads a fixed, isolated data set with
+seven switchable personas and examples for every notification, ride/request state,
+message thread, event review, report decision, warning, ban, and appeal flow. Google Maps
+is replaced by deterministic address suggestions and route estimates, while Twilio,
+calendar import, and other paid/network integrations are simulated.
+
+- **Hosted/Vercel:** apply `20260714050000_demo_sessions.sql`, set a random
+  `DEMO_SESSION_SECRET` of at least 32 characters, and leave `DEMO_SQLITE_PATH` unset.
+  A signed-in admin can then turn demo mode on from `/admin`.
+- **Offline rehearsal:** set `DEMO_ADMIN_PASSCODE` (at least 32 characters) and
+  `DEMO_SQLITE_PATH=.juber/demo.sqlite`, then open `/admin/demo`. No Supabase or paid API
+  key is required.
+- **Replay:** **Reset** restores the original fixture immediately. **Exit** deletes the
+  isolated session; opening demo mode again always starts from the original fixture.
+
+## Live integration walkthrough
 
 Use **two Google accounts** for the full driver/rider flow, or one account to explore
 posting and admin tools.

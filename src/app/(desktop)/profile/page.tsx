@@ -12,6 +12,7 @@ import { AvatarUploader } from "@/components/avatar-uploader";
 import { authCallbackDestination } from "@/lib/route-targets";
 import { SignOutForm } from "@/components/sign-out-form";
 import { GooglePlaceInput } from "@/components/google-place-input";
+import { getDemoRuntime } from "@/lib/demo/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -47,9 +48,21 @@ export default async function EditProfilePage({
         ? "contact_required"
         : null;
 
-  const supabase = await createClient();
-  const contact = await getContact(supabase, user.id);
-  const homeAddress = await getHomeAddress(supabase);
+  const demo = await getDemoRuntime();
+  let contact: { phone: string | null; whatsapp: string | null };
+  let homeAddress: string | null;
+  if (demo) {
+    const demoContact = demo.state.contacts[user.id];
+    contact = {
+      phone: demoContact?.phone ?? null,
+      whatsapp: demoContact?.whatsapp ?? null,
+    };
+    homeAddress = demoContact?.homeAddress ?? null;
+  } else {
+    const supabase = await createClient();
+    contact = await getContact(supabase, user.id);
+    homeAddress = await getHomeAddress(supabase);
+  }
   const preferredContact = profile?.preferred_contact ?? "message";
   const progress = buildSetupProgress({
     fullName: profile?.full_name,

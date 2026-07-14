@@ -13,6 +13,8 @@ import { ProfileSetupPanel, setupRationale } from "@/components/profile-setup-pa
 import { authCallbackDestination } from "@/lib/route-targets";
 import type { Place } from "@/lib/types";
 import { GooglePlaceInput } from "@/components/google-place-input";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { demoPlaces } from "@/lib/demo-page-data";
 
 export const dynamic = "force-dynamic";
 
@@ -55,17 +57,20 @@ export default async function MobileEditProfilePage({
         ? "contact_required"
         : null;
 
-  const supabase = await createClient();
-  const { data: places } = await supabase
-    .from("places")
-    .select("*")
-    .eq("active", true)
-    .order("name", { ascending: true });
+  const demo = await getDemoRuntime();
+  const supabase = demo ? null : await createClient();
+  const { data: places } = demo
+    ? { data: demoPlaces(demo.state) }
+    : await supabase!
+        .from("places")
+        .select("*")
+        .eq("active", true)
+        .order("name", { ascending: true });
   const neighborhoods = ((places as Place[]) ?? []).filter((p) => p.kind !== "event");
   const options = neighborhoods.length ? neighborhoods : ((places as Place[]) ?? []);
 
-  const contact = await getContact(supabase, user.id);
-  const homeAddress = await getHomeAddress(supabase);
+  const contact = demo ? demo.state.contacts[user.id] : await getContact(supabase!, user.id);
+  const homeAddress = demo ? demo.state.contacts[user.id]?.homeAddress ?? null : await getHomeAddress(supabase!);
   const progress = buildSetupProgress({
     fullName: profile?.full_name,
     avatarUrl: profile?.avatar_url,

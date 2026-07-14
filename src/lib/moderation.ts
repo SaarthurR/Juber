@@ -11,173 +11,57 @@ export type ModerationWarning = {
   id: string;
   note: string | null;
   created_at: string;
+  outcomeId: string;
+  acknowledgedAt: string | null;
+};
+
+export type ModerationOutcomeType =
+  | "warning"
+  | "ban"
+  | "unban"
+  | "appeal_granted"
+  | "appeal_denied";
+
+export type ModerationOutcome = {
+  id: string;
+  type: ModerationOutcomeType;
+  sourceActionId: string;
+  acknowledgedAt: string | null;
+  createdAt: string;
+  memberReason: string | null;
+};
+
+export type ModerationAppeal = {
+  id: string;
+  status: "pending" | "granted" | "denied";
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
+export type ModerationOutcomeCursor = {
+  id: string;
+  createdAt: string;
 };
 
 export type ModerationSnapshot = {
   banned: boolean;
   ban: ModerationBan | null;
   hasPendingAppeal: boolean;
+  appeal: ModerationAppeal | null;
   warnings: ModerationWarning[];
+  outcomes: ModerationOutcome[];
+  outcomeCursor: ModerationOutcomeCursor | null;
+  loadError?: boolean;
 };
 
-export type ReportRow = {
-  id: string;
-  target_type: ReportTargetType;
-  target_id: string;
-  target_user_id: string | null;
-  reporter_id: string;
-  reason: string;
-  status: "pending" | "reviewing" | "actioned" | "dismissed";
-  resolution: string | null;
-  created_at: string;
-};
-
-export type ModerationEvidence = {
-  report?: {
-    id: string;
-    target_type: string;
-    reason: string;
-    details: string | null;
-    status: string;
-  };
-  evidence?: Record<string, unknown>;
-  reporter?: {
-    full_name?: string | null;
-  };
-  reported?: {
-    full_name?: string | null;
-  };
-};
-
-export type ModerationEvidenceState = {
-  selectedReportId: string | null;
-  requestToken: number;
-  loading: boolean;
-  evidence: ModerationEvidence | null;
-  error: string | null;
-};
-
-export type ModerationEvidenceAction =
-  | { type: "select"; reportId: string }
-  | {
-      type: "resolve";
-      reportId: string;
-      requestToken: number;
-      evidence: ModerationEvidence;
-    }
-  | {
-      type: "reject";
-      reportId: string;
-      requestToken: number;
-      error: string;
-    };
-
-export type BoundModerationActionTarget = {
-  reportId: string;
-  reportedUserId: string | null;
-  reporterUserId: string;
-  reason: string;
-};
-
-export function createModerationEvidenceState(
-  selectedReportId: string | null,
-): ModerationEvidenceState {
-  return {
-    selectedReportId,
-    requestToken: selectedReportId ? 1 : 0,
-    loading: selectedReportId !== null,
-    evidence: null,
-    error: null,
-  };
-}
-
-export function moderationEvidenceReducer(
-  state: ModerationEvidenceState,
-  action: ModerationEvidenceAction,
-): ModerationEvidenceState {
-  if (action.type === "select") {
-    if (action.reportId === state.selectedReportId) return state;
-    return {
-      selectedReportId: action.reportId,
-      requestToken: state.requestToken + 1,
-      loading: true,
-      evidence: null,
-      error: null,
-    };
-  }
-
-  if (
-    action.reportId !== state.selectedReportId
-    || action.requestToken !== state.requestToken
-  ) {
-    return state;
-  }
-
-  if (action.type === "reject") {
-    return {
-      ...state,
-      loading: false,
-      evidence: null,
-      error: action.error,
-    };
-  }
-
-  if (action.evidence.report?.id !== action.reportId) {
-    return {
-      ...state,
-      loading: false,
-      evidence: null,
-      error: "Evidence did not match the selected report.",
-    };
-  }
-
-  return {
-    ...state,
-    loading: false,
-    evidence: action.evidence,
-    error: null,
-  };
-}
-
-export function isModerationEvidenceReady(state: ModerationEvidenceState) {
-  return (
-    !state.loading
-    && state.selectedReportId !== null
-    && state.evidence?.report?.id === state.selectedReportId
-  );
-}
-
-export function visibleModerationEvidence(state: ModerationEvidenceState) {
-  return isModerationEvidenceReady(state) ? state.evidence : null;
-}
-
-export function bindModerationActionTarget(
-  state: ModerationEvidenceState,
-  report: ReportRow | null,
-): BoundModerationActionTarget | null {
-  if (
-    !report
-    || !isModerationEvidenceReady(state)
-    || report.id !== state.selectedReportId
-  ) {
-    return null;
-  }
-
-  return {
-    reportId: report.id,
-    reportedUserId: report.target_user_id,
-    reporterUserId: report.reporter_id,
-    reason: report.reason,
-  };
-}
-
-export type AppealRow = {
-  id: string;
-  user_id: string;
-  text: string;
-  status: "pending" | "granted" | "denied";
-  created_at: string;
-  ban_id: string;
+export const EMPTY_MODERATION_SNAPSHOT: ModerationSnapshot = {
+  banned: false,
+  ban: null,
+  hasPendingAppeal: false,
+  appeal: null,
+  warnings: [],
+  outcomes: [],
+  outcomeCursor: null,
 };
 
 export const REPORT_REASONS = [
@@ -188,15 +72,6 @@ export const REPORT_REASONS = [
   "Inappropriate content",
   "Other",
 ] as const;
-
-export const MODERATION_ALLOWED_PATHS = new Set(["/banned", "/m/banned"]);
-
-export function isModerationAllowedPath(pathname: string) {
-  return (
-    MODERATION_ALLOWED_PATHS.has(pathname)
-    || pathname.startsWith("/auth/")
-  );
-}
 
 export function bannedPagePath(isMobile: boolean) {
   return isMobile ? "/m/banned" : "/banned";
@@ -218,19 +93,84 @@ export function parseModerationNotices(raw: unknown): ModerationSnapshot {
   const warningsRaw = Array.isArray(payload.warnings) ? payload.warnings : [];
   const warnings = warningsRaw.flatMap((entry) => {
     const row = entry as Record<string, unknown>;
-    if (typeof row.id !== "string" || typeof row.created_at !== "string") return [];
+    if (
+      typeof row.id !== "string"
+      || typeof row.created_at !== "string"
+      || typeof row.outcome_id !== "string"
+    ) return [];
     return [{
       id: row.id,
       note: typeof row.note === "string" ? row.note : null,
       created_at: row.created_at,
+      outcomeId: row.outcome_id,
+      acknowledgedAt:
+        typeof row.acknowledged_at === "string" ? row.acknowledged_at : null,
     }];
   });
+
+  const appealRaw = payload.appeal as Record<string, unknown> | null | undefined;
+  const appealStatus = appealRaw?.status;
+  const appeal: ModerationAppeal | null = appealRaw
+    && typeof appealRaw.id === "string"
+    && (appealStatus === "pending"
+      || appealStatus === "granted"
+      || appealStatus === "denied")
+    && typeof appealRaw.created_at === "string"
+      ? {
+          id: appealRaw.id,
+          status: appealStatus as ModerationAppeal["status"],
+          createdAt: appealRaw.created_at,
+          resolvedAt:
+            typeof appealRaw.resolved_at === "string" ? appealRaw.resolved_at : null,
+        }
+      : null;
+
+  const outcomeTypes = new Set<ModerationOutcomeType>([
+    "warning",
+    "ban",
+    "unban",
+    "appeal_granted",
+    "appeal_denied",
+  ]);
+  const outcomesRaw = Array.isArray(payload.outcomes) ? payload.outcomes : [];
+  const outcomes = outcomesRaw.flatMap((entry) => {
+    const row = entry as Record<string, unknown>;
+    if (
+      typeof row.id !== "string"
+      || typeof row.type !== "string"
+      || !outcomeTypes.has(row.type as ModerationOutcomeType)
+      || typeof row.source_action_id !== "string"
+      || typeof row.created_at !== "string"
+    ) return [];
+    return [{
+      id: row.id,
+      type: row.type as ModerationOutcomeType,
+      sourceActionId: row.source_action_id,
+      acknowledgedAt:
+        typeof row.acknowledged_at === "string" ? row.acknowledged_at : null,
+      createdAt: row.created_at,
+      memberReason:
+        row.type === "unban" && typeof row.member_reason === "string"
+          ? row.member_reason
+          : null,
+    }];
+  });
+
+  const cursorRaw = payload.outcome_cursor as Record<string, unknown> | null | undefined;
+  const outcomeCursor = cursorRaw
+    && typeof cursorRaw.id === "string"
+    && typeof cursorRaw.created_at === "string"
+      ? { id: cursorRaw.id, createdAt: cursorRaw.created_at }
+      : null;
 
   return {
     banned: Boolean(payload.banned) || ban !== null,
     ban,
     hasPendingAppeal: Boolean(payload.has_pending_appeal),
+    appeal,
     warnings,
+    outcomes,
+    outcomeCursor,
   };
 }
 
@@ -240,6 +180,17 @@ export function formatBanExpiry(expiresAt: string | null) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+export function formatBanLength(ban: ModerationBan) {
+  if (!ban.expires_at) return "Permanent";
+  const start = new Date(ban.created_at).getTime();
+  const end = new Date(ban.expires_at).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return "Temporary";
+  }
+  const days = Math.max(1, Math.round((end - start) / 86_400_000));
+  return `${days} day${days === 1 ? "" : "s"}`;
 }
 
 export function mapReportSubmitError(message: string) {

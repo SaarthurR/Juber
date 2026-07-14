@@ -6,6 +6,7 @@ import {
   handleProxyRequest,
 } from "./proxy";
 import { DESKTOP_COOKIE } from "./lib/route-targets";
+import { createDemoSessionToken } from "./lib/demo/session";
 
 const ORIGIN = "https://juber.invalid";
 const MOBILE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)";
@@ -201,4 +202,44 @@ test("proxy refreshes session before pass-through branches", async () => {
     "sb-b=; Path=/; Max-Age=0",
   ]);
   assert.equal(response.headers.get("x-session-internal"), "must-not-leak");
+});
+
+test("unverified demo cookie preserves live auth refresh and mobile routing", async () => {
+  let refreshes = 0;
+  const response = await handleProxyRequest(
+    request("/rides", { cookie: "juber_demo_session=signed-demo-token" }),
+    async () => {
+      refreshes += 1;
+      return refreshedResponse();
+    },
+  );
+
+  assert.equal(refreshes, 1);
+  assert.equal(response.headers.get("location"), `${ORIGIN}/m`);
+});
+
+test("verified local demo cookie stays offline without changing mobile routing", async () => {
+  const secret = "local-demo-secret-that-is-at-least-32-characters";
+  const previousPath = process.env.DEMO_SQLITE_PATH;
+  const previousSecret = process.env.DEMO_SESSION_SECRET;
+  process.env.DEMO_SQLITE_PATH = ".juber/test-demo.sqlite";
+  process.env.DEMO_SESSION_SECRET = secret;
+  let refreshes = 0;
+  try {
+    const token = createDemoSessionToken("123e4567-e89b-42d3-a456-426614174000", secret);
+    const response = await handleProxyRequest(
+      request("/rides", { cookie: `juber_demo_session=${token}` }),
+      async () => {
+        refreshes += 1;
+        return refreshedResponse();
+      },
+    );
+    assert.equal(refreshes, 0);
+    assert.equal(response.headers.get("location"), `${ORIGIN}/m`);
+  } finally {
+    if (previousPath === undefined) delete process.env.DEMO_SQLITE_PATH;
+    else process.env.DEMO_SQLITE_PATH = previousPath;
+    if (previousSecret === undefined) delete process.env.DEMO_SESSION_SECRET;
+    else process.env.DEMO_SESSION_SECRET = previousSecret;
+  }
 });

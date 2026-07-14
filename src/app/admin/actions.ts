@@ -24,6 +24,7 @@ import {
   planJcncImport,
   summarizeJcncImport,
 } from "@/lib/jcnc-import";
+import { getDemoRuntime, getDemoStore } from "@/lib/demo/runtime";
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -73,6 +74,31 @@ export async function createEvent(
   formData: FormData,
 ): Promise<AdminActionState> {
   try {
+    const demo = await getDemoRuntime();
+    if (demo) {
+      const name = str(formData.get("name"));
+      if (!name) return adminActionError("Please add an event name.");
+      const sourceUrl = parseEventSourceUrl(formData.get("source_url"));
+      if (formData.get("source_url")?.toString().trim() && !sourceUrl) {
+        return adminActionError("Please enter a valid http or https URL.");
+      }
+      await getDemoStore().mutate(demo.id, demo.revision, {
+        type: "create_event",
+        actorId: demo.activeActorId,
+        input: {
+          name,
+          slug: `${slugify(name)}-demo`,
+          description: str(formData.get("description")),
+          venue_label: str(formData.get("venue_label")),
+          start_date: str(formData.get("start_date")),
+          end_date: str(formData.get("end_date")),
+          source_url: sourceUrl,
+          is_active: true,
+        },
+      });
+      revalidateAdminEventPaths();
+      return adminActionSuccess("Event added.", previousState);
+    }
     const { supabase, user } = await requireAdmin();
     const name = str(formData.get("name"));
     if (!name) return adminActionError("Please add an event name.");
@@ -107,6 +133,25 @@ export async function createPlace(
   formData: FormData,
 ): Promise<AdminActionState> {
   try {
+    const demo = await getDemoRuntime();
+    if (demo) {
+      const name = str(formData.get("name"));
+      if (!name) return adminActionError("Please add a location name.");
+      const kind = str(formData.get("kind"));
+      await getDemoStore().mutate(demo.id, demo.revision, {
+        type: "create_place",
+        actorId: demo.activeActorId,
+        input: {
+          name,
+          address: str(formData.get("address")),
+          kind: kind === "hub" || kind === "event" ? kind : "neighborhood",
+          event_id: str(formData.get("event_id")),
+          active: true,
+        },
+      });
+      revalidatePath("/admin");
+      return adminActionSuccess("Location added.", previousState);
+    }
     const { supabase } = await requireAdmin();
     const name = str(formData.get("name"));
     if (!name) return adminActionError("Please add a location name.");
@@ -130,6 +175,12 @@ export async function deleteEvent(
   eventId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
+  const demo = await getDemoRuntime();
+  if (demo) {
+    await getDemoStore().mutate(demo.id, demo.revision, { type: "delete_event", actorId: demo.activeActorId, eventId });
+    revalidateAdminEventPaths();
+    return adminActionSuccess("Event deleted.", previousState);
+  }
   return adminReviewActions.deleteEvent(eventId, previousState);
 }
 
@@ -137,6 +188,12 @@ export async function deletePlace(
   placeId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
+  const demo = await getDemoRuntime();
+  if (demo) {
+    await getDemoStore().mutate(demo.id, demo.revision, { type: "delete_place", actorId: demo.activeActorId, placeId });
+    revalidatePath("/admin");
+    return adminActionSuccess("Location deleted.", previousState);
+  }
   return adminReviewActions.deletePlace(placeId, previousState);
 }
 
@@ -144,6 +201,12 @@ export async function approveEventRequest(
   requestId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
+  const demo = await getDemoRuntime();
+  if (demo) {
+    await getDemoStore().mutate(demo.id, demo.revision, { type: "review_event_request", actorId: demo.activeActorId, requestId, decision: "approved" });
+    revalidateAdminEventPaths();
+    return adminActionSuccess("Event request approved.", previousState);
+  }
   return adminReviewActions.approveEventRequest(requestId, previousState);
 }
 
@@ -151,6 +214,12 @@ export async function rejectEventRequest(
   requestId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
+  const demo = await getDemoRuntime();
+  if (demo) {
+    await getDemoStore().mutate(demo.id, demo.revision, { type: "review_event_request", actorId: demo.activeActorId, requestId, decision: "rejected" });
+    revalidateAdminEventPaths();
+    return adminActionSuccess("Event request rejected.", previousState);
+  }
   return adminReviewActions.rejectEventRequest(requestId, previousState);
 }
 
@@ -158,6 +227,12 @@ export async function deleteEventRequest(
   requestId: string,
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
+  const demo = await getDemoRuntime();
+  if (demo) {
+    await getDemoStore().mutate(demo.id, demo.revision, { type: "delete_event_request", actorId: demo.activeActorId, requestId });
+    revalidatePath("/admin");
+    return adminActionSuccess("Event request deleted.", previousState);
+  }
   return adminReviewActions.deleteEventRequest(requestId, previousState);
 }
 
@@ -165,6 +240,14 @@ export async function importJcncEvents(
   previousState: AdminActionState,
 ): Promise<AdminActionState> {
   try {
+    const demo = await getDemoRuntime();
+    if (demo) {
+      const next = await getDemoStore().mutate(demo.id, demo.revision, { type: "import_events", actorId: demo.activeActorId });
+      revalidatePath("/admin");
+      const imported = Object.values(next.state.eventRequests).filter((request) => request.source === "jcnc").length
+        - Object.values(demo.state.eventRequests).filter((request) => request.source === "jcnc").length;
+      return adminActionSuccess(imported ? "Imported 1 JCNC event for review." : "JCNC demo events are already imported.", previousState);
+    }
     const { supabase, user } = await requireAdmin();
     const calendarText = await fetchJcncCalendar();
     const candidates = parseJcncIcs(calendarText).filter(likelyHighTraffic);

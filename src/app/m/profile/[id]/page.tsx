@@ -11,6 +11,7 @@ import { PendingActionButton, PendingActionGroup } from "@/components/pending-ac
 import { ReportTargetButton } from "@/components/report-target-button";
 import type { Profile } from "@/lib/types";
 import { throwReadError } from "@/lib/supabase/read-error";
+import { getDemoRuntime } from "@/lib/demo/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -25,24 +26,31 @@ export default async function MobilePublicProfilePage({
   const { user } = await getCurrentUser();
   if (user?.id === id) redirect("/m/profile");
 
-  const supabase = await createClient();
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle<Profile>();
-
-  throwReadError(error, "profile");
+  const demo = await getDemoRuntime();
+  let profile: Profile | null;
+  let canViewContact: boolean;
+  let messagingRideId: string | null;
+  let contact: { phone: string | null; whatsapp: string | null };
+  if (demo) {
+    profile = demo.state.profiles[id] ?? null;
+    const ride = user ? Object.values(demo.state.rides).find((item) =>
+      (item.driver_id === id && Object.values(demo.state.passengers).some((passenger) => passenger.ride_id === item.id && passenger.passenger_id === user.id && passenger.status === "confirmed"))
+      || (item.driver_id === user.id && Object.values(demo.state.passengers).some((passenger) => passenger.ride_id === item.id && passenger.passenger_id === id && passenger.status === "confirmed")),
+    ) : null;
+    canViewContact = Boolean(ride);
+    messagingRideId = ride?.id ?? null;
+    contact = canViewContact ? demo.state.contacts[id] ?? { phone: null, whatsapp: null } : { phone: null, whatsapp: null };
+  } else {
+    const supabase = await createClient();
+    const result = await supabase.from("profiles").select("*").eq("id", id).maybeSingle<Profile>();
+    throwReadError(result.error, "profile");
+    profile = result.data;
+    const context = await getProfileContactContext(supabase, user?.id, id);
+    canViewContact = context.canViewContact;
+    messagingRideId = context.messagingRideId;
+    contact = canViewContact ? await getContact(supabase, id) : { phone: null, whatsapp: null };
+  }
   if (!profile) notFound();
-
-  const { canViewContact, messagingRideId } = await getProfileContactContext(
-    supabase,
-    user?.id,
-    id,
-  );
-  const contact = canViewContact
-    ? await getContact(supabase, id)
-    : { phone: null, whatsapp: null };
   const preferred = profile.preferred_contact ?? "message";
   const metaLine = [profile.pronouns, profile.neighborhood].filter(Boolean).join(" · ");
 

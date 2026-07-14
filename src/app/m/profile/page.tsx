@@ -11,6 +11,8 @@ import { SignOutForm } from "@/components/sign-out-form";
 import type { RideWithDriver } from "@/lib/types";
 import { RIDE_WITH_JOIN, RIDE_NESTED_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
 import { throwReadError } from "@/lib/supabase/read-error";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { queryDemoRides } from "@/lib/demo/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +39,15 @@ export default async function MobileProfilePage() {
     );
   }
 
-  const supabase = await createClient();
-  const [postedResult, joinedResult] = await Promise.all([
-    supabase
+  const demo = await getDemoRuntime();
+  const supabase = demo ? null : await createClient();
+  const [postedResult, joinedResult] = demo ? [{ data: [], error: null }, { data: [], error: null }] : await Promise.all([
+    supabase!
       .from("rides")
       .select(RIDE_WITH_JOIN)
       .eq("driver_id", user.id)
       .order("depart_at", { ascending: false }),
-    supabase
+    supabase!
       .from("ride_passengers")
       .select(
         `ride:rides!ride_passengers_ride_id_fkey(${RIDE_NESTED_JOIN})`,
@@ -57,12 +60,17 @@ export default async function MobileProfilePage() {
   const postedData = postedResult.data;
   const joinedData = joinedResult.data;
 
-  const posted = asRideWithDriverRows(postedData);
-  const joined = ((joinedData as JoinedRideRow[] | null) ?? [])
+  const demoRides = demo ? queryDemoRides(demo.state) : [];
+  const posted = demo
+    ? demoRides.filter((ride) => ride.driver_id === user.id)
+    : asRideWithDriverRows(postedData);
+  const joined = demo
+    ? demoRides.filter((ride) => Object.values(demo.state.passengers).some((passenger) => passenger.ride_id === ride.id && passenger.passenger_id === user.id && passenger.status === "confirmed"))
+    : ((joinedData as JoinedRideRow[] | null) ?? [])
     .map((r) => r.ride)
     .filter((r): r is RideWithDriver => Boolean(r));
 
-  const contact = await getContact(supabase, user.id);
+  const contact = demo ? demo.state.contacts[user.id] : await getContact(supabase!, user.id);
   const preferred = profile?.preferred_contact ?? "message";
   const metaLine = [profile?.pronouns, profile?.neighborhood].filter(Boolean).join(" · ");
 
@@ -120,7 +128,7 @@ export default async function MobileProfilePage() {
           />
         </div>
 
-        <ProfileTabs posted={posted} joined={joined} now={new Date().getTime()} />
+        <ProfileTabs posted={posted} joined={joined} now={demo ? Date.parse(demo.state.now) : new Date().getTime()} />
 
         <section className="rounded-[18px] border border-border bg-white p-4">
           <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-muted-warm">

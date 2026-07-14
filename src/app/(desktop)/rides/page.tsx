@@ -7,6 +7,9 @@ import { dateOnlyToIso, getTodayDateInputValue, parseDateOnly } from "@/lib/date
 import { redirect } from "next/navigation";
 import { RIDE_WITH_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
 import { throwReadError } from "@/lib/supabase/read-error";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { demoActiveRequests, demoActiveRides } from "@/lib/demo-page-data";
+import type { RideWithDriver } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +47,6 @@ export default async function RidesPage({
     redirect(`/rides${clean.size ? `?${clean}` : ""}`);
   }
 
-  const { user } = await getCurrentUser();
-  const supabase = await createClient();
-
   let dayRange: { gte: string; lt: string } | null = null;
   if (date) {
     const start = dateOnlyToIso(date, "00:00");
@@ -58,6 +58,11 @@ export default async function RidesPage({
   }
 
   const nowIso = now.toISOString();
+  const demo = await getDemoRuntime();
+  let rides: RideWithDriver[];
+  let requests: RideRequestWithRider[];
+  let requestCount: number;
+  let signedIn: boolean;
 
   function applyRequestFilters<T extends { gte: (c: string, v: string) => T; lte: (c: string, v: string) => T; ilike: (c: string, v: string) => T }>(
     q: T,
@@ -69,8 +74,28 @@ export default async function RidesPage({
     return q;
   }
 
-  const ridesQuery = user
-    ? (() => {
+  if (demo) {
+    signedIn = true;
+    rides = demoActiveRides(demo.state).filter((ride) =>
+      (!from || ride.origin_label.toLowerCase().includes(from.toLowerCase()))
+      && (!to || ride.destination_label.toLowerCase().includes(to.toLowerCase()))
+      && (!tripFilter || ride.round_trip === (tripFilter === "round"))
+      && (dayRange ? ride.depart_at >= dayRange.gte && ride.depart_at < dayRange.lt : ride.depart_at >= nowIso),
+    ).sort((a, b) => a.depart_at.localeCompare(b.depart_at));
+    requests = demoActiveRequests(demo.state).filter((request) =>
+      (!from || request.origin_label.toLowerCase().includes(from.toLowerCase()))
+      && (!to || request.destination_label.toLowerCase().includes(to.toLowerCase()))
+      && (date
+        ? Boolean(request.earliest_date && request.latest_date && request.earliest_date <= date && request.latest_date >= date)
+        : Boolean(request.latest_date && request.latest_date >= today)),
+    ).sort((a, b) => a.depart_at.localeCompare(b.depart_at));
+    requestCount = requests.length;
+  } else {
+    const { user } = await getCurrentUser();
+    const supabase = await createClient();
+    signedIn = Boolean(user);
+    const ridesQuery = user
+      ? (() => {
         let q = supabase
           .from("rides")
           .select(RIDE_WITH_JOIN)
@@ -82,42 +107,42 @@ export default async function RidesPage({
         if (dayRange) q = q.gte("depart_at", dayRange.gte).lt("depart_at", dayRange.lt);
         else q = q.gte("depart_at", nowIso);
         return q;
-      })()
-    : supabase.rpc("public_upcoming_rides", {
+        })()
+      : supabase.rpc("public_upcoming_rides", {
         p_from: from ?? null,
         p_to: to ?? null,
         p_date: date || null,
         p_limit: 100,
         p_round_trip: tripFilter === null ? null : tripFilter === "round",
-      });
-  const requestsQuery = user
-    ? applyRequestFilters(
+        });
+    const requestsQuery = user
+      ? applyRequestFilters(
         supabase
           .from("ride_requests")
           .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
           .eq("status", "active")
           .order("depart_at", { ascending: true }),
-      )
-    : Promise.resolve({ data: [], error: null });
+        )
+      : Promise.resolve({ data: [], error: null });
 
-  const [ridesResult, requestsResult, countResult] = await Promise.all([
-    ridesQuery,
-    requestsQuery,
-    user
-      ? supabase
+    const [ridesResult, requestsResult, countResult] = await Promise.all([
+      ridesQuery,
+      requestsQuery,
+      user
+        ? supabase
           .from("ride_requests")
           .select("id", { count: "exact", head: true })
           .eq("status", "active")
           .gte("latest_date", today)
-      : Promise.resolve({ count: 0, error: null }),
-  ]);
-  throwReadError(ridesResult.error, "rides");
-  throwReadError(requestsResult.error, "ride requests");
-  throwReadError(countResult.error, "ride request count");
-
-  const rides = asRideWithDriverRows(ridesResult.data);
-  const requests = (requestsResult.data as RideRequestWithRider[]) ?? [];
-  const requestCount = countResult.count ?? 0;
+        : Promise.resolve({ count: 0, error: null }),
+    ]);
+    throwReadError(ridesResult.error, "rides");
+    throwReadError(requestsResult.error, "ride requests");
+    throwReadError(countResult.error, "ride request count");
+    rides = asRideWithDriverRows(ridesResult.data);
+    requests = (requestsResult.data as RideRequestWithRider[]) ?? [];
+    requestCount = countResult.count ?? 0;
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
@@ -146,7 +171,7 @@ export default async function RidesPage({
         rides={rides}
         requests={requests}
         requestCount={requestCount ?? 0}
-        signedIn={Boolean(user)}
+        signedIn={signedIn}
       />
     </div>
   );

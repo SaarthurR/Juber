@@ -110,13 +110,13 @@ test("desktop notifications have one provider channel and gated surface refresh"
   assert.match(provider, /createSurfaceRefreshDebouncer/);
   const subscriptionStart = provider.indexOf("return subscribeToNotificationChanges");
   const subscriptionEnd = provider.indexOf(
-    "}, [refreshGate, userId]);",
+    "}, [demoEnabled, refreshGate, userId]);",
     subscriptionStart,
   );
   assert.ok(subscriptionStart >= 0);
   assert.ok(
     subscriptionEnd > subscriptionStart,
-    "desktop channel effect must only reconnect when userId changes",
+    "desktop channel effect must disconnect when identity or demo mode changes",
   );
   assert.doesNotMatch(bell, /subscribeToNotificationChanges|router\.refresh|useRouter|loadVisibleNotificationIds/);
   assert.match(bell, /useNotifications\(\)/);
@@ -126,7 +126,7 @@ test("desktop notifications have one provider channel and gated surface refresh"
   assert.match(mobileSheet, /subscribeToNotificationChanges\([\s\S]*"mobile-notifications"/);
 });
 
-test("session proxy behavior remains invariant and exposes no spoofable surface marker", () => {
+test("session proxy keeps routing invariant and only skips auth for verified local demos", () => {
   const proxy = readFileSync(fileURLToPath(new URL("../proxy.ts", import.meta.url)), "utf8");
   const middleware = readFileSync(
     fileURLToPath(new URL("../lib/supabase/middleware.ts", import.meta.url)),
@@ -134,7 +134,8 @@ test("session proxy behavior remains invariant and exposes no spoofable surface 
   );
 
   assert.match(proxy, /return handleProxyRequest\(request\)/);
-  assert.match(proxy, /const refreshedResponse = await refreshSession\(request\)/);
+  assert.match(proxy, /readDemoSessionCookie\(request\.headers\.get\("cookie"\)\)/);
+  assert.match(proxy, /: await refreshSession\(request\)/);
   assert.match(proxy, /copySetCookieHeaders\(refreshedResponse, response\)/);
   assert.match(proxy, /pathname === "\/profile"/);
   assert.match(proxy, /root === "events"/);

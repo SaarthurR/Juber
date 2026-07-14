@@ -30,7 +30,7 @@ if (process.argv.includes("--list")) {
 
 const run = spawnSync(
   process.execPath,
-  ["--import", "tsx", "--test", ...files],
+  ["--import", "./scripts/test-server-only.mjs", "--import", "tsx", "--test", ...files],
   {
     stdio: "inherit",
     env: { ...process.env, TZ: "America/Los_Angeles" },

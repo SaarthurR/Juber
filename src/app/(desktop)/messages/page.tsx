@@ -8,6 +8,8 @@ import { MessagesList } from "@/components/messages-list";
 import { FALLBACK_NOTIFICATION_SELECT, NOTIFICATION_SELECT } from "@/lib/notifications-query";
 import type { NotificationWithContext } from "@/lib/types";
 import { loadThreadSummaries, loadVisibleNotificationIds } from "@/lib/messages";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { queryDemoNotifications, queryDemoThreadSummaries } from "@/lib/demo/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +23,15 @@ export default async function MessagesPage({
 
   const { user } = await getCurrentUser();
   if (!user) redirect("/");
-  const supabase = await createClient();
-
-  const unreadResult = await loadVisibleNotificationIds(supabase, null, true);
+  const demo = await getDemoRuntime();
+  const unreadResult = demo
+    ? {
+        ids: queryDemoNotifications(demo.state, user.id)
+          .filter((notification) => !notification.read_at)
+          .map((notification) => notification.id),
+        error: null,
+      }
+    : await loadVisibleNotificationIds(await createClient(), null, true);
   const unreadCount = unreadResult.error ? 0 : unreadResult.ids.length;
 
   return (
@@ -56,6 +64,10 @@ export default async function MessagesPage({
 }
 
 async function MessagesTab({ userId }: { userId: string }) {
+  const demo = await getDemoRuntime();
+  if (demo) {
+    return <MessagesList userId={userId} initialThreads={queryDemoThreadSummaries(demo.state, userId)} />;
+  }
   const supabase = await createClient();
   const threads = await loadThreadSummaries(supabase, userId);
 
@@ -69,6 +81,26 @@ async function NotificationsTab({
   userId: string;
   hasUnread: boolean;
 }) {
+  const demo = await getDemoRuntime();
+  if (demo) {
+    const notifications = queryDemoNotifications(demo.state, userId).slice(0, 50);
+    return (
+      <>
+        <NotificationsMarkRead hasUnread={hasUnread} />
+        {notifications.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-stone-300 p-10 text-center text-stone-500">
+            No notifications yet. You&apos;ll hear here when there&apos;s activity on your rides.
+          </p>
+        ) : (
+          <ul className="divide-y divide-stone-200 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+            {notifications.map((notification) => (
+              <li key={notification.id}><NotificationCard n={notification} /></li>
+            ))}
+          </ul>
+        )}
+      </>
+    );
+  }
   const supabase = await createClient();
   const visibility = await loadVisibleNotificationIds(supabase, 50, false);
   const notificationIds = visibility.ids;

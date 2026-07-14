@@ -9,19 +9,29 @@ import {
   formatEventDateShort,
   loadEventSummaries,
   loadMyEventRequests,
+  type EventSummary,
   type MyEventRequest,
 } from "@/lib/events";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { demoEventSummaries, demoMyEventRequests } from "@/lib/demo-page-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function EventsPage() {
   const { user } = await getCurrentUser();
-  const supabase = await createClient();
-
-  const [summaries, myRequests] = await Promise.all([
-    loadEventSummaries(supabase, Boolean(user)),
-    user ? loadMyEventRequests(supabase, user.id) : Promise.resolve([]),
-  ]);
+  const demo = await getDemoRuntime();
+  let summaries: EventSummary[];
+  let myRequests: MyEventRequest[];
+  if (demo) {
+    summaries = demoEventSummaries(demo.state);
+    myRequests = user ? demoMyEventRequests(demo.state, user.id) : [];
+  } else {
+    const supabase = await createClient();
+    [summaries, myRequests] = await Promise.all([
+      loadEventSummaries(supabase, Boolean(user)),
+      user ? loadMyEventRequests(supabase, user.id) : Promise.resolve([]),
+    ]);
+  }
 
   const featured = summaries[0];
   const rest = summaries.slice(1);

@@ -1,4 +1,6 @@
 import { cache } from "react";
+import { resolveIdentity } from "@/lib/demo/access";
+import { getDemoRuntime } from "@/lib/demo/runtime";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 
@@ -30,16 +32,21 @@ export async function getAuthUser(
  * instead of each issuing their own round-trips.
  */
 export const getCurrentUser = cache(async () => {
-  const supabase = await createClient();
-  const user = await getAuthUser(supabase);
+  return resolveIdentity(await getDemoRuntime(), async () => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return { user: null, profile: null as Profile | null };
+    }
+    const supabase = await createClient();
+    const user = await getAuthUser(supabase);
 
-  if (!user) return { user: null, profile: null as Profile | null };
+    if (!user) return { user: null, profile: null as Profile | null };
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
 
-  return { user, profile: (profile as Profile) ?? null };
+    return { user, profile: (profile as Profile) ?? null };
+  });
 });

@@ -7,6 +7,8 @@ import { SubHeader } from "@/components/mobile/sub-header";
 import { MRequestCard } from "@/components/mobile/mobile-cards";
 import type { RideRequestWithRider } from "@/lib/types";
 import { throwReadError } from "@/lib/supabase/read-error";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { demoActiveRequests } from "@/lib/demo-page-data";
 
 export const dynamic = "force-dynamic";
 
@@ -22,18 +24,22 @@ export default async function MobileRequestsPage() {
       </div>
     );
   }
-  const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
-
-  const { data, error } = await supabase
-    .from("ride_requests")
-    .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
-    .eq("status", "active")
-    .gte("latest_date", today)
-    .order("depart_at", { ascending: true });
-  throwReadError(error, "ride requests");
-
-  const requests = (data as RideRequestWithRider[]) ?? [];
+  const demo = await getDemoRuntime();
+  let requests: RideRequestWithRider[];
+  if (demo) {
+    requests = demoActiveRequests(demo.state);
+  } else {
+    const supabase = await createClient();
+    const today = new Date().toISOString().slice(0, 10);
+    const { data, error } = await supabase
+      .from("ride_requests")
+      .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
+      .eq("status", "active")
+      .gte("latest_date", today)
+      .order("depart_at", { ascending: true });
+    throwReadError(error, "ride requests");
+    requests = (data as RideRequestWithRider[]) ?? [];
+  }
 
   return (
     <div className="pb-[calc(5rem+env(safe-area-inset-bottom)+1rem)]">

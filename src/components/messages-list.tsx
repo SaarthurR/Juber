@@ -5,7 +5,9 @@ import { RouteProgressLink as Link } from "@/components/route-progress-link";
 import { formatDistanceToNow } from "date-fns";
 import { CheckCheck, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 import { deleteConversation } from "@/app/messages/actions";
+import { useDemoRuntime } from "@/components/demo-runtime-provider";
 import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { Message } from "@/lib/types";
@@ -27,6 +29,8 @@ export function MessagesList({
   /** Route prefix for thread links — "/m/messages" keeps mobile in the phone shell. */
   basePath?: string;
 }) {
+  const router = useRouter();
+  const { enabled: demoEnabled } = useDemoRuntime();
   const [threads, setThreads] = useState(initialThreads);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -62,6 +66,10 @@ export function MessagesList({
   }
 
   const refreshThreads = useCallback(async () => {
+    if (demoEnabled) {
+      router.refresh();
+      return;
+    }
     const version = ++fullRefreshVersion.current;
     const startedVersions = new Map(threadRefreshVersions.current);
     try {
@@ -80,9 +88,13 @@ export function MessagesList({
       if (version !== fullRefreshVersion.current) return;
       setLoadError("Could not refresh conversations. Showing the last loaded inbox.");
     }
-  }, [userId]);
+  }, [demoEnabled, router, userId]);
 
   const refreshThread = useCallback(async (conversationId: string) => {
+    if (demoEnabled) {
+      router.refresh();
+      return;
+    }
     const version = (threadRefreshVersions.current.get(conversationId) ?? 0) + 1;
     threadRefreshVersions.current.set(conversationId, version);
     try {
@@ -103,9 +115,12 @@ export function MessagesList({
       if (threadRefreshVersions.current.get(conversationId) !== version) return;
       setLoadError("Could not refresh a conversation. Showing its last loaded state.");
     }
-  }, [userId]);
+  }, [demoEnabled, router, userId]);
 
   useEffect(() => {
+    if (demoEnabled) {
+      return undefined;
+    }
     const supabase = createClient();
     function refreshExactThread(conversationId: string) {
       void refreshThread(conversationId);
@@ -149,7 +164,7 @@ export function MessagesList({
       document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
-  }, [userId, refreshThread, refreshThreads]);
+  }, [demoEnabled, router, userId, refreshThread, refreshThreads]);
 
   useEffect(() => {
     const delay = nextArchiveRefreshDelay(threads, new Date().toISOString());

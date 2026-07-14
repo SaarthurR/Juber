@@ -67,18 +67,15 @@ test("signed-out loadEventBoard keeps serial public RPC path", () => {
   assert.doesNotMatch(signedOut, /Promise\.all/);
 });
 
-test("desktop layout parallelizes profile and notifications only after ban gate", () => {
+test("desktop layout loads shared identity before notifications and only after ban gate", () => {
   const layoutStart = indexAfter(desktopLayout, "export default async function DesktopLayout");
   const layoutBody = desktopLayout.slice(layoutStart);
   const moderation = indexAfter(layoutBody, "loadModerationSnapshot");
   const banned = indexAfter(layoutBody, "const banned", moderation);
-  const parallel = indexAfter(layoutBody, "await Promise.all([", banned);
-  assert.match(
-    layoutBody.slice(parallel, parallel + 400),
-    /profiles[\s\S]*loadDesktopNotificationSnapshot/,
-  );
+  const notifications = indexAfter(layoutBody, "loadDesktopNotificationSnapshot", banned);
+  assert.match(layoutBody.slice(0, banned), /getCurrentUser/);
   assert.match(layoutBody, /if \(user && !banned\)/);
-  assert.doesNotMatch(layoutBody.slice(moderation, parallel), /loadDesktopNotificationSnapshot\(/);
+  assert.doesNotMatch(layoutBody.slice(moderation, notifications), /loadDesktopNotificationSnapshot\(/);
 });
 
 test("root layout keeps moderation ban gate serial and authoritative", () => {

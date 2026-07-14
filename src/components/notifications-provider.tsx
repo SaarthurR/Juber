@@ -13,7 +13,8 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { markNotificationsRead } from "@/app/messages/actions";
+import { markNotificationRead, markNotificationsRead } from "@/app/messages/actions";
+import { useDemoRuntime } from "@/components/demo-runtime-provider";
 import {
   failClosedNotificationState,
   loadVisibleNotificationIds,
@@ -65,6 +66,7 @@ export function NotificationsProvider({
 }) {
   const initialSnapshot = initial ?? emptySnapshot;
   const router = useRouter();
+  const { enabled: demoEnabled } = useDemoRuntime();
   const [state, dispatch] = useReducer(
     notificationControllerReducer,
     initialSnapshot,
@@ -94,6 +96,10 @@ export function NotificationsProvider({
 
   const refreshNotifications = useCallback(async () => {
     if (!userId) return;
+    if (demoEnabled) {
+      router.refresh();
+      return;
+    }
     const ticket = refreshGate.start(identity);
     if (!ticket) return;
     const currentTicket = ticket;
@@ -155,7 +161,7 @@ export function NotificationsProvider({
     } catch {
       failClosed("Could not refresh notifications.");
     }
-  }, [identity, refreshGate, userId]);
+  }, [demoEnabled, identity, refreshGate, router, userId]);
 
   useLayoutEffect(() => {
     refreshNotificationsRef.current = refreshNotifications;
@@ -171,6 +177,7 @@ export function NotificationsProvider({
 
   useEffect(() => {
     if (!userId) return undefined;
+    if (demoEnabled) return undefined;
     const channelUserId = userId;
     const supabase = createClient();
     return subscribeToNotificationChanges(supabase, "bell", userId, ({ type }) => {
@@ -193,7 +200,7 @@ export function NotificationsProvider({
         }
       });
     });
-  }, [refreshGate, userId]);
+  }, [demoEnabled, refreshGate, userId]);
 
   useEffect(() => {
     function onVisible() {
@@ -252,6 +259,23 @@ export function NotificationsProvider({
       },
     });
     const readAt = new Date().toISOString();
+    if (demoEnabled) {
+      try {
+        await markNotificationRead(id);
+      } catch {
+        dispatch({
+          type: "mark-one-failed",
+          id,
+          operationId,
+          error: notificationWriteErrorMessage("row"),
+        });
+        return;
+      }
+      if (refreshGate.isActive(identity)) {
+        dispatch({ type: "mark-one-success", id, operationId, readAt });
+      }
+      return;
+    }
     const supabase = createClient();
     const { error } = await supabase
       .from("notifications")
@@ -269,7 +293,7 @@ export function NotificationsProvider({
       return;
     }
     dispatch({ type: "mark-one-success", id, operationId, readAt });
-  }, [identity, refreshGate, state.items, state.operation, userId]);
+  }, [demoEnabled, identity, refreshGate, state.items, state.operation, userId]);
 
   const value = useMemo(
     () => ({

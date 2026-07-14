@@ -16,7 +16,11 @@ import { throwReadError } from "@/lib/supabase/read-error";
 import type {
   NotificationWithContext,
   RideRequestWithRider,
+  RideWithDriver,
 } from "@/lib/types";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { queryDemoNotifications } from "@/lib/demo/queries";
+import { demoActiveRequests, demoActiveRides } from "@/lib/demo-page-data";
 
 export const dynamic = "force-dynamic";
 
@@ -51,44 +55,57 @@ export default async function MobileHomePage({
   }
 
   const { user, profile } = await getCurrentUser();
-  const supabase = await createClient();
+  const demo = await getDemoRuntime();
+  let rides: RideWithDriver[];
+  let requests: RideRequestWithRider[];
+  let notif: { items: NotificationWithContext[]; unread: number; error: string | null };
 
-  const ridesQuery = user
-    ? supabase
-        .from("rides")
-        .select(RIDE_WITH_JOIN)
-        .eq("status", "active")
-        .gte("depart_at", nowIso)
-        .order("depart_at", { ascending: true })
-    : supabase.rpc("public_upcoming_rides", {
-        p_from: null,
-        p_to: null,
-        p_date: null,
-        p_limit: 100,
-        p_round_trip: null,
-      });
-
-  const requestsQuery = user
-    ? supabase
-        .from("ride_requests")
-        .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
-        .eq("status", "active")
-        .gte("latest_date", today)
-        .order("depart_at", { ascending: true })
-    : Promise.resolve({ data: [], error: null });
-
-  const [ridesResult, requestsResult, notif] = await Promise.all([
-    ridesQuery,
-    requestsQuery,
-    user
-      ? loadNotifications(supabase, user.id)
-      : Promise.resolve({ items: [], unread: 0, error: null }),
-  ]);
-  throwReadError(ridesResult.error, "rides");
-  throwReadError(requestsResult.error, "ride requests");
-
-  const rides = asRideWithDriverRows(ridesResult.data);
-  const requests = (requestsResult.data as RideRequestWithRider[]) ?? [];
+  if (demo) {
+    rides = demoActiveRides(demo.state);
+    requests = demoActiveRequests(demo.state);
+    const items = queryDemoNotifications(demo.state, demo.activeActorId);
+    notif = {
+      items,
+      unread: items.filter((item) => !item.read_at).length,
+      error: null,
+    };
+  } else {
+    const supabase = await createClient();
+    const ridesQuery = user
+      ? supabase
+          .from("rides")
+          .select(RIDE_WITH_JOIN)
+          .eq("status", "active")
+          .gte("depart_at", nowIso)
+          .order("depart_at", { ascending: true })
+      : supabase.rpc("public_upcoming_rides", {
+          p_from: null,
+          p_to: null,
+          p_date: null,
+          p_limit: 100,
+          p_round_trip: null,
+        });
+    const requestsQuery = user
+      ? supabase
+          .from("ride_requests")
+          .select("*, rider:profiles!ride_requests_rider_id_fkey(*), event:events(id,name,slug)")
+          .eq("status", "active")
+          .gte("latest_date", today)
+          .order("depart_at", { ascending: true })
+      : Promise.resolve({ data: [], error: null });
+    const [ridesResult, requestsResult, liveNotif] = await Promise.all([
+      ridesQuery,
+      requestsQuery,
+      user
+        ? loadNotifications(supabase, user.id)
+        : Promise.resolve({ items: [], unread: 0, error: null }),
+    ]);
+    throwReadError(ridesResult.error, "rides");
+    throwReadError(requestsResult.error, "ride requests");
+    rides = asRideWithDriverRows(ridesResult.data);
+    requests = (requestsResult.data as RideRequestWithRider[]) ?? [];
+    notif = liveNotif;
+  }
 
   return (
     <div className="pb-[calc(5rem+env(safe-area-inset-bottom)+1rem)]">

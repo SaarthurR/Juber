@@ -65,6 +65,15 @@ const coarseLabelPermissionFix = readFileSync(
   ),
   "utf8",
 );
+const authenticatedLocationRevoke = readFileSync(
+  fileURLToPath(
+    new URL(
+      "../../supabase/migrations/20260712185122_ride_location_authenticated_revoke.sql",
+      import.meta.url,
+    ),
+  ),
+  "utf8",
+);
 const ridePickupRequestHardening = readFileSync(
   fileURLToPath(
     new URL(
@@ -221,6 +230,15 @@ test("coarse-label trigger wrappers execute as their owner", () => {
     coarseLabelPermissionFix,
     /revoke all on function public\.assert_coarse_label\(text\)\s+from public, anon, authenticated/i,
   );
+});
+
+test("authenticated location revoke closes SELECT without touching INSERT", () => {
+  assert.match(
+    authenticatedLocationRevoke,
+    /revoke select \(pickup_location, dropoff_location\) on public\.rides from authenticated/i,
+  );
+  assert.doesNotMatch(authenticatedLocationRevoke, /revoke\s+insert/i);
+  assert.doesNotMatch(authenticatedLocationRevoke, /drop column/i);
 });
 
 test("ride pickup hardening makes request_seat authoritative", () => {

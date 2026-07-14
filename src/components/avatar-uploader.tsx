@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Camera, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { initials } from "@/lib/utils";
+import { useDemoRuntime } from "@/components/demo-runtime-provider";
+import { updateDemoAvatar } from "@/app/profile/actions";
 
 const MAX_BYTES = 4 * 1024 * 1024;
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
@@ -32,6 +34,7 @@ export function AvatarUploader({
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const demo = useDemoRuntime();
 
   async function onFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -43,6 +46,21 @@ export function AvatarUploader({
     }
     if (file.size > MAX_BYTES) {
       setError("Image must be under 4MB.");
+      return;
+    }
+
+    if (demo.enabled) {
+      setBusy(true);
+      setError(null);
+      const formData = new FormData();
+      formData.set("avatar", file);
+      const result = await updateDemoAvatar(formData);
+      if ("error" in result) setError(result.error ?? "Unable to update the demo photo.");
+      else if (result.avatarUrl) {
+        setUrl(result.avatarUrl);
+        router.refresh();
+      }
+      setBusy(false);
       return;
     }
 

@@ -114,8 +114,8 @@ select pg_temp.task27_assert(
   )
 );
 select pg_temp.task27_assert(
-  'authenticated uses report-scoped unban rpc',
-  has_function_privilege(
+  'authenticated legacy unban rpcs are retired',
+  not has_function_privilege(
     'authenticated',
     'public.admin_unban_user(uuid,text,uuid)',
     'EXECUTE'
@@ -224,6 +224,11 @@ values (
   'evidence',
   public.admin_report_evidence(:'report_default'::uuid)
 );
+insert into task27_payloads (label, payload)
+values (
+  'evidence context',
+  public.admin_report_evidence(:'report_context'::uuid)
+);
 select pg_temp.task27_assert(
   'invalid ban duration fails before mutation',
   pg_temp.task27_capture_sqlstate(
@@ -237,20 +242,29 @@ select pg_temp.task27_assert(
 insert into task27_payloads (label, payload)
 values (
   'ban',
-  public.admin_ban_user(
-    :'reported'::uuid,
+  public.admin_close_report_case(
+    :'report_context'::uuid,
+    0,
+    (select (payload ->> 'receipt_id')::uuid from task27_payloads where label = 'evidence context'),
+    'violation',
+    'temporary_ban',
     'Task 27 one-day ban',
-    1,
-    :'report_context'::uuid
+    'Task 27 private note',
+    1
   )
 );
 select pg_temp.task27_assert(
   'second report is dismissed for terminal mutation checks',
-  public.admin_set_report_status(
+  public.admin_close_report_case(
     :'report_default'::uuid,
-    'dismissed',
-    'Task 27 dismissed'
-  ) ->> 'outcome' = 'updated'
+    0,
+    (select (payload ->> 'receipt_id')::uuid from task27_payloads where label = 'evidence'),
+    'no_violation',
+    'none',
+    null,
+    'Task 27 dismissed',
+    null
+  ) ->> 'outcome' = 'closed'
 );
 select pg_temp.task27_assert(
   'warnings reject actioned and dismissed reports',
@@ -296,9 +310,9 @@ select pg_temp.task27_assert(
 select pg_temp.task27_assert(
   'duration ban returns expiry and actions the linked report',
   (
-    select payload ->> 'outcome' = 'applied'
-      and payload ->> 'report_status' = 'actioned'
-      and payload ->> 'expires_at' is not null
+    select payload ->> 'outcome' = 'closed'
+      and payload ->> 'status' = 'actioned'
+      and payload ->> 'ban_id' is not null
     from task27_payloads
     where label = 'ban'
   )
@@ -313,7 +327,11 @@ select pg_temp.task27_assert(
     select 1 from public.reports
     where id = :'report_context'::uuid
       and status = 'actioned'
-      and resolution like 'Temporary ban until %'
+      and verdict = 'violation'
+      and verdict_version = 1
+      and enforcement = 'temporary_ban'
+      and ban_days = 1
+      and resolution = 'Violation — 1-day ban'
       and reviewed_by = :'admin_one'::uuid
       and reviewed_at is not null
   )
@@ -322,7 +340,12 @@ select pg_temp.task27_assert(
     where report_id = :'report_context'::uuid
       and action = 'ban'
       and detail ->> 'duration_days' = '1'
-      and detail ->> 'report_status' = 'actioned'
+      and detail ->> 'ban_id' is not null
+  )
+  and exists (
+    select 1 from public.moderation_outcomes
+    where recipient_id = :'reported'::uuid
+      and type = 'ban'
   )
 );
 select pg_temp.task27_assert(

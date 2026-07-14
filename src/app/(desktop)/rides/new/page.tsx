@@ -6,6 +6,8 @@ import { getDateTimeInputValue } from "@/lib/date-time";
 import { hasContact } from "@/lib/contact-readiness";
 import { contactSetupDestination } from "@/lib/route-targets";
 import type { EventRow, Place } from "@/lib/types";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { demoEvents, demoPlaces } from "@/lib/demo-page-data";
 
 export const dynamic = "force-dynamic";
 
@@ -22,20 +24,30 @@ export default async function NewRidePage({
   const { user } = await getCurrentUser();
   if (!user) redirect("/");
 
-  const supabase = await createClient();
-  if (!(await hasContact(supabase, user.id))) {
-    const attempted = eventId ? `/rides/new?event_id=${eventId}` : "/rides/new";
-    redirect(contactSetupDestination(attempted));
+  const demo = await getDemoRuntime();
+  let places: Place[];
+  let events: EventRow[];
+  if (demo) {
+    const contact = demo.state.contacts[user.id];
+    if (!contact?.phone && !contact?.whatsapp) {
+      const attempted = eventId ? `/rides/new?event_id=${eventId}` : "/rides/new";
+      redirect(contactSetupDestination(attempted));
+    }
+    places = demoPlaces(demo.state);
+    events = demoEvents(demo.state);
+  } else {
+    const supabase = await createClient();
+    if (!(await hasContact(supabase, user.id))) {
+      const attempted = eventId ? `/rides/new?event_id=${eventId}` : "/rides/new";
+      redirect(contactSetupDestination(attempted));
+    }
+    const [{ data: placeRows }, { data: eventRows }] = await Promise.all([
+      supabase.from("places").select("*").eq("active", true),
+      supabase.from("events").select("*").eq("is_active", true).order("start_date", { ascending: true }),
+    ]);
+    places = (placeRows as Place[]) ?? [];
+    events = (eventRows as EventRow[]) ?? [];
   }
-
-  const [{ data: places }, { data: events }] = await Promise.all([
-    supabase.from("places").select("*").eq("active", true),
-    supabase
-      .from("events")
-      .select("*")
-      .eq("is_active", true)
-      .order("start_date", { ascending: true }),
-  ]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
@@ -48,8 +60,8 @@ export default async function NewRidePage({
 
       <div className="mt-8">
         <NewRideForm
-          events={(events as EventRow[]) ?? []}
-          places={(places as Place[]) ?? []}
+          events={events}
+          places={places}
           defaultEventId={eventId ?? ""}
           minDepartAt={minDepartAt}
         />

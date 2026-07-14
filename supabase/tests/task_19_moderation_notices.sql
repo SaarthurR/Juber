@@ -6,6 +6,10 @@
 \set active_warning 00000000-0000-4000-8000-000000019201
 \set old_warning 00000000-0000-4000-8000-000000019202
 \set expired_member_warning 00000000-0000-4000-8000-000000019203
+\set active_unban_action 00000000-0000-4000-8000-000000019204
+\set active_warning_outcome 00000000-0000-4000-8000-000000019301
+\set expired_warning_outcome 00000000-0000-4000-8000-000000019302
+\set active_unban_outcome 00000000-0000-4000-8000-000000019303
 
 begin;
 
@@ -110,6 +114,44 @@ values
     :'expired_member',
     '{"note":"Task 19 other member warning"}',
     now() - interval '2 hours'
+  ),
+  (
+    :'active_unban_action',
+    :'admin',
+    'unban',
+    :'active_member',
+    '{"member_reason":"Task 19 safe compensation reason","internal_note":"Task 19 private compensation note"}',
+    now() - interval '30 minutes'
+  );
+
+insert into public.moderation_outcomes (
+  id,
+  recipient_id,
+  source_action_id,
+  type,
+  created_at
+)
+values
+  (
+    :'active_warning_outcome',
+    :'active_member',
+    :'active_warning',
+    'warning',
+    now() - interval '1 hour'
+  ),
+  (
+    :'expired_warning_outcome',
+    :'expired_member',
+    :'expired_member_warning',
+    'warning',
+    now() - interval '2 hours'
+  ),
+  (
+    :'active_unban_outcome',
+    :'active_member',
+    :'active_unban_action',
+    'unban',
+    now() - interval '30 minutes'
   );
 
 select pg_temp.task19_assert(
@@ -147,10 +189,60 @@ select pg_temp.task19_assert(
     select jsonb_array_length(notice -> 'warnings') = 1
       and notice -> 'warnings' -> 0 ->> 'id' = :'active_warning'
       and notice -> 'warnings' -> 0 ->> 'note' = 'Task 19 visible warning'
+      and notice -> 'warnings' -> 0 ->> 'outcome_id' = :'active_warning_outcome'
       and notice::text not like '%Task 19 expired warning%'
       and notice::text not like '%Task 19 other member warning%'
     from payload
   )
+);
+
+select pg_temp.task19_assert(
+  'outcome outbox is self-scoped and exposes only the safe compensation reason',
+  (
+    with payload as (
+      select public.get_moderation_notices() as notice
+    )
+    select jsonb_array_length(notice -> 'outcomes') = 2
+      and exists (
+        select 1
+        from jsonb_array_elements(notice -> 'outcomes') item
+        where item ->> 'id' = :'active_warning_outcome'
+          and item ->> 'type' = 'warning'
+          and item -> 'member_reason' = 'null'::jsonb
+      )
+      and exists (
+        select 1
+        from jsonb_array_elements(notice -> 'outcomes') item
+        where item ->> 'id' = :'active_unban_outcome'
+          and item ->> 'type' = 'unban'
+          and item ->> 'member_reason' = 'Task 19 safe compensation reason'
+      )
+      and notice::text not like '%Task 19 private compensation note%'
+      and notice::text not like '%' || :'expired_warning_outcome' || '%'
+    from payload
+  )
+);
+
+select pg_temp.task19_assert(
+  'outcome table RLS and acknowledgement reject another recipient',
+  (select count(*) = 2 from public.moderation_outcomes)
+  and not public.acknowledge_moderation_outcome(:'expired_warning_outcome'::uuid)
+);
+
+select pg_temp.task19_assert(
+  'own outcome acknowledgement succeeds',
+  public.acknowledge_moderation_outcome(:'active_unban_outcome'::uuid)
+);
+select acknowledged_at::text as value
+from public.moderation_outcomes
+where id = :'active_unban_outcome'::uuid
+\gset first_ack_
+select pg_temp.task19_assert(
+  'own outcome acknowledgement is monotonic and idempotent',
+  public.acknowledge_moderation_outcome(:'active_unban_outcome'::uuid)
+  and (select acknowledged_at::text = :'first_ack_value'
+       from public.moderation_outcomes
+       where id = :'active_unban_outcome'::uuid)
 );
 
 select pg_temp.task19_assert(
@@ -203,8 +295,11 @@ select pg_temp.task19_assert(
     )
     select jsonb_array_length(notice -> 'warnings') = 1
       and notice -> 'warnings' -> 0 ->> 'id' = :'expired_member_warning'
+      and jsonb_array_length(notice -> 'outcomes') = 1
+      and notice -> 'outcomes' -> 0 ->> 'id' = :'expired_warning_outcome'
       and notice::text not like '%Task 19 active ban%'
       and notice::text not like '%Task 19 visible warning%'
+      and notice::text not like '%' || :'active_unban_outcome' || '%'
     from payload
   )
 );
@@ -246,7 +341,16 @@ begin
     where id in (
       '00000000-0000-4000-8000-000000019201'::uuid,
       '00000000-0000-4000-8000-000000019202'::uuid,
-      '00000000-0000-4000-8000-000000019203'::uuid
+      '00000000-0000-4000-8000-000000019203'::uuid,
+      '00000000-0000-4000-8000-000000019204'::uuid
+    )
+  ) or exists (
+    select 1
+    from public.moderation_outcomes
+    where id in (
+      '00000000-0000-4000-8000-000000019301'::uuid,
+      '00000000-0000-4000-8000-000000019302'::uuid,
+      '00000000-0000-4000-8000-000000019303'::uuid
     )
   ) then
     raise exception 'task_19 fixtures survived rollback';

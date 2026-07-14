@@ -1,4 +1,6 @@
 import "server-only";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { queryDemoNotifications } from "@/lib/demo/queries";
 import { createClient } from "@/lib/supabase/server";
 import { loadVisibleNotificationIds } from "@/lib/messages";
 import {
@@ -11,6 +13,14 @@ import type { NotificationWithContext } from "@/lib/types";
 export async function loadDesktopNotificationSnapshot(
   userId: string,
 ): Promise<NotificationSnapshot> {
+  const runtime = await getDemoRuntime();
+  if (runtime) {
+    const items = queryDemoNotifications(runtime.state, userId).slice(0, 6);
+    const unreadIds = Object.values(runtime.state.notifications)
+      .filter((notification) => notification.recipient_id === userId && !notification.read_at)
+      .map((notification) => notification.id);
+    return { items, unread: unreadIds.length, unreadIds, error: null };
+  }
   const supabase = await createClient();
   const [unreadResult, notificationResult] = await Promise.all([
     loadVisibleNotificationIds(supabase, null, true),

@@ -7,7 +7,8 @@ import { getAuthUser } from "@/lib/auth";
 import { JCNC_LABEL } from "@/lib/constants";
 import { dateOnlyToIso } from "@/lib/date-time";
 import { authCallbackDestination, authRevalidationPath } from "@/lib/route-targets";
-import { setHomeAddress } from "@/lib/home-address";
+import { getHomeAddress, setHomeAddress } from "@/lib/home-address";
+import { requireGoogleAddressSelection } from "@/lib/driver-route";
 import { hasContact } from "@/lib/contact-readiness";
 import {
   mapCoarseLabelDbError,
@@ -20,6 +21,8 @@ import {
   type ProfileFormState,
 } from "@/lib/profile-save";
 import type { RequestFormState } from "@/app/rides/actions";
+import { demoProfileCommands, demoRequestCommand } from "@/lib/demo/action-inputs";
+import { getDemoRuntime, getDemoStore } from "@/lib/demo/runtime";
 
 function str(v: FormDataEntryValue | null) {
   const s = (v ?? "").toString().trim();
@@ -61,6 +64,18 @@ export async function postRequestMobile(
   _previousState: RequestFormState,
   formData: FormData,
 ): Promise<RequestFormState> {
+  const demo = await getDemoRuntime();
+  if (demo) {
+    try {
+      await getDemoStore().mutate(demo.id, demo.revision, demoRequestCommand(demo, formData, true));
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : "Unable to post this request." };
+    }
+    revalidatePath("/rides");
+    revalidatePath("/m");
+    revalidatePath("/m/requests");
+    redirect("/m/requests");
+  }
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/m");
@@ -126,6 +141,30 @@ export async function postRequestMobile(
 export async function updateProfileMobile(
   formData: FormData,
 ): Promise<ProfileFormState> {
+  const demo = await getDemoRuntime();
+  if (demo) {
+    const fallback = "/m/profile";
+    const nextValues = formData.getAll("next");
+    const destination = authCallbackDestination(nextValues.length === 1 ? nextValues[0] : null, fallback);
+    const revalidationPath = authRevalidationPath(destination, fallback);
+    const phone = str(formData.get("phone"));
+    const whatsapp = str(formData.get("whatsapp"));
+    if (!phone && !whatsapp) return { error: "Add a phone or WhatsApp number." };
+    const first = str(formData.get("first_name")) ?? "";
+    const lastInitial = str(formData.get("last_initial")) ?? "";
+    const fullName = [first, lastInitial].filter(Boolean).join(" ") || null;
+    try {
+      const [profileCommand, contactCommand] = demoProfileCommands(demo, formData, fullName, true);
+      const next = await getDemoStore().mutate(demo.id, demo.revision, profileCommand);
+      await getDemoStore().mutate(next.id, next.revision, contactCommand);
+    } catch (error) {
+      return { error: profileSaveError(error) };
+    }
+    revalidatePath("/profile");
+    revalidatePath("/m/profile");
+    revalidatePath(revalidationPath);
+    redirect(destination);
+  }
   const supabase = await createClient();
   const user = await getAuthUser(supabase);
   if (!user) redirect("/m");
@@ -161,6 +200,14 @@ export async function updateProfileMobile(
 
   try {
     const homeAddress = parseHomeAddress(formData.get("home_address"));
+    requireGoogleAddressSelection({
+      address: homeAddress,
+      placeId: formData.get("home_address_place_id"),
+      placeType: formData.get("home_address_place_type"),
+      previousAddress: await getHomeAddress(supabase),
+      enabled: Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_PLACES_KEY?.trim()),
+      label: "your home address",
+    });
 
     // phone/whatsapp live in the booking-scoped profile_contacts table (0020).
     const { error: contactError } = await supabase

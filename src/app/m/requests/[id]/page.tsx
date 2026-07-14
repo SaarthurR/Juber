@@ -14,6 +14,8 @@ import { PendingActionButton, PendingActionGroup } from "@/components/pending-ac
 import { formatRideDateTime } from "@/lib/date-time";
 import type { EventRow, Profile, RideRequest } from "@/lib/types";
 import { throwReadError } from "@/lib/supabase/read-error";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { demoRequest } from "@/lib/demo-page-data";
 
 export const dynamic = "force-dynamic";
 
@@ -43,17 +45,22 @@ export default async function MobileRequestDetailPage({
       </div>
     );
   }
-  const supabase = await createClient();
-
-  const { data: request, error } = await supabase
-    .from("ride_requests")
-    .select(
-      "*, rider:profiles!ride_requests_rider_id_fkey(*), accepted_driver:profiles!ride_requests_accepted_driver_id_fkey(*), event:events(id,name,slug)",
-    )
-    .eq("id", id)
-    .maybeSingle<RequestDetail>();
-
-  throwReadError(error, "ride request");
+  const demo = await getDemoRuntime();
+  let request: RequestDetail | null;
+  if (demo) {
+    request = demoRequest(demo.state, id);
+  } else {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("ride_requests")
+      .select(
+        "*, rider:profiles!ride_requests_rider_id_fkey(*), accepted_driver:profiles!ride_requests_accepted_driver_id_fkey(*), event:events(id,name,slug)",
+      )
+      .eq("id", id)
+      .maybeSingle<RequestDetail>();
+    throwReadError(error, "ride request");
+    request = data;
+  }
   if (!request) notFound();
 
   const isOwner = user?.id === request.rider_id;

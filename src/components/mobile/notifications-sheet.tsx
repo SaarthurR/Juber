@@ -14,6 +14,7 @@ import {
 } from "@/components/notification-controls";
 import { markNotificationRead, markNotificationsRead } from "@/app/messages/actions";
 import { createClient } from "@/lib/supabase/client";
+import { useDemoRuntime } from "@/components/demo-runtime-provider";
 import {
   failClosedNotificationState,
   loadVisibleNotificationIds,
@@ -88,6 +89,7 @@ function MNotificationBellController({
   initialSnapshot: NotificationSnapshot;
 }) {
   const router = useRouter();
+  const { enabled: demoEnabled } = useDemoRuntime();
   const [state, dispatch] = useReducer(
     notificationControllerReducer,
     initialSnapshot,
@@ -99,6 +101,10 @@ function MNotificationBellController({
   const surfaceRefreshRef = useRef(createSurfaceRefreshDebouncer(() => router.refresh()));
 
   const refreshNotifications = useCallback(async () => {
+    if (demoEnabled) {
+      router.refresh();
+      return;
+    }
     const generation = ++refreshGeneration.current;
     const supabase = createClient();
     function failClosed(message: string) {
@@ -186,7 +192,7 @@ function MNotificationBellController({
     } catch {
       failClosed("Could not refresh notifications.");
     }
-  }, [userId]);
+  }, [demoEnabled, router, userId]);
 
   useEffect(() => {
     active.current = true;
@@ -205,6 +211,9 @@ function MNotificationBellController({
   }, [router, userId]);
 
   useEffect(() => {
+    if (demoEnabled) {
+      return undefined;
+    }
     const supabase = createClient();
     return subscribeToNotificationChanges(
       supabase,
@@ -219,7 +228,7 @@ function MNotificationBellController({
         });
       },
     );
-  }, [userId, refreshNotifications]);
+  }, [demoEnabled, router, userId, refreshNotifications]);
 
   function open_() {
     dispatch({ type: "open" });

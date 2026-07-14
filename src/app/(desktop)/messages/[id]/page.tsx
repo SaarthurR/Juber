@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { MessageThread } from "@/components/message-thread";
 import type { Message } from "@/lib/types";
 import { loadThreadSummaries, newestThreadMessages } from "@/lib/messages";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { queryDemoThreadSummaries, queryDemoThreads } from "@/lib/demo/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +17,26 @@ export default async function ThreadPage({
   const { id } = await params;
   const { user } = await getCurrentUser();
   if (!user) redirect("/");
+  const demo = await getDemoRuntime();
+  if (demo) {
+    const thread = queryDemoThreadSummaries(demo.state, user.id).find((item) => item.id === id);
+    const source = queryDemoThreads(demo.state, user.id).find((item) => item.conversation.id === id);
+    if (!thread || !source) notFound();
+    return (
+      <MessageThread
+        key={`${id}:${demo.revision}`}
+        conversationId={id}
+        currentUserId={user.id}
+        other={thread.other}
+        initialMessages={newestThreadMessages(source.messages)}
+        archiveState={thread.archiveState}
+        hiddenAt={thread.hiddenAt}
+        departAt={thread.context.kind === "missing" ? null : thread.context.departAt}
+        contextKind={thread.context.kind}
+        contextId={thread.context.id}
+      />
+    );
+  }
   const supabase = await createClient();
 
   const { data: membership, error: membershipError } = await supabase

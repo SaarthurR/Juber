@@ -13,6 +13,8 @@ import {
 import { DesktopDialog } from "@/components/ui/desktop-dialog";
 import type { RiderEndpointLabel } from "@/lib/driver-route";
 import { partyTotal } from "@/lib/booking";
+import { DemoRoutePreview } from "@/components/demo-route-preview";
+import { useDemoRuntime } from "@/components/demo-runtime-provider";
 
 type Variant = "desktop" | "mobile";
 
@@ -26,6 +28,7 @@ export function RiderDecisionDialog(props: {
   guestCount: number;
   endpointLabel: RiderEndpointLabel | null;
   endpointAddress: string | null;
+  driverHome: string | null;
   embedUrl: string | null;
   missingHome: boolean;
   mapsConfigured: boolean;
@@ -47,6 +50,7 @@ function RiderDecisionContent({
   guestCount,
   endpointLabel,
   endpointAddress,
+  driverHome,
   embedUrl,
   missingHome,
   mapsConfigured,
@@ -54,6 +58,7 @@ function RiderDecisionContent({
   const [open, setOpen] = useState(false);
   const titleId = useId();
   const pending = usePendingActionOpen();
+  const demo = useDemoRuntime();
   const profileHref = variant === "mobile" ? `/m/profile/${riderId}` : `/profile/${riderId}`;
   const setupHref = variant === "mobile" ? "/m/profile/edit" : "/profile";
 
@@ -78,7 +83,12 @@ function RiderDecisionContent({
         <p className="mt-0.5 break-words text-stone-500">{endpointAddress ?? "Not provided"}</p>
       </div>
       <div className="mt-4 overflow-hidden rounded-xl border border-stone-200 bg-stone-100">
-        {embedUrl ? (
+        {demo.enabled && endpointAddress && driverHome ? (
+          <DemoRoutePreview
+            origin={endpointLabel === "Drop-off" ? endpointAddress : driverHome}
+            destination={endpointLabel === "Drop-off" ? driverHome : endpointAddress}
+          />
+        ) : !demo.enabled && embedUrl ? (
           <iframe
             src={embedUrl}
             title={`${endpointLabel ?? "Rider"} route for ${riderName}`}
@@ -111,9 +121,11 @@ function RiderDecisionContent({
           </div>
         )}
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-stone-500">
-        Opening this preview shares your home and the rider&apos;s {endpointLabel?.toLowerCase() ?? "ride"} location with Google Maps.
-      </p>
+      {!demo.enabled && (
+        <p className="mt-2 text-xs leading-relaxed text-stone-500">
+          Opening this preview shares your home and the rider&apos;s {endpointLabel?.toLowerCase() ?? "ride"} location with Google Maps.
+        </p>
+      )}
       <div className="mt-5">
         <PassengerStatusButtons passengerId={passengerId} rideId={rideId} />
       </div>

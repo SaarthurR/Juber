@@ -7,40 +7,49 @@ import { RideCard } from "@/components/ride-card";
 import { EventCard } from "@/components/event-card";
 import { GoogleSignInButton } from "@/components/auth-button";
 import { LandingAuthGate } from "@/components/landing-auth-gate";
-import { loadEventSummaries } from "@/lib/events";
+import { loadEventSummaries, type EventSummary } from "@/lib/events";
 import { RIDE_WITH_JOIN, asRideWithDriverRows } from "@/lib/rides-query";
 import { throwReadError } from "@/lib/supabase/read-error";
+import type { RideWithDriver } from "@/lib/types";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { demoActiveRides, demoEventSummaries } from "@/lib/demo-page-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const { user } = await getCurrentUser();
-  const supabase = await createClient();
-
   const nowIso = new Date().toISOString();
-
-  const ridesPromise = user
-    ? supabase
-        .from("rides")
-        .select(RIDE_WITH_JOIN)
-        .eq("status", "active")
-        .gte("depart_at", nowIso)
-        .order("depart_at", { ascending: true })
-        .limit(3)
-    : supabase.rpc("public_upcoming_rides", {
-        p_from: null,
-        p_to: null,
-        p_date: null,
-        p_limit: 3,
-        p_round_trip: null,
-      });
-
-  const [ridesResult, eventSummaries] = await Promise.all([
-    ridesPromise,
-    loadEventSummaries(supabase, Boolean(user)),
-  ]);
-  throwReadError(ridesResult.error, "rides");
-  const rides = ridesResult.data;
+  const demo = await getDemoRuntime();
+  let rides: RideWithDriver[];
+  let eventSummaries: EventSummary[];
+  if (demo) {
+    rides = demoActiveRides(demo.state, 3);
+    eventSummaries = demoEventSummaries(demo.state);
+  } else {
+    const supabase = await createClient();
+    const ridesPromise = user
+      ? supabase
+          .from("rides")
+          .select(RIDE_WITH_JOIN)
+          .eq("status", "active")
+          .gte("depart_at", nowIso)
+          .order("depart_at", { ascending: true })
+          .limit(3)
+      : supabase.rpc("public_upcoming_rides", {
+          p_from: null,
+          p_to: null,
+          p_date: null,
+          p_limit: 3,
+          p_round_trip: null,
+        });
+    const [ridesResult, summaries] = await Promise.all([
+      ridesPromise,
+      loadEventSummaries(supabase, Boolean(user)),
+    ]);
+    throwReadError(ridesResult.error, "rides");
+    rides = asRideWithDriverRows(ridesResult.data);
+    eventSummaries = summaries;
+  }
 
   const content = (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
@@ -102,9 +111,9 @@ export default async function HomePage() {
       {/* Recent rides */}
       <section className="mt-14">
         <SectionHeader title="Scheduled rides" href="/rides" allowAnonymousBrowse />
-        {rides && rides.length > 0 ? (
+        {rides.length > 0 ? (
           <div className="grid gap-3">
-            {asRideWithDriverRows(rides).map((ride) => (
+            {rides.map((ride) => (
               <RideCard key={ride.id} ride={ride} />
             ))}
           </div>

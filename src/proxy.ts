@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 import { DESKTOP_COOKIE } from "@/lib/route-targets";
+import { readDemoSessionCookie } from "@/lib/demo/session";
 
 type ProxyDecision =
   | { kind: "next" }
@@ -63,7 +64,13 @@ export async function handleProxyRequest(
   request: NextRequest,
   refreshSession: SessionRefresher = updateSession,
 ) {
-  const refreshedResponse = await refreshSession(request);
+  const verifiedLocalDemo = Boolean(
+    process.env.DEMO_SQLITE_PATH
+    && readDemoSessionCookie(request.headers.get("cookie")),
+  );
+  const refreshedResponse = verifiedLocalDemo
+    ? NextResponse.next({ request })
+    : await refreshSession(request);
   const decision = getProxyDecision(request);
 
   if (decision.kind === "next") return refreshedResponse;

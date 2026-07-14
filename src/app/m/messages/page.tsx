@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { SubHeader } from "@/components/mobile/sub-header";
 import { MessagesList } from "@/components/messages-list";
 import { loadThreadSummaries } from "@/lib/messages";
+import { getDemoRuntime } from "@/lib/demo/runtime";
+import { queryDemoThreadSummaries } from "@/lib/demo/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +15,10 @@ export const dynamic = "force-dynamic";
 export default async function MobileMessagesPage() {
   const { user } = await getCurrentUser();
   if (!user) redirect("/m");
-  const supabase = await createClient();
-  const threads = await loadThreadSummaries(supabase, user.id);
+  const demo = await getDemoRuntime();
+  const threads = demo
+    ? queryDemoThreadSummaries(demo.state, user.id)
+    : await loadThreadSummaries(await createClient(), user.id);
 
   return (
     <div className="pb-28">
