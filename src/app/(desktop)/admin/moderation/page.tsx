@@ -4,8 +4,13 @@ import { loadAdminModerationQueue } from "@/lib/moderation-server";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminModerationPage() {
-  const queue = await loadAdminModerationQueue();
+export default async function AdminModerationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ report?: string | string[] }>;
+}) {
+  const { report } = await searchParams;
+  const queue = await loadAdminModerationQueue(report);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
@@ -25,9 +30,11 @@ export default async function AdminModerationPage() {
       </div>
 
       <AdminModerationPanel
+        key={queue.selectedReport?.id ?? "none"}
         reports={queue.reports}
         appeals={queue.appeals}
         error={queue.error}
+        initialReport={queue.selectedReport}
       />
     </div>
   );

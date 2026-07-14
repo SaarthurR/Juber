@@ -53,12 +53,12 @@ export function moderationActionButtonClass(
   }
 }
 
-export function moderationConfirmLabel(action: string) {
+export function moderationConfirmLabel(action: string, banDays?: 1 | 7 | 30) {
   switch (action) {
     case "ban-perm":
       return "Permanent ban";
     case "ban-temp":
-      return "Temp ban";
+      return `Confirm ${banDays ?? 7}-day ban`;
     case "unban":
       return "Unban member";
     case "warn-reporter":

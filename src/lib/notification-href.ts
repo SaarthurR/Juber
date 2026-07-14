@@ -2,12 +2,15 @@ import type { EventRow, NotificationType, NotificationWithContext } from "@/lib/
 
 type NotificationHrefInput = Pick<
   NotificationWithContext,
-  "type" | "ride_id" | "request_id" | "event_id" | "conversation_id"
+  "type" | "ride_id" | "request_id" | "event_id" | "conversation_id" | "report_id"
 > & {
   event?: Pick<EventRow, "slug"> | null;
 };
 
 export function desktopNotificationHref(notification: NotificationHrefInput): string | null {
+  if (notification.type === "moderation_report_submitted" && notification.report_id) {
+    return `/admin/moderation?report=${notification.report_id}`;
+  }
   if (notification.ride_id) return `/rides/${notification.ride_id}`;
   if (notification.request_id) return `/requests/${notification.request_id}`;
   if (notification.event_id && notification.event?.slug) {
@@ -21,6 +24,9 @@ export function desktopNotificationHref(notification: NotificationHrefInput): st
 }
 
 export function mobileNotificationHref(notification: NotificationHrefInput): string | null {
+  if (notification.type === "moderation_report_submitted" && notification.report_id) {
+    return `/m/admin?report=${notification.report_id}`;
+  }
   const desktop = desktopNotificationHref(notification);
   if (!desktop) return null;
   if (desktop === "/events") return "/m/events";

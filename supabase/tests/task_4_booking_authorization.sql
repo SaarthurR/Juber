@@ -152,7 +152,7 @@ select public.task4_expect_rejected(
     :'rider'
   ),
   '42501',
-  'row-level security'
+  'permission denied'
 );
 select public.task4_expect_rejected(
   'rider self-fulfilled request',
@@ -452,8 +452,7 @@ values (:'main_ride', :'driver', 'Main A', 'Main B', now() + interval '1 day', 1
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
-insert into public.ride_passengers (ride_id, passenger_id)
-values (:'main_ride', :'rider');
+select public.request_seat(:'main_ride', 0, 'Main pickup');
 select public.task4_assert(
   'new passenger request is pending',
   (select status = 'pending' from public.ride_passengers where ride_id = :'main_ride' and passenger_id = :'rider')
@@ -723,8 +722,7 @@ values (:'seat_ride', :'driver', 'Seat A', 'Seat B', now() + interval '1 day', 1
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
-insert into public.ride_passengers (ride_id, passenger_id)
-values (:'seat_ride', :'rider');
+select public.request_seat(:'seat_ride', 0, 'Seat pickup');
 reset role;
 
 set role authenticated;
@@ -787,8 +785,7 @@ values (:'cancel_ride', :'driver', 'Cancel A', 'Cancel B', now() + interval '1 d
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
-insert into public.ride_passengers (ride_id, passenger_id)
-values (:'cancel_ride', :'rider');
+select public.request_seat(:'cancel_ride', 0, 'Cancel pickup');
 reset role;
 
 set role authenticated;

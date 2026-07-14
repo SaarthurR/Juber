@@ -198,6 +198,7 @@ export function mobileNotificationDestination({
   request_id,
   conversation_id,
   event_id,
+  report_id,
   type,
   event,
 }: {
@@ -205,6 +206,7 @@ export function mobileNotificationDestination({
   request_id?: string | null;
   conversation_id?: string | null;
   event_id?: string | null;
+  report_id?: string | null;
   type?: NotificationType;
   event?: Pick<EventRow, "slug"> | null;
 }) {
@@ -213,6 +215,7 @@ export function mobileNotificationDestination({
     request_id: request_id ?? null,
     conversation_id: conversation_id ?? null,
     event_id: event_id ?? null,
+    report_id: report_id ?? null,
     type: type ?? "seat_requested",
     event: event ?? null,
   });

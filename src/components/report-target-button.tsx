@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
 import { Flag } from "lucide-react";
 import { DesktopDialog } from "@/components/ui/desktop-dialog";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
@@ -135,6 +136,25 @@ function ReportTargetForm({
           hint="Optional. Do not include contact info you do not want admins to see."
         />
 
+        {targetType === "message" && (
+          <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-3">
+            <input
+              type="checkbox"
+              name="include_message_context"
+              className="mt-0.5 h-4 w-4 rounded border-stone-300 text-brand-600"
+            />
+            <span>
+              <span className="block text-sm font-bold text-ink">
+                Include nearby messages for context
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-stone-500">
+                The reported message is always included. Checking this may also share up to 10
+                nearby messages, including your own, with admins.
+              </span>
+            </span>
+          </label>
+        )}
+
         <InlineActionError
           id={errorId}
           error={state.status === "error" ? state.message : null}
@@ -179,7 +199,9 @@ function ReportTargetDialog({
     onClose();
   }
 
-  return (
+  if (!open) return null;
+
+  return createPortal(
     <DesktopDialog
       open={open}
       onDismiss={close}
@@ -210,7 +232,8 @@ function ReportTargetDialog({
           </button>
         )}
       </div>
-    </DesktopDialog>
+    </DesktopDialog>,
+    document.body,
   );
 }
 
@@ -228,7 +251,9 @@ function ReportTargetSheet({
   const titleId = useId();
   const [pending, setPending] = useState(false);
 
-  return (
+  if (!open) return null;
+
+  return createPortal(
     <BottomSheet
       open={open}
       onClose={onClose}
@@ -250,6 +275,7 @@ function ReportTargetSheet({
           onPendingChange={setPending}
         />
       </div>
-    </BottomSheet>
+    </BottomSheet>,
+    document.body,
   );
 }

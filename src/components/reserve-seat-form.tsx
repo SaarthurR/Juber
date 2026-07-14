@@ -1,9 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useId, useState } from "react";
 import { requestSeat } from "@/app/rides/actions";
 import { InlineActionError } from "@/components/inline-action-error";
+import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { PendingActionButton } from "@/components/pending-action-button";
+import { DesktopDialog } from "@/components/ui/desktop-dialog";
 import { maxGuestCount, partyTotal } from "@/lib/booking";
 
 type Variant = "desktop" | "mobile";
@@ -21,7 +23,12 @@ export function ReserveSeatForm({
   label?: string;
   variant?: Variant;
 }) {
-  const [state, formAction] = useActionState(requestSeat.bind(null, rideId), null);
+  const [state, formAction, pending] = useActionState(
+    requestSeat.bind(null, rideId),
+    null,
+  );
+  const [open, setOpen] = useState(false);
+  const titleId = useId();
   const maxParty = partyTotal(maxGuestCount(seatsAvailable));
   const [pickupSource, setPickupSource] = useState<"home" | "custom" | null>(
     savedHome ? "home" : null,
@@ -59,7 +66,7 @@ export function ReserveSeatForm({
       ? "h-[54px] w-full rounded-[14px] bg-brand-600 text-[15px] font-bold text-white shadow-[0_14px_24px_-12px_rgba(166,83,41,0.7)] transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60"
       : "w-full rounded-full bg-brand-600 px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-brand-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed";
 
-  return (
+  const form = (
     <form action={formAction} className={sectionCls}>
       <input
         type="hidden"
@@ -74,8 +81,8 @@ export function ReserveSeatForm({
         </p>
       </div>
 
-      <div>
-        <span className={labelCls}>Pickup location</span>
+      <fieldset>
+        <legend className={labelCls}>Pickup location</legend>
         <div className="flex flex-col gap-2">
           {savedHome ? (
             <label className={radioCls}>
@@ -83,6 +90,7 @@ export function ReserveSeatForm({
                 type="radio"
                 name="pickup_source"
                 value="home"
+                required
                 checked={pickupSource === "home"}
                 onChange={() => setPickupSource("home")}
                 className="sr-only"
@@ -95,6 +103,7 @@ export function ReserveSeatForm({
               type="radio"
               name="pickup_source"
               value="custom"
+              required
               checked={pickupSource === "custom"}
               onChange={() => setPickupSource("custom")}
               className="sr-only"
@@ -116,14 +125,14 @@ export function ReserveSeatForm({
             Choose custom address, or add a saved home in your profile.
           </p>
         )}
-      </div>
+      </fieldset>
 
       <PendingActionButton
         actionKey={`reserve-${rideId}`}
         pendingLabel="Submitting..."
         className={buttonCls}
       >
-        {label}
+        Send seat request
       </PendingActionButton>
       <InlineActionError
         id={`reserve-${rideId}-error`}
@@ -147,6 +156,47 @@ export function ReserveSeatForm({
         </a>
       )}
     </form>
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+        className={buttonCls}
+      >
+        {label}
+      </button>
+      {variant === "mobile" ? (
+        <BottomSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          labelledBy={titleId}
+          dismissDisabled={pending}
+          closeLabel="Close seat request"
+        >
+          <h2 id={titleId} className="pr-10 text-[18px] font-extrabold text-ink">
+            Request a seat
+          </h2>
+          <div className="pb-2 pt-4">{form}</div>
+        </BottomSheet>
+      ) : (
+        <DesktopDialog
+          open={open}
+          onDismiss={() => setOpen(false)}
+          labelledBy={titleId}
+          dismissDisabled={pending}
+          closeLabel="Close seat request"
+        >
+          <h2 id={titleId} className="pr-10 text-lg font-bold text-stone-900">
+            Request a seat
+          </h2>
+          <div className="mt-4">{form}</div>
+        </DesktopDialog>
+      )}
+    </>
   );
 }
 

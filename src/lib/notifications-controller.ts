@@ -362,6 +362,8 @@ export function notificationTitle(notification: NotificationWithContext): string
       return "Your event board request was approved";
     case "event_request_rejected":
       return "Your event board request was not approved";
+    case "moderation_report_submitted":
+      return "A new report needs review";
   }
 }
 
@@ -391,6 +393,7 @@ const SURFACE_REFRESH_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Se
   "request_accepted",
   "event_request_approved",
   "event_request_rejected",
+  "moderation_report_submitted",
 ]);
 
 export function notificationTriggersSurfaceRefresh(

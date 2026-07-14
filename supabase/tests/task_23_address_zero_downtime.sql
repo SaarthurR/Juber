@@ -407,7 +407,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
 select public.task23_assert(
   'request_seat still locks ride row for booking',
-  public.request_seat(:'request_ride', 0) = 'requested'
+  public.request_seat(:'request_ride', 0, 'Request pickup') = 'requested'
 );
 reset role;
 

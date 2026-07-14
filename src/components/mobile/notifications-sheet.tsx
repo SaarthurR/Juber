@@ -51,6 +51,7 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   new_message: MessageCircle,
   event_request_approved: CalendarCheck,
   event_request_rejected: X,
+  moderation_report_submitted: Bell,
 };
 
 export function MNotificationBell({

@@ -42,6 +42,7 @@ function notification(
     request_id: null,
     conversation_id: null,
     event_id: null,
+    report_id: null,
     message: null,
     read_at: null,
     created_at: "2026-07-11T12:00:00.000Z",

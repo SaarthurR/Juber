@@ -54,6 +54,8 @@ test("requestSeat forwards guest_count and pickup_note to RPC with validation", 
 
   assert.match(fn, /parseGuestCount/);
   assert.match(fn, /parsePickupSource/);
+  assert.match(fn, /if \(!pickupSource\)/);
+  assert.match(fn, /Enter a pickup location or choose your saved home/);
   assert.match(fn, /getHomeAddress/);
   assert.match(fn, /p_guest_count: guestCount/);
   assert.match(fn, /p_pickup_note: pickupNote/);
@@ -208,14 +210,42 @@ test("google maps deep links encode addresses without API keys", () => {
   assert.doesNotMatch(url, /key=/);
 });
 
-test("desktop and mobile booking UIs share reserve seat form", () => {
+test("shared booking form gates required fields behind accessible intent layers", () => {
   const form = readRepo("src/components/reserve-seat-form.tsx");
   assert.match(form, /guest_count/);
   assert.match(form, /pickup_source/);
   assert.match(form, /pickup_note/);
+  assert.match(form, /type="button"[\s\S]*aria-haspopup="dialog"[\s\S]*aria-expanded=\{open\}/);
+  assert.match(form, /DesktopDialog/);
+  assert.match(form, /BottomSheet/);
+  assert.match(form, /dismissDisabled=\{pending\}/);
+  assert.match(form, /<fieldset>[\s\S]*<legend[^>]*>Pickup location<\/legend>/);
+  assert.equal((form.match(/name="pickup_source"[\s\S]{0,160}?required/g) ?? []).length, 2);
+  assert.match(form, /Send seat request/);
   assert.match(form, /PendingActionButton/);
   assert.match(readRepo("src/components/ride-actions.tsx"), /ReserveSeatForm/);
   assert.match(readRepo("src/components/mobile/m-reserve.tsx"), /ReserveSeatForm/);
+});
+
+test("browser contract: driver lists retain confirmed pickup and guest count", () => {
+  for (const path of [
+    "src/app/(desktop)/rides/[id]/page.tsx",
+    "src/app/m/rides/[id]/page.tsx",
+  ]) {
+    const source = readRepo(path);
+    assert.match(
+      source,
+      /p\.status === "pending" \|\| p\.status === "confirmed"/,
+      path,
+    );
+    assert.match(source, /passengerDisplayName\(p\.passenger\?\.full_name, p\.guest_count \?\? 0\)/, path);
+    assert.match(source, /meetupByPassenger\.get\(p\.passenger_id\)\?\.pickup_note/, path);
+    assert.match(
+      source,
+      /ride\.status === "active" && p\.status === "pending"/,
+      path,
+    );
+  }
 });
 
 test("desktop and mobile cancellation gates reuse the same confirmed count", () => {

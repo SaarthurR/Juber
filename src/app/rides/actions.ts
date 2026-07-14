@@ -366,6 +366,9 @@ export async function requestSeat(
 
     const guestCount = parseGuestCount(formData.get("guest_count"), ride.seats_available);
     const pickupSource = parsePickupSource(formData.get("pickup_source"));
+    if (!pickupSource) {
+      throw new Error("Enter a pickup location or choose your saved home.");
+    }
     let pickupNote: string | null = null;
 
     if (pickupSource === "home") {

@@ -77,16 +77,36 @@ select public.task5_assert(
   'request_seat anon revoked',
   not has_function_privilege('anon', 'public.request_seat(uuid,integer,text)', 'EXECUTE')
 );
+select public.task5_assert(
+  'direct authenticated passenger inserts revoked',
+  not has_table_privilege('authenticated', 'public.ride_passengers', 'INSERT')
+);
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
 select public.task5_assert(
+  'blank pickup is rejected',
+  public.task5_capture_sqlstate(
+    format('select public.request_seat(%L::uuid, 0, %L)', :'request_ride', '   ')
+  ) = 'P0001'
+);
+select public.task5_assert(
+  'direct passenger insert is rejected',
+  public.task5_capture_sqlstate(
+    format(
+      'insert into public.ride_passengers (ride_id, passenger_id) values (%L::uuid, %L::uuid)',
+      :'request_ride',
+      :'rider'
+    )
+  ) = '42501'
+);
+select public.task5_assert(
   'first request creates pending row',
-  public.request_seat(:'request_ride') = 'requested'
+  public.request_seat(:'request_ride', 0, 'Request pickup') = 'requested'
 );
 select public.task5_assert(
   'duplicate pending request is idempotent',
-  public.request_seat(:'request_ride') = 'exists'
+  public.request_seat(:'request_ride', 0, 'Request pickup') = 'exists'
 );
 reset role;
 select public.task5_assert(
@@ -113,7 +133,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
 select public.task5_assert(
   'declined row can request fresh pending',
-  public.request_seat(:'request_ride') = 'requested'
+  public.request_seat(:'request_ride', 0, 'Request pickup') = 'requested'
 );
 select public.task5_assert(
   'declined re-request leaves one pending row',
@@ -144,7 +164,7 @@ select public.task5_assert(
 );
 select public.task5_assert(
   'cancelled row can request fresh pending',
-  public.request_seat(:'request_ride') = 'requested'
+  public.request_seat(:'request_ride', 0, 'Request pickup') = 'requested'
 );
 reset role;
 select public.task5_assert(
@@ -160,8 +180,10 @@ select public.task5_assert(
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'other', false);
-insert into public.ride_passengers (ride_id, passenger_id)
-values (:'confirmed_ride', :'other');
+select public.task5_assert(
+  'confirmed fixture request succeeds',
+  public.request_seat(:'confirmed_ride', 0, 'Confirmed pickup') = 'requested'
+);
 reset role;
 
 set role authenticated;
@@ -176,7 +198,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'other', false);
 select public.task5_assert(
   'confirmed request remains idempotent',
-  public.request_seat(:'confirmed_ride') = 'exists'
+  public.request_seat(:'confirmed_ride', 0, 'Confirmed pickup') = 'exists'
 );
 select public.task5_assert(
   'confirmed row was not demoted',
@@ -191,8 +213,10 @@ reset role;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'other', false);
-insert into public.ride_passengers (ride_id, passenger_id)
-values (:'full_ride', :'other');
+select public.task5_assert(
+  'full fixture request succeeds',
+  public.request_seat(:'full_ride', 0, 'Full pickup') = 'requested'
+);
 reset role;
 
 set role authenticated;
@@ -207,20 +231,26 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
 select public.task5_assert(
   'full ride rejects fresh request',
-  public.task5_capture_sqlstate(format('select public.request_seat(%L::uuid)', :'full_ride')) = 'P0001'
+  public.task5_capture_sqlstate(
+    format('select public.request_seat(%L::uuid, 0, %L)', :'full_ride', 'Rider pickup')
+  ) = 'P0001'
 );
 reset role;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
-insert into public.ride_passengers (ride_id, passenger_id)
-values (:'race_ride', :'rider');
+select public.task5_assert(
+  'first race request succeeds',
+  public.request_seat(:'race_ride', 0, 'Rider race pickup') = 'requested'
+);
 reset role;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'other', false);
-insert into public.ride_passengers (ride_id, passenger_id)
-values (:'race_ride', :'other');
+select public.task5_assert(
+  'second race request succeeds',
+  public.request_seat(:'race_ride', 0, 'Other race pickup') = 'requested'
+);
 reset role;
 
 select dblink_connect('task5_confirm_1', format('dbname=%s', current_database()));

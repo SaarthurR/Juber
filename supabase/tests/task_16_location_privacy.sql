@@ -126,6 +126,10 @@ select public.task16_assert(
   not has_function_privilege('anon', 'public.request_seat(uuid,integer,text)', 'EXECUTE')
 );
 select public.task16_assert(
+  'direct authenticated passenger inserts revoked',
+  not has_table_privilege('authenticated', 'public.ride_passengers', 'INSERT')
+);
+select public.task16_assert(
   'ride_meetup_location authenticated grant',
   has_function_privilege('authenticated', 'public.ride_meetup_location(uuid)', 'EXECUTE')
 );
@@ -194,19 +198,31 @@ select public.task16_assert(
 );
 reset role;
 
--- Backward-compatible request_seat callers
+-- Required pickup request_seat callers
 set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
 select public.task16_assert(
-  'legacy 1-arg request_seat still works',
-  public.request_seat(:'loc_ride') = 'requested'
+  'pickup-less request_seat is rejected',
+  public.task16_capture_sqlstate(
+    format('select public.request_seat(%L::uuid)', :'loc_ride')
+  ) = 'P0001'
 );
 select public.task16_assert(
-  '2-arg request_seat with guest_count works',
-  public.request_seat(:'guest_ride', 2) = 'requested'
+  'blank pickup request_seat is rejected',
+  public.task16_capture_sqlstate(
+    format('select public.request_seat(%L::uuid, 0, %L)', :'loc_ride', '   ')
+  ) = 'P0001'
 );
 select public.task16_assert(
   '3-arg request_seat stores pickup snapshot',
+  public.request_seat(:'loc_ride', 0, 'Location pickup') = 'requested'
+);
+select public.task16_assert(
+  'request_seat with guest_count and pickup works',
+  public.request_seat(:'guest_ride', 2, 'Guest pickup') = 'requested'
+);
+select public.task16_assert(
+  'request_seat stores private pickup snapshot',
   (
     select public.request_seat(:'guest_ride2', 1, 'Rider home snapshot 42') = 'requested'
   )
@@ -337,6 +353,20 @@ select public.task16_assert(
   'driver confirms guest party',
   public.confirm_passenger(:'rider', :'guest_ride2')
 );
+select public.task16_assert(
+  'driver retains confirmed rider pickup and guest count',
+  exists (
+    select 1
+    from public.ride_meetup_location(:'guest_ride2') meetup
+    join public.ride_passengers passenger
+      on passenger.ride_id = :'guest_ride2'::uuid
+     and passenger.passenger_id = meetup.passenger_id
+    where meetup.passenger_id = :'rider'::uuid
+      and meetup.pickup_note = 'Rider home snapshot 42'
+      and passenger.status = 'confirmed'
+      and passenger.guest_count = 1
+  )
+);
 reset role;
 
 set role authenticated;
@@ -395,7 +425,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'other', false);
 select public.task16_assert(
   'first pending party of 2 is accepted',
-  public.request_seat(:'race_ride', 1) = 'requested'
+  public.request_seat(:'race_ride', 1, 'Other pickup') = 'requested'
 );
 reset role;
 
@@ -403,7 +433,7 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'rider', false);
 select public.task16_assert(
   'second pending party may coexist',
-  public.request_seat(:'race_ride', 0) = 'requested'
+  public.request_seat(:'race_ride', 0, 'Rider pickup') = 'requested'
 );
 reset role;
 

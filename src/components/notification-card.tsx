@@ -16,6 +16,7 @@ const ICON: Record<NotificationType, React.ComponentType<{ size?: number; classN
   new_message: MessageCircle,
   event_request_approved: CalendarCheck,
   event_request_rejected: X,
+  moderation_report_submitted: Bell,
 };
 
 function firstName(name: string | null | undefined) {
@@ -45,6 +46,8 @@ function titleFor(n: NotificationWithContext): string {
       return "Your event board request was approved";
     case "event_request_rejected":
       return "Your event board request was not approved";
+    case "moderation_report_submitted":
+      return "A new report needs review";
   }
 }
 
