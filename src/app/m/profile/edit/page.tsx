@@ -12,6 +12,7 @@ import { ProfileForm } from "@/components/profile-form";
 import { ProfileSetupPanel, setupRationale } from "@/components/profile-setup-panel";
 import { authCallbackDestination } from "@/lib/route-targets";
 import type { Place } from "@/lib/types";
+import { GooglePlaceInput } from "@/components/google-place-input";
 
 export const dynamic = "force-dynamic";
 
@@ -175,12 +176,14 @@ export default async function MobileEditProfilePage({
   const homeField = (
     <label className="block">
       <Caption>Saved home address (optional)</Caption>
-      <input
+      <GooglePlaceInput
         name="home_address"
-        defaultValue={homeAddress ?? ""}
-        placeholder="Only you can see this until you book with it"
+        label="Saved home address"
+        initialValue={homeAddress ?? ""}
+        placeholder="Search for your home address"
         maxLength={500}
-        aria-describedby="profile-save-error"
+        ariaDescribedBy="profile-save-error"
+        manualFallback
         className={inputCls}
       />
       <p className="mt-1.5 text-[11px] text-muted-warm">
@@ -353,12 +356,14 @@ export default async function MobileEditProfilePage({
             </p>
             <label className="block">
               <Caption>Saved home address (optional)</Caption>
-              <input
+              <GooglePlaceInput
                 name="home_address"
-                defaultValue={homeAddress ?? ""}
-                placeholder="Only you can see this until you book with it"
+                label="Saved home address"
+                initialValue={homeAddress ?? ""}
+                placeholder="Search for your home address"
                 maxLength={500}
-                aria-describedby="profile-save-error"
+                ariaDescribedBy="profile-save-error"
+                manualFallback
                 className={inputCls}
               />
               <p className="mt-1.5 text-[11px] text-muted-warm">

@@ -23,7 +23,6 @@ import { ShareButton } from "@/components/share-button";
 import { ReportTargetButton } from "@/components/report-target-button";
 import { GoogleSignInButton } from "@/components/auth-button";
 import {
-  PassengerStatusButtons,
   CancelSeatButton,
   DriverRideActions,
   LostItemMessageButton,
@@ -31,6 +30,11 @@ import {
 import { PendingActionGroup } from "@/components/pending-action-button";
 import type { Profile, Ride, RidePassenger } from "@/lib/types";
 import { throwReadError } from "@/lib/supabase/read-error";
+import { RiderDecisionDialog } from "@/components/rider-decision-dialog";
+import {
+  driverRouteEmbedUrl,
+  riderEndpointLabel,
+} from "@/lib/driver-route";
 
 export const dynamic = "force-dynamic";
 
@@ -82,8 +86,7 @@ export default async function MobileTripPage({
   );
   const emptySlots = Math.max(0, ride.seats_total - confirmedCount);
   const meetupPromise = user ? getRideMeetup(supabase, id) : Promise.resolve([]);
-  const homePromise =
-    user && !isDriver ? getHomeAddress(supabase) : Promise.resolve(null);
+  const homePromise = user ? getHomeAddress(supabase) : Promise.resolve(null);
   const [meetupRows, savedHome] = await Promise.all([meetupPromise, homePromise]);
   const meetup = resolveMeetupLabels({
     coarsePickup: ride.origin_label,
@@ -100,6 +103,10 @@ export default async function MobileTripPage({
     meetupRows
       .filter((row) => row.passenger_id)
       .map((row) => [row.passenger_id as string, row]),
+  );
+  const endpointLabel = riderEndpointLabel(
+    ride.origin_label,
+    ride.destination_label,
   );
 
   const price = ride.gas_contribution ? `$${Number(ride.gas_contribution).toFixed(0)}` : "Free";
@@ -154,8 +161,6 @@ export default async function MobileTripPage({
           <MeetupLocations
             pickupLabel={meetup.pickupLabel}
             dropoffLabel={meetup.dropoffLabel}
-            pickupMapsUrl={meetup.pickupMapsUrl}
-            dropoffMapsUrl={meetup.dropoffMapsUrl}
             variant="mobile"
           />
           {ride.round_trip && (
@@ -269,13 +274,32 @@ export default async function MobileTripPage({
                           <p className="text-[11px] capitalize text-muted-warm">{p.status}</p>
                           {meetupByPassenger.get(p.passenger_id)?.pickup_note && (
                             <p className="mt-0.5 truncate text-[11px] text-muted-warm">
-                              Pickup: {meetupByPassenger.get(p.passenger_id)?.pickup_note}
+                              {endpointLabel ?? "Location"}: {meetupByPassenger.get(p.passenger_id)?.pickup_note}
                             </p>
                           )}
                         </div>
                       </Link>
                       {ride.status === "active" && p.status === "pending" && (
-                        <PassengerStatusButtons passengerId={p.id} rideId={ride.id} />
+                        <RiderDecisionDialog
+                          variant="mobile"
+                          passengerId={p.id}
+                          rideId={ride.id}
+                          riderId={p.passenger_id}
+                          riderName={p.passenger?.full_name ?? "Member"}
+                          riderAvatar={p.passenger?.avatar_url ?? null}
+                          guestCount={p.guest_count ?? 0}
+                          endpointLabel={endpointLabel}
+                          endpointAddress={meetupByPassenger.get(p.passenger_id)?.pickup_note ?? null}
+                          embedUrl={driverRouteEmbedUrl({
+                            apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY,
+                            originLabel: ride.origin_label,
+                            destinationLabel: ride.destination_label,
+                            driverHome: savedHome,
+                            riderEndpoint: meetupByPassenger.get(p.passenger_id)?.pickup_note ?? null,
+                          })}
+                          missingHome={!savedHome}
+                          mapsConfigured={Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY?.trim())}
+                        />
                       )}
                     </li>
                   ))}
@@ -332,13 +356,14 @@ export default async function MobileTripPage({
                 <PassengerPickupNote
                   note={meetup.selfPickupNote}
                   mapsUrl={meetup.selfPickupMapsUrl}
+                  endpointLabel={endpointLabel}
                   variant="mobile"
                 />
               </div>
             )}
             {myJoin.status === "confirmed" && !meetup.selfPickupNote && (
               <p className="mt-2 text-center text-[12px] leading-relaxed text-muted-warm">
-                Use in-app chat to confirm pickup details with {driverFirst}.
+                Use in-app chat to confirm {endpointLabel?.toLowerCase() ?? "ride"} details with {driverFirst}.
               </p>
             )}
             {ride.status === "active" &&
@@ -351,6 +376,7 @@ export default async function MobileTripPage({
             rideId={ride.id}
             seatsAvailable={ride.seats_available}
             savedHome={savedHome}
+            endpointLabel={endpointLabel}
             label={myJoin ? "Request a seat again" : undefined}
           />
         ) : (

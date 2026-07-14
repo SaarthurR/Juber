@@ -33,7 +33,7 @@ test("mobile makes declined and cancelled seat requests reachable", () => {
 
 test("desktop and mobile hide passenger decisions on terminal rides", () => {
   for (const source of [desktopRidePage, mobileRidePage]) {
-    const buttonIndex = source.indexOf("<PassengerStatusButtons");
+    const buttonIndex = source.indexOf("<RiderDecisionDialog");
     assert.notEqual(buttonIndex, -1);
     assert.match(source.slice(Math.max(0, buttonIndex - 180), buttonIndex), /ride\.status === "active"/);
   }
@@ -42,6 +42,11 @@ test("desktop and mobile hide passenger decisions on terminal rides", () => {
 test("passenger status action rejects terminal rides before either decision", () => {
   assert.match(rideActions, /\.select\("driver_id,status"\)/);
   assert.match(rideActions, /ride\.status !== "active"/);
+});
+
+test("passenger status action rejects values outside the two decisions", () => {
+  assert.match(rideActions, /status !== "confirmed" && status !== "declined"/);
+  assert.match(rideActions, /Invalid passenger status/);
 });
 
 test("empty-reason cancellation atomically requires a fresh empty roster", () => {

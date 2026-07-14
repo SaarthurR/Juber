@@ -55,7 +55,8 @@ test("requestSeat forwards guest_count and pickup_note to RPC with validation", 
   assert.match(fn, /parseGuestCount/);
   assert.match(fn, /parsePickupSource/);
   assert.match(fn, /if \(!pickupSource\)/);
-  assert.match(fn, /Enter a pickup location or choose your saved home/);
+  assert.match(fn, /riderEndpointLabel\(ride\.origin_label, ride\.destination_label\)/);
+  assert.match(fn, /Enter a \$\{endpointLower\} or choose your saved home/);
   assert.match(fn, /getHomeAddress/);
   assert.match(fn, /p_guest_count: guestCount/);
   assert.match(fn, /p_pickup_note: pickupNote/);
@@ -87,8 +88,8 @@ test("desktop and mobile profile forms cap home input and preserve values on err
   const mobile = readRepo("src/app/m/profile/edit/page.tsx");
   const form = readRepo("src/components/profile-form.tsx");
 
-  assert.match(desktop, /name="home_address"[\s\S]*maxLength=\{500\}/);
-  assert.match(mobile, /name="home_address"[\s\S]*maxLength=\{500\}/);
+  assert.match(desktop, /<GooglePlaceInput[\s\S]*name="home_address"[\s\S]*maxLength=\{500\}/);
+  assert.match(mobile, /<GooglePlaceInput[\s\S]*name="home_address"[\s\S]*maxLength=\{500\}/);
   assert.match(desktop, /<ProfileForm[\s\S]*action=\{updateProfile\}/);
   assert.match(mobile, /<ProfileForm[\s\S]*action=\{updateProfileMobile\}/);
   assert.match(form, /event\.preventDefault\(\)/);
@@ -141,11 +142,10 @@ test("meetup visibility keeps coarse labels for unrelated viewers", () => {
 
   assert.equal(resolved.pickupLabel, "Fremont area");
   assert.equal(resolved.dropoffLabel, "JCNC area");
-  assert.equal(resolved.pickupMapsUrl, null);
   assert.equal(resolved.selfPickupNote, null);
 });
 
-test("meetup visibility exposes exact locations and maps links to entitled viewers", () => {
+test("meetup visibility exposes exact locations without shared map links", () => {
   const driverView = resolveMeetupLabels({
     coarsePickup: "Fremont area",
     coarseDropoff: "JCNC area",
@@ -161,7 +161,7 @@ test("meetup visibility exposes exact locations and maps links to entitled viewe
     isDriver: true,
   });
   assert.equal(driverView.pickupLabel, "123 Main St");
-  assert.match(driverView.pickupMapsUrl ?? "", /^https:\/\/maps\.google\.com\/\?q=/);
+  assert.doesNotMatch(readRepo("src/components/meetup-locations.tsx"), /Open in Google Maps[\s\S]*MeetupLine/);
 
   const riderView = resolveMeetupLabels({
     coarsePickup: "Fremont area",
@@ -199,7 +199,6 @@ test("pending rider reload shows only their pickup selection", () => {
 
   assert.equal(pendingView.pickupLabel, "Fremont area");
   assert.equal(pendingView.dropoffLabel, "JCNC area");
-  assert.equal(pendingView.pickupMapsUrl, null);
   assert.equal(pendingView.selfPickupNote, "Home snapshot");
   assert.match(pendingView.selfPickupMapsUrl ?? "", /Home%20snapshot/);
 });
@@ -215,11 +214,13 @@ test("shared booking form gates required fields behind accessible intent layers"
   assert.match(form, /guest_count/);
   assert.match(form, /pickup_source/);
   assert.match(form, /pickup_note/);
+  assert.match(form, /GooglePlaceInput/);
+  assert.match(form, /name="pickup_note"[\s\S]*manualFallback/);
   assert.match(form, /type="button"[\s\S]*aria-haspopup="dialog"[\s\S]*aria-expanded=\{open\}/);
   assert.match(form, /DesktopDialog/);
   assert.match(form, /BottomSheet/);
   assert.match(form, /dismissDisabled=\{pending\}/);
-  assert.match(form, /<fieldset>[\s\S]*<legend[^>]*>Pickup location<\/legend>/);
+  assert.match(form, /<fieldset>[\s\S]*<legend[^>]*>\{locationLabel\}<\/legend>/);
   assert.equal((form.match(/name="pickup_source"[\s\S]{0,160}?required/g) ?? []).length, 2);
   assert.match(form, /Send seat request/);
   assert.match(form, /PendingActionButton/);
@@ -227,7 +228,7 @@ test("shared booking form gates required fields behind accessible intent layers"
   assert.match(readRepo("src/components/mobile/m-reserve.tsx"), /ReserveSeatForm/);
 });
 
-test("browser contract: driver lists retain confirmed pickup and guest count", () => {
+test("browser contract: driver lists retain confirmed endpoint and review pending riders", () => {
   for (const path of [
     "src/app/(desktop)/rides/[id]/page.tsx",
     "src/app/m/rides/[id]/page.tsx",
@@ -240,11 +241,8 @@ test("browser contract: driver lists retain confirmed pickup and guest count", (
     );
     assert.match(source, /passengerDisplayName\(p\.passenger\?\.full_name, p\.guest_count \?\? 0\)/, path);
     assert.match(source, /meetupByPassenger\.get\(p\.passenger_id\)\?\.pickup_note/, path);
-    assert.match(
-      source,
-      /ride\.status === "active" && p\.status === "pending"/,
-      path,
-    );
+    assert.match(source, /ride\.status === "active" && p\.status === "pending"/, path);
+    assert.match(source, /<RiderDecisionDialog/, path);
   }
 });
 

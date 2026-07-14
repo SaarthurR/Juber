@@ -6,6 +6,7 @@ import { InlineActionError } from "@/components/inline-action-error";
 import { BottomSheet } from "@/components/mobile/bottom-sheet";
 import { PendingActionButton } from "@/components/pending-action-button";
 import { DesktopDialog } from "@/components/ui/desktop-dialog";
+import { GooglePlaceInput } from "@/components/google-place-input";
 import { maxGuestCount, partyTotal } from "@/lib/booking";
 
 type Variant = "desktop" | "mobile";
@@ -14,12 +15,14 @@ export function ReserveSeatForm({
   rideId,
   seatsAvailable,
   savedHome,
+  endpointLabel,
   label = "Reserve a seat",
   variant = "desktop",
 }: {
   rideId: string;
   seatsAvailable: number;
   savedHome: string | null;
+  endpointLabel: "Pickup" | "Drop-off" | null;
   label?: string;
   variant?: Variant;
 }) {
@@ -33,12 +36,14 @@ export function ReserveSeatForm({
   const [pickupSource, setPickupSource] = useState<"home" | "custom" | null>(
     savedHome ? "home" : null,
   );
+  const locationLabel = endpointLabel ?? "Ride location";
 
   if (state && "success" in state) {
     return (
       <BookingSummary
         guestCount={state.guestCount}
         pickupNote={state.pickupNote}
+        endpointLabel={endpointLabel}
         variant={variant}
       />
     );
@@ -82,7 +87,7 @@ export function ReserveSeatForm({
       </div>
 
       <fieldset>
-        <legend className={labelCls}>Pickup location</legend>
+        <legend className={labelCls}>{locationLabel}</legend>
         <div className="flex flex-col gap-2">
           {savedHome ? (
             <label className={radioCls}>
@@ -108,15 +113,17 @@ export function ReserveSeatForm({
               onChange={() => setPickupSource("custom")}
               className="sr-only"
             />
-            Custom address
+            Custom {endpointLabel?.toLowerCase() ?? "ride"} address
           </label>
         </div>
         {pickupSource === "custom" && (
-          <input
+          <GooglePlaceInput
             name="pickup_note"
+            label={`${locationLabel} address`}
             required
+            manualFallback
             maxLength={500}
-            placeholder="Street address or landmark"
+            placeholder={`Search for the ${endpointLabel?.toLowerCase() ?? "ride"} address`}
             className={`${inputCls} mt-2`}
           />
         )}
@@ -253,10 +260,12 @@ function StepBtn({
 function BookingSummary({
   guestCount,
   pickupNote,
+  endpointLabel,
   variant,
 }: {
   guestCount: number;
   pickupNote: string | null;
+  endpointLabel: "Pickup" | "Drop-off" | null;
   variant: Variant;
 }) {
   const boxCls =
@@ -269,7 +278,7 @@ function BookingSummary({
       <p>Seat requested</p>
       <p className={variant === "mobile" ? "mt-1 font-medium text-muted" : "mt-1 text-sm font-medium text-stone-600"}>
         Party of {partyTotal(guestCount)}
-        {pickupNote ? ` · Pickup: ${pickupNote}` : ""}
+        {pickupNote ? ` · ${endpointLabel ?? "Location"}: ${pickupNote}` : ""}
       </p>
     </div>
   );

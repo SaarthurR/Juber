@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { actionErrorMessage } from "@/lib/action-lifecycle";
 import { InlineActionError } from "@/components/inline-action-error";
-import { PendingActionButton, PendingActionGroup } from "@/components/pending-action-button";
+import { PendingActionButton } from "@/components/pending-action-button";
 import { DesktopDialog } from "@/components/ui/desktop-dialog";
 import {
   setPassengerStatus,
@@ -23,11 +23,13 @@ export function ReserveSeatButton({
   rideId,
   seatsAvailable,
   savedHome,
+  endpointLabel,
   label = "Reserve a seat",
 }: {
   rideId: string;
   seatsAvailable: number;
   savedHome: string | null;
+  endpointLabel: "Pickup" | "Drop-off" | null;
   label?: string;
 }) {
   return (
@@ -35,6 +37,7 @@ export function ReserveSeatButton({
       rideId={rideId}
       seatsAvailable={seatsAvailable}
       savedHome={savedHome}
+      endpointLabel={endpointLabel}
       label={label}
       variant="desktop"
     />
@@ -61,7 +64,7 @@ export function PassengerStatusButtons({
     (declineState && "error" in declineState ? declineState.error : undefined);
 
   return (
-    <PendingActionGroup>
+    <>
       <div className="flex gap-2">
         <form action={confirmAction}>
           <PendingActionButton
@@ -87,7 +90,7 @@ export function PassengerStatusButtons({
         error={error}
         className="mt-2 text-right text-xs font-semibold text-red-600"
       />
-    </PendingActionGroup>
+    </>
   );
 }
 

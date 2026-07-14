@@ -156,17 +156,17 @@ test("request and seat cancellation clear stale errors but retain the seat reaso
   );
 });
 
-test("mobile seat-request pickup note stacks below passenger identity", () => {
+test("mobile seat-request endpoint stacks below passenger identity", () => {
   const mobileRide = readFileSync("src/app/m/rides/[id]/page.tsx", "utf8");
   const desktopRide = readFileSync("src/app/(desktop)/rides/[id]/page.tsx", "utf8");
 
-  assert.match(mobileRide, /<div className="min-w-0">[\s\S]*Pickup:/);
+  assert.match(mobileRide, /<div className="min-w-0">[\s\S]*endpointLabel \?\? "Location"/);
   assert.match(mobileRide, /mt-0\.5 truncate text-\[11px\] text-muted-warm/);
   assert.doesNotMatch(
     mobileRide,
     /<Link[^>]*flex min-w-0 items-center gap-2\.5">[\s\S]*<MAvatar[\s\S]*<span className="truncate[\s\S]*<p className="truncate text-\[11px\]/,
   );
-  assert.match(desktopRide, /Pickup:/);
+  assert.match(desktopRide, /endpointLabel \?\? "Location"/);
 });
 
 test("contact-required skip copy clarifies browsing and later prompts", () => {

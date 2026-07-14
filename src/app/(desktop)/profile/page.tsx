@@ -11,6 +11,7 @@ import { ProfileSetupPanel, setupRationale } from "@/components/profile-setup-pa
 import { AvatarUploader } from "@/components/avatar-uploader";
 import { authCallbackDestination } from "@/lib/route-targets";
 import { SignOutForm } from "@/components/sign-out-form";
+import { GooglePlaceInput } from "@/components/google-place-input";
 
 export const dynamic = "force-dynamic";
 
@@ -117,15 +118,24 @@ export default async function EditProfilePage({
   );
 
   const homeField = (
-    <FormField
-      label="Saved home address (optional)"
-      name="home_address"
-      defaultValue={homeAddress ?? ""}
-      placeholder="Only you can see this until you book with it"
-      hint={`${setupRationale("home")} Drivers only see a copy when you request a seat with saved home.`}
-      maxLength={500}
-      ariaDescribedBy="profile-save-error"
-    />
+    <label className="block">
+      <span className="mb-1 block text-[15px] font-bold text-ink">
+        Saved home address (optional)
+      </span>
+      <span className="mb-2.5 block text-[13px] text-[#a8a29e]">
+        {setupRationale("home")} Drivers only see a copy when you request a seat with saved home.
+      </span>
+      <GooglePlaceInput
+        name="home_address"
+        label="Saved home address"
+        initialValue={homeAddress ?? ""}
+        placeholder="Search for your home address"
+        maxLength={500}
+        ariaDescribedBy="profile-save-error"
+        manualFallback
+        className="w-full rounded-xl border border-[#e2ddd5] px-3.5 py-3 text-[15px] outline-none placeholder:text-[#a8a29e] focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+      />
+    </label>
   );
 
   const avatarFields = (
@@ -283,15 +293,7 @@ export default async function EditProfilePage({
               placeholder="e.g. +1 555 555 5555"
             />
             <p className="text-xs font-medium text-stone-500">At least one contact number is required to book or post.</p>
-            <FormField
-              label="Saved home address (optional)"
-              name="home_address"
-              defaultValue={homeAddress ?? ""}
-              placeholder="Only you can see this until you book with it"
-              hint={`${setupRationale("home")} Drivers only see a copy when you request a seat with saved home.`}
-              maxLength={500}
-              ariaDescribedBy="profile-save-error"
-            />
+            {homeField}
           </div>
         </div>
 
