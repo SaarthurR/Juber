@@ -42,9 +42,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-Juber.zip
+# agent / tool scratch dirs
+.codex/
+.swarm/
+.superpowers/
+
+# archives, decks, scratch exports (kept locally, not committed)
+*.zip
+*.pdf
 Moober Pages/
 supabase/.temp/
-Juber1.zip
-Juber.zip
-*.zip

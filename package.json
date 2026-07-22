@@ -2,6 +2,9 @@
   "name": "juber",
   "version": "0.1.0",
   "private": true,
+  "overrides": {
+    "sharp": "^0.35.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
